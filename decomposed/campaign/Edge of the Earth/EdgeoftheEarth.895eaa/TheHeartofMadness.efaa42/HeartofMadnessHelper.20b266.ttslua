@@ -1,0 +1,119 @@
+TOP_LOCATION = Vector({ -13.5, 1.62, -0.03 })
+ROTATION = { 0, 270, 0 }
+V_OFFSET = Vector({ 0, 1, 0 })
+CIRCLE_STEPS = 60
+
+function onLoad()
+  self.createButton({
+    label = "Set Up",
+    click_function = "setup",
+    function_owner = self,
+    position = { 0, 0.1, 0 },
+    height = 120,
+    width = 400,
+    scale = { x = 1.75, y = 1.75, z = 1.75 },
+    font_size = 80
+  })
+
+  playarea = getObjectFromGUID("721ba2")
+end
+
+function getLocationDeck()
+  deck = nil
+  for i, obj in ipairs(getObjects()) do
+    local name = obj.getName()
+    if name == "Ancient Facilities" or name == "Locations" then
+      deck = obj
+    elseif name == "The Gate of Y'quaa" then
+      gate = obj.getPosition()
+    end
+  end
+end
+
+function setup(_obj, _color, _alt_click)
+  getLocationDeck()
+  if gate == nil or deck == nil then
+    broadcastToColor("Either The Gate of Y'quaa or the location deck were not found", _color)
+    return
+  end
+
+  deck.shuffle()
+
+  -- reset clue spawned status for locations
+  local tokenSpawnTracker = getObjectFromGUID("e3ffc9")
+  if tokenSpawnTracker then
+    tokenSpawnTracker.call("resetAllLocations")
+  else
+    broadcastToColor("Couldn't find token spawn tracker to reset spawned status for locations", _color)
+  end
+
+  local offset = Vector.between(gate, TOP_LOCATION):scale(1 / 3)
+
+  -- place locations
+  locations = {}
+  for i = 1, 5 do
+    for j = 1, 3 do
+      local pos = gate + offset * j + V_OFFSET
+      if i == 5 and j == 3 then
+        locations["5-3"] = deck.remainder.getGUID()
+        deck.remainder.setPosition(pos)
+      else
+        deck.takeObject({
+          position = pos,
+          rotation = ROTATION,
+          smooth = false,
+          callback_function = function(obj)
+            locations[i .. "-" .. j] = obj.getGUID()
+          end
+        })
+      end
+    end
+    offset:rotateOver('y', 72)
+  end
+
+  Wait.time(drawLines, 1)
+end
+
+function drawLines()
+  local center = playarea.positionToLocal(gate)
+  local params = {}
+
+  -- draw spokes
+  for i = 1, 5 do
+    local edge = getObjectFromGUID(locations[i .. "-3"]).getPosition()
+    table.insert(params, {
+      color = { 0.6, 0.6, 0.6 },
+      thickness = 0.01,
+      points = { center, playarea.positionToLocal(edge) }
+    })
+  end
+
+  local offset = Vector.between(
+    playarea.positionToLocal(gate),
+    playarea.positionToLocal(TOP_LOCATION)
+  ):scale(1 / 3)
+
+  -- draw rings
+  for j = 1, 3 do
+    drawCircle(center, j * offset:magnitude(), params)
+  end
+
+  playarea.setVectorLines(params)
+end
+
+function drawCircle(center, radius, params)
+  local d, s, c, r = 360 / CIRCLE_STEPS, math.sin, math.cos, math.rad
+  local points = {}
+  for i = 0, CIRCLE_STEPS do
+    table.insert(points, {
+      center.x + c(r(d * i)) * radius,
+      0.07,
+      center.z + s(r(d * i)) * radius
+    })
+  end
+  table.insert(params, {
+    color = { 0.6, 0.6, 0.6 },
+    thickness = 0.01,
+    points = points
+  })
+end

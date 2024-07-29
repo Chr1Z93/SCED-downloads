@@ -1,0 +1,335 @@
+local deckLib = require("util/DeckLib")
+local playmatApi = require("playermat/PlaymatApi")
+require("playercards/PlayerCardSpawner")
+
+local ALL_CARDS_GUID       = "15bb07"
+local CAST_POS             = {
+  DRAW = { x = 1.05, y = 0.05, z = 0.16 },
+  DISCARD = { x = -1.05, y = 0.05, z = 0.16 }
+}
+local colliding            = false
+local helpVisibleToPlayers = {}
+local playerTekelili       = {}
+
+-- contains the ArkhamDB IDs to spawn a new Tekeli-li Deck from the AllCardsBag
+local NEW_DECK_DATA        = {
+  ["08723"] = 3,
+  ["08724"] = 3,
+  ["08725"] = 2,
+  ["08726"] = 2,
+  ["08727"] = 2,
+  ["08728"] = 2,
+  ["08729"] = 2
+}
+
+---------------------------------------------------------
+-- main functionality
+---------------------------------------------------------
+
+-- adding context menu entries
+function onLoad()
+  self.addContextMenuItem("Spawn new deck", spawnFreshDeck)
+  self.addContextMenuItem("Spawn missing cards", spawnMissing)
+  self.addContextMenuItem("Remove ALL Tekeli-lis", removeAll)
+end
+
+-- TTS Event to trigger object movement
+function onCollisionEnter(collisionInfo)
+  -- flag to catch multiple calls
+  if colliding then return end
+  colliding = true
+  Wait.time(function() colliding = false end, 0.1)
+
+  -- check if colliding obj is above
+  local pos = collisionInfo.collision_object.getPosition()
+  local selfPos = self.getPosition()
+  if pos.y < selfPos.y then return end
+
+  returnObject()
+end
+
+-- moves an object to the bottom of the Tekeli-li Deck if it is a card
+function returnObject(obj)
+  -- use provided object or get object from snap point
+  local discard
+  if obj then
+    discard = obj
+  else
+    discard = checkSnapPoint("DISCARD")
+  end
+
+  -- exit early if nothing found or not a card/deck
+  if discard == nil or (discard.type ~= "Card" and discard.type ~= "Deck") then return end
+
+  -- place objects into deck
+  local rot = self.getRotation()
+  discard.setRotation({ rot.x, rot.y, 180 })
+  discard.setPosition(self.positionToWorld(CAST_POS.DRAW))
+end
+
+---------------------------------------------------------
+-- context menu functions
+---------------------------------------------------------
+
+-- spawns a fresh Tekeli-li Deck from the AllCardsBag
+function spawnFreshDeck()
+  spawnTekeliliDeck(NEW_DECK_DATA)
+end
+
+-- spawns just the missing tekeli-li cards as a new deck
+function spawnMissing()
+  -- analyse cards and decks for currently existing tekeli-li cards
+  local foundCards = {}
+  for _, obj in ipairs(getObjects()) do
+    if obj.type == "Card" and obj.getName() == "Tekeli-li" then
+      local md = JSON.decode(obj.getGMNotes()) or {}
+      if md.weakness and md.id then
+        foundCards[md.id] = (foundCards[md.id] or 0) + 1
+      end
+    elseif obj.type == "Deck" then
+      local data = obj.getData()
+      for _, cardData in ipairs(data.ContainedObjects) do
+        if cardData.Nickname == "Tekeli-li" then
+          local md = JSON.decode(cardData.GMNotes) or {}
+          if md.weakness and md.id then
+            foundCards[md.id] = (foundCards[md.id] or 0) + 1
+          end
+        end
+      end
+    end
+  end
+
+  -- generate list of missing cards
+  local missingCards = {}
+  for cardId, cardCount in pairs(NEW_DECK_DATA) do
+    -- if any copies are in play, subtract them from the missing count
+    if foundCards[cardId] then
+      if foundCards[cardId] > cardCount then
+        printToAll("Detected more Tekeli-li cards with id " .. cardId .. " than usually available!", "Orange")
+      elseif foundCards[cardId] < cardCount then
+        missingCards[cardId] = cardCount - foundCards[cardId]
+      end
+    else
+      missingCards[cardId] = cardCount
+    end
+  end
+
+  -- spawn missing cards
+  spawnTekeliliDeck(missingCards)
+end
+
+-- removes all Tekeli-li cards from the table (single and in decks)
+function removeAll()
+  local count = 0
+  for _, obj in ipairs(getObjects()) do
+    if obj.type == "Card" and obj.getName() == "Tekeli-li" then
+      local notes = JSON.decode(obj.getGMNotes()) or {}
+      if notes.weakness then
+        count = count + 1
+        obj.destruct()
+      end
+    elseif obj.type == "Deck" then
+      local data = obj.getData()
+      local containedObjectsNew = {}
+      local deckIdsNew = {}
+      local manipulated = false
+
+      for i, cardData in ipairs(data.ContainedObjects) do
+        local keepCard = true
+
+        if cardData.Nickname == "Tekeli-li" then
+          local notes = JSON.decode(cardData.GMNotes) or {}
+          if notes.weakness then
+            count = count + 1
+            keepCard = false
+            manipulated = true
+          end
+        end
+
+        if keepCard then
+          table.insert(containedObjectsNew, cardData)
+          table.insert(deckIdsNew, data.DeckIDs[i])
+        end
+      end
+
+      if manipulated then
+        obj.destruct()
+        if #containedObjectsNew > 0 then
+          data.ContainedObjects = containedObjectsNew
+          data.DeckIDs = deckIdsNew
+          spawnObjectData({ data = data })
+        end
+      end
+    end
+  end
+  printToAll("Removed " .. count .. " card(s) from play (decks included).")
+end
+
+---------------------------------------------------------
+-- Clean Up Helper functions
+---------------------------------------------------------
+
+-- stores Tekeli-li cards the provided playermat hat
+function storeTekelili(matColor)
+  local searchResult = playmatApi.searchAroundPlaymat(matColor, "isCardOrDeck")
+
+  -- add found tekeli-li cards to table
+  playerTekelili[matColor] = {}
+
+  for _, obj in ipairs(searchResult) do
+    if obj.type == "Card" and obj.getName() == "Tekeli-li" then
+      trackTekelili(matColor, obj.getGMNotes())
+    elseif obj.type == "Deck" then
+      for _, cardData in ipairs(obj.getData().ContainedObjects) do
+        if cardData.Nickname == "Tekeli-li" then
+          trackTekelili(matColor, cardData.GMNotes)
+        end
+      end
+    end
+  end
+end
+
+-- adds a tekelili card to the stored cards index
+function trackTekelili(matColor, notes)
+  local md = JSON.decode(notes) or {}
+  if md.weakness and md.id then
+    playerTekelili[matColor][md.id] = (playerTekelili[matColor][md.id] or 0) + 1
+  end
+end
+
+-- respawns the stored Tekeli-li cards
+function spawnStoredTekelili(matColor)
+  local allCardsBag = getObjectFromGUID(ALL_CARDS_GUID)
+  local cardsToSpawn = {}
+  for cardId, cardCount in pairs(playerTekelili[matColor]) do
+    local card = allCardsBag.call("getCardById", { id = cardId })
+    if card ~= nil then
+      for i = 1, cardCount do
+        table.insert(cardsToSpawn, { data = card.data, metadata = card.metadata })
+      end
+    end
+  end
+
+  local pos = playmatApi.getDrawPosition(matColor)
+  local rot = playmatApi.returnRotation(matColor)
+  rot.z = 180
+  Spawner.spawnCards(cardsToSpawn, pos, rot, true, _)
+  playerTekelili[matColor] = nil
+end
+
+---------------------------------------------------------
+-- XML click functions
+---------------------------------------------------------
+
+-- draws a tekeli-li card to the playmat of the requesting player
+function drawTekelili(player)
+  local deck = getTekeliliDeck()
+  if not deck then return end
+
+  local matColor = playmatApi.getMatColor(player.color)
+  local pos = playmatApi.getEncounterCardDrawPosition(matColor, false)
+  local rot = playmatApi.returnRotation(matColor)
+  deckLib.placeOrMergeIntoDeck(deck.takeObject(), Vector(pos), rot)
+end
+
+-- shuffles a tekeli-li card into the deck of the requesting player
+function shuffleTekelili(player)
+  local deck = getTekeliliDeck()
+  if not deck then return end
+
+  local matColor = playmatApi.getMatColor(player.color)
+  local pos = playmatApi.getDrawPosition(matColor)
+  local rot = playmatApi.returnRotation(matColor)
+  rot = rot:setAt("z", 180)
+  deckLib.placeOrMergeIntoDeck(deck.takeObject(), Vector(pos), rot)
+
+  -- shuffle deck (after a short delay to make sure the card is in it)
+  Wait.time(function()
+    local drawDeck = playmatApi.getDeckAreaObjects(matColor).draw
+    if drawDeck then
+      drawDeck.shuffle()
+    end
+  end, 1)
+end
+
+-- toggles the help text for the player that clicks it
+function toggleHelp(player)
+  if helpVisibleToPlayers[player.color] then
+    helpVisibleToPlayers[player.color] = nil
+  else
+    helpVisibleToPlayers[player.color] = true
+  end
+  updateHelpVisibility()
+end
+
+---------------------------------------------------------
+-- helper functions
+---------------------------------------------------------
+
+-- spawns a tekeli-li deck with the provided cards
+function spawnTekeliliDeck(deckData)
+  local allCardsBag = getObjectFromGUID(ALL_CARDS_GUID)
+  local cardsToSpawn = {}
+  for cardId, cardCount in pairs(deckData) do
+    local card = allCardsBag.call("getCardById", { id = cardId })
+    if card ~= nil then
+      for i = 1, cardCount do
+        table.insert(cardsToSpawn, { data = card.data, metadata = card.metadata })
+      end
+    end
+  end
+
+  local pos = self.positionToWorld(CAST_POS.DRAW)
+  local rot = self.getRotation()
+  rot.z = 180
+  local callback = function(deck)
+    deck.setName("Tekeli-li Deck")
+    deck.shuffle()
+  end
+  Spawner.spawnCards(cardsToSpawn, pos, rot, _, callback)
+end
+
+-- returns a reference to the tekeli-li deck
+function getTekeliliDeck()
+  local deck = checkSnapPoint("DRAW")
+
+  if not deck then
+    printToAll("Couldn't find Tekeli-li deck! Spawn a new one from the context menu.", "Orange")
+  else
+    return deck
+  end
+end
+
+-- returns the first object found, type can be "deck" or "discard"
+function checkSnapPoint(type)
+  local result = Physics.cast({
+    direction    = { 0, 1, 0 },
+    max_distance = 0.1,
+    type         = 3,
+    size         = { 0.1, 0.1, 0.1 },
+    origin       = self.positionToWorld(CAST_POS[type])
+  })
+
+  for _, hit in ipairs(result) do
+    if hit.hit_object ~= self then
+      return hit.hit_object
+    end
+  end
+
+  return nil
+end
+
+-- updates the visibility of the help text
+function updateHelpVisibility()
+  local visibility = ""
+  for playerColor, _ in pairs(helpVisibleToPlayers) do
+    if string.len(visibility) > 0 then
+      visibility = visibility .. "|" .. playerColor
+    else
+      visibility = playerColor
+    end
+  end
+  self.UI.setAttribute("helpText", "visibility", visibility)
+  self.UI.setAttribute("helpPanel", "visibility", visibility)
+  self.UI.setAttribute("helpPanel", "active", string.len(visibility) > 0)
+end
