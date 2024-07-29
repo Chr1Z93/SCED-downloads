@@ -12,11 +12,12 @@ TTS_MOD_MANAGER_URL := https://github.com/argonui/TTSModManager/releases/downloa
 endif
 
 # Initialize the project
-# Copy contents of src directory to the cloned SCED repository for Lua bundling
+# Copy contents of src/xml directory to the cloned SCED repository for Lua/XML bundling
 init:
 	curl -fOL $(TTS_MOD_MANAGER_URL) && chmod +x TTSModManager-Linux
 	git clone https://github.com/argonui/SCED --branch $(SCED_TAG) SCED
 	cp -R src/* SCED/src/
+	cp -R xml/* SCED/xml/
 
 # Build the project
 build:
