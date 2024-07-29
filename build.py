@@ -1,15 +1,24 @@
 import json
+import shutil
 import subprocess
 from pathlib import Path
 
-INPUT_PATH = "decomposed"
-OUTPUT_PATH = ".build"
-MODDIR = "SCED"
-MOD_EXECUTABLE = "./TTSModManager-Linux"
+PATHS = {
+    "decomposed": "./decomposed",
+    "downloadable": "./downloadable",
+    "library": "./library.json",
+    "moddir": "./SCED",
+    "modexec": "./TTSModManager-Linux",
+    "output": "./.build",
+}
+
+
+def resolve(path):
+    return Path.cwd().joinpath(path)
 
 
 def read_library():
-    with open("library.json") as f:
+    with open(resolve(PATHS["library"])) as f:
         data = json.load(f)
     return data["content"]
 
@@ -17,32 +26,34 @@ def read_library():
 def exec_mod_manager(input_path, output_path):
     subprocess.run(
         [
-            Path.cwd().joinpath(MOD_EXECUTABLE),
+            resolve(PATHS["modexec"]),
             "--objin",
             input_path,
             "--objout",
             output_path,
             "--moddir",
-            MODDIR,
+            resolve(PATHS["moddir"]),
         ],
         check=True,
     )
 
 
 def __main__():
-    library = read_library()
+    output_dir = resolve(PATHS["output"])
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    decomposed = [item for item in library if item["decomposed"]]
-
-    for item in decomposed:
-        input_path = next(
-            Path.cwd().joinpath(INPUT_PATH, item["type"], item["name"]).glob("*.json")
+    for item in [item for item in read_library() if item["decomposed"]]:
+        exec_mod_manager(
+            next(
+                Path.cwd()
+                .joinpath(PATHS["decomposed"], item["type"], item["name"])
+                .glob("*.json")
+            ),
+            output_dir.joinpath(f'{item["filename"]}.json'),
         )
 
-        output_path = Path.cwd().joinpath(OUTPUT_PATH, f'{item["filename"]}.json')
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-
-        exec_mod_manager(input_path, output_path)
+    for f in resolve(PATHS["downloadable"]).glob("**/*.json"):
+        shutil.copy(f, output_dir)
 
 
 if __name__ == "__main__":
