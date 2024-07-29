@@ -1,0 +1,95 @@
+ASSEMBLY = {
+  position = Vector({ x = 68, y = 2, z = 36 }),
+  rotation = { x = 0, y = 270, z = 180 }
+}
+ASSEMBLY_OFFSET = Vector({ 0, 0, -4 })
+EXPLORATION = { -17.12, 1.65, 7.57 }
+
+function onLoad()
+  self.createButton({
+    label = "Setup",
+    click_function = "setup",
+    function_owner = self,
+    position = { 0, 0.3, 2 },
+    rotation = { 0, 0, 0 },
+    height = 300,
+    width = 1000,
+    font_size = 250,
+    color = { 0, 0, 0 },
+    font_color = { 1, 1, 1 }
+  })
+  math.randomseed(os.time())
+end
+
+function setup()
+  local objs = self.getObjects()
+  for i = #objs, 1, -1 do
+    local name = objs[i].name
+    if name == "River Canyon" then
+      self.takeObject({
+        position = ASSEMBLY.position,
+        rotation = ASSEMBLY.rotation,
+        smooth = false
+      })
+    else
+      self.takeObject({
+        position = ASSEMBLY.position + (ASSEMBLY_OFFSET * i),
+        rotation = ASSEMBLY.rotation,
+        smooth = false,
+        callback_function = function(obj) pickRandomCard(obj) end
+      })
+    end
+  end
+
+  Wait.time(setup_2, 1)
+end
+
+function setup_2()
+  local objs = Physics.cast({
+    origin = ASSEMBLY.position,
+    direction = { x = 0, y = 1, z = 0 },
+    type = 3,
+    size = { x = 3, y = 3, z = 3 },
+    orientation = ASSEMBLY.rotation
+  })
+
+  local deck
+  for _, v in ipairs(objs) do
+    if v.hit_object.tag == "Deck" then
+      deck = v.hit_object
+      break
+    end
+  end
+
+  deck.shuffle()
+  deck.setName("Exploration Deck")
+  deck.setPosition(getExploreDeckPosition())
+end
+
+function pickRandomCard(obj)
+  obj.shuffle()
+  obj.takeObject({
+    position = ASSEMBLY.position,
+    rotation = ASSEMBLY.rotation,
+    smooth = false
+  })
+  self.putObject(obj.remainder)
+end
+
+function getExploreDeckPosition()
+  local exploreHelper
+  for _, obj in ipairs(getObjects()) do
+    if obj.getName() == "Explore Helper" then
+      exploreHelper = obj
+      break
+    end
+  end
+
+  -- use the explore helper if present
+  if not exploreHelper then
+    return EXPLORATION
+  else
+    return exploreHelper.positionToWorld(Vector(0.5887, 0.5, 0))
+  end
+end
+

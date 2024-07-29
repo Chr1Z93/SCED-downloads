@@ -1,0 +1,207 @@
+START       = { x = -30.24, y = 1.55, z = 0 }
+SET_ASIDE   = { x = -12.5, y = 1.8, z = 6.75 }
+EXPLORATION = { x = -11.5, y = 1.8, z = 11 }
+
+LOCATIONS = {
+  "City of the Serpents",
+  "Bridge over N'kai",
+  "Abandoned Site",
+  "Caverns of Yoth",
+  "Hall of Heresy",
+  "Bright Canyon",
+  "Forked Path",
+  "Crumbling Precipice",
+  "Broken Passage",
+  "Steps of Yoth"
+}
+
+TOKEN_IMAGES = {
+  doom = "https://i.imgur.com/EoL7yaZ.png",
+  clue = "https://steamusercontent-a.akamaihd.net/ugc/1758068501357164917/1D06F1DC4D6888B6F57124BD2AFE20D0B0DA15A8/"
+}
+
+function onLoad()
+  self.createButton({
+    label = "Set Up",
+    click_function = "setup",
+    function_owner = self,
+    position = { 0, 0.1, 0 },
+    height = 200,
+    width = 500,
+    scale = { x = 1.75, y = 1.75, z = 1.75 },
+    font_size = 125
+  })
+  math.randomseed(os.time())
+end
+
+function getExploreDeckPosition()
+  local exploreHelper
+  for _, obj in ipairs(getObjects()) do
+    if obj.getName() == "Explore Helper" then
+      exploreHelper = obj
+      break
+    end
+  end
+
+  -- use the explore helper if present
+  if not exploreHelper then
+    return EXPLORATION
+  else
+    return exploreHelper.positionToWorld(Vector(0.5887, 0.5, 0))
+  end
+end
+
+function setup(_, _color)
+  local zone = getObjectFromGUID("a2f932")
+
+  -- make index of all cards in play area and remove all clues and doom
+  local allCards = {}
+  for _, obj in ipairs(zone.getObjects()) do
+    if obj.tag == "Card" then
+      local notes = JSON.decode(obj.getGMNotes()) or nil
+      local name = obj.getName()
+      if ((notes ~= nil and notes.type == "Location") or name == "Perils of Yoth") and name ~= nil then
+        allCards[name] = { card = obj, guid = obj.getGUID() }
+      end
+    elseif obj.tag == "Deck" then
+      for _, card in ipairs(obj.getObjects()) do
+        if card.name ~= nil then
+          allCards[card.name] = { deck = obj, guid = card.guid }
+        end
+      end
+    elseif obj.tag == "Tile" then
+      local props = obj.getCustomObject()
+      if (props.image == TOKEN_IMAGES.clue and props.image_bottom == TOKEN_IMAGES.doom)
+          or (props.image == TOKEN_IMAGES.doom and props.image_bottom == TOKEN_IMAGES.clue)
+      then
+        obj.destruct()
+      end
+    end
+  end
+
+  -- Perils of Yoth
+  local peril = allCards["Perils of Yoth"]
+  if peril ~= nil then
+    if peril.card ~= nil then
+      placeCard(nil, peril.card, getExploreDeckPosition())
+    else
+      placeCard(peril.deck, peril.guid, getExploreDeckPosition())
+    end
+  end
+
+  -- find location cards
+  local locCards = {}
+  local notFound = {}
+  for i = 1, #LOCATIONS do
+    if allCards[LOCATIONS[i]] == nil then
+      table.insert(notFound, LOCATIONS[i])
+    else
+      table.insert(locCards, allCards[LOCATIONS[i]])
+    end
+  end
+
+  if #notFound > 0 then
+    printToColor("The following locations were not found: " .. table.concat(notFound, ", "), _color)
+    printToColor("Place them in the central play area and try again.", _color)
+    return
+  end
+
+  -- reset clue spawn status and make a deck of all location cards
+  for _, loc in ipairs(locCards) do
+    if loc.card ~= nil then
+      placeCard(nil, loc.card, SET_ASIDE)
+    elseif loc.deck ~= nil and #loc.deck.getObjects() > 0 then
+      placeCard(loc.deck, loc.guid, SET_ASIDE)
+    else
+      -- all but one card was taken from deck, so it doesn't exist anymore
+      placeCard(nil, loc.guid, SET_ASIDE)
+    end
+  end
+
+  resetSpawnStatus()
+  Wait.time(setup_2, 0.5)
+end
+
+function setup_2()
+  local objs = Physics.cast({
+    origin = SET_ASIDE,
+    direction = { x = 0, y = 1, z = 0 },
+    type = 3,
+    size = { x = 1, y = 1, z = 1 },
+    orientation = { 0, 270, 0 }
+  })
+
+  local deck = nil
+  for i, v in ipairs(objs) do
+    if v.hit_object.tag == "Deck" then
+      deck = v.hit_object
+      deck.setName("Set Aside Locations")
+      break
+    end
+  end
+  if deck == nil then return end
+
+  local locMap = {}
+  for _, card in ipairs(deck.getObjects()) do
+    locMap[card.name] = card.guid
+  end
+
+  -- assemble exploration deck (4 random locations + Steps of Yoth and Perils of Yoth (if necessary))
+  placeCard(deck, locMap["Steps of Yoth"], getExploreDeckPosition())
+  deck.shuffle()
+
+  for i = 1, 4 do
+    placeCard(deck, nil, getExploreDeckPosition())
+  end
+  Wait.time(nameExplorationDeck, 0.5)
+
+  -- randomly select starting location
+  placeCard(deck, nil, START, true)
+end
+
+function nameExplorationDeck()
+  local objs = Physics.cast({
+    origin = getExploreDeckPosition(),
+    direction = { x = 0, y = 1, z = 0 },
+    type = 3,
+    size = { x = 1, y = 1, z = 1 },
+    orientation = { 0, 270, 0 }
+  })
+
+  for _, v in ipairs(objs) do
+    if v.hit_object.tag == "Deck" then
+      v.hit_object.shuffle()
+      v.hit_object.setName("Exploration Deck")
+      return
+    end
+  end
+end
+
+function placeCard(deck, card, position, faceup)
+  if deck ~= nil then
+    local rot = { 0, 270, 180 }
+    if faceup then rot = { 0, 270, 0 } end
+    deck.takeObject({
+      guid = card,
+      position = position,
+      rotation = rot,
+      smooth = false
+    })
+  else
+    if type(card) == "string" then
+      card = getObjectFromGUID(card)
+    end
+
+    if card ~= nil then
+      card.setRotation({ 0, 270, 180 })
+      card.setPosition(position)
+    end
+  end
+end
+
+function resetSpawnStatus()
+  local tokenSpawntracker = getObjectFromGUID("e3ffc9")
+  if tokenSpawntracker then
+    tokenSpawntracker.call("resetAllLocations")
+  end
+end
