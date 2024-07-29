@@ -1,0 +1,2059 @@
+{
+  "GUID": "260b82",
+  "Name": "Custom_Model_Bag",
+  "Transform": {
+    "posX": 50,
+    "posY": 1.5,
+    "posZ": 20,
+    "rotX": 0,
+    "rotY": 270,
+    "rotZ": 0,
+    "scaleX": 1.0,
+    "scaleY": 0.14,
+    "scaleZ": 1.0
+  },
+  "Nickname": "The Blood of Drakul Investigator Expansion",
+  "Description": "",
+  "GMNotes": "",
+  "AltLookAngle": {
+    "x": 0.0,
+    "y": 0.0,
+    "z": 0.0
+  },
+  "ColorDiffuse": {
+    "r": 1.0,
+    "g": 1.0,
+    "b": 1.0
+  },
+  "LayoutGroupSortIndex": 0,
+  "Value": 0,
+  "Locked": false,
+  "Grid": true,
+  "Snap": true,
+  "IgnoreFoW": false,
+  "MeasureMovement": false,
+  "DragSelectable": true,
+  "Autoraise": true,
+  "Sticky": true,
+  "Tooltip": true,
+  "GridProjection": false,
+  "HideWhenFaceDown": false,
+  "Hands": false,
+  "MaterialIndex": -1,
+  "MeshIndex": -1,
+  "CustomMesh": {
+    "MeshURL": "https://raw.githubusercontent.com/RobMayer/TTSLibrary/master/advboxes/core_h_MSH.obj",
+    "DiffuseURL": "https://github.com/ArkhamDotCards/thebloodofdrakul/blob/main/product/enUS/drakul-boxart-investigator-defuse-enUS.png?raw=true",
+    "NormalURL": "",
+    "ColliderURL": "https://raw.githubusercontent.com/RobMayer/TTSLibrary/master/advboxes/core_h_COL.obj",
+    "Convex": true,
+    "MaterialIndex": 3,
+    "TypeIndex": 6,
+    "CustomShader": {
+      "SpecularColor": {
+        "r": 1.0,
+        "g": 1.0,
+        "b": 1.0
+      },
+      "SpecularIntensity": 0.0,
+      "SpecularSharpness": 2.0,
+      "FresnelStrength": 0.0
+    },
+    "CastShadows": true
+  },
+  "Bag": {
+    "Order": 0
+  },
+  "LuaScript": "-- Utility memory bag by Directsun\r\n-- Version 2.5.2\r\n-- Fork of Memory Bag 2.0 by MrStump\r\n\r\nfunction updateSave()\r\n    local data_to_save = {[\"ml\"]=memoryList}\r\n    saved_data = JSON.encode(data_to_save)\r\n    self.script_state = saved_data\r\nend\r\n\r\nfunction combineMemoryFromBagsWithin()\r\n  local bagObjList = self.getObjects()\r\n  for _, bagObj in ipairs(bagObjList) do\r\n    local data = bagObj.lua_script_state\r\n      if data ~= nil then\r\n        local j = JSON.decode(data)\r\n        if j ~= nil and j.ml ~= nil then\r\n          for guid, entry in pairs(j.ml) do\r\n            memoryList[guid] = entry\r\n          end\r\n        end\r\n      end\r\n    end\r\nend\r\n\r\nfunction updateMemoryWithMoves()\r\n    memoryList = memoryListBackup\r\n    --get the first transposed object's coordinates\r\n    local obj = getObjectFromGUID(moveGuid)\r\n\r\n    -- p1 is where needs to go, p2 is where it was\r\n    local refObjPos = memoryList[moveGuid].pos\r\n    local deltaPos = findOffsetDistance(obj.getPosition(), refObjPos, nil)\r\n    local movedRotation = obj.getRotation()\r\n    for guid, entry in pairs(memoryList) do\r\n        memoryList[guid].pos.x = entry.pos.x - deltaPos.x\r\n        memoryList[guid].pos.y = entry.pos.y - deltaPos.y\r\n        memoryList[guid].pos.z = entry.pos.z - deltaPos.z\r\n        -- memoryList[guid].rot.x = movedRotation.x\r\n        -- memoryList[guid].rot.y = movedRotation.y\r\n        -- memoryList[guid].rot.z = movedRotation.z\r\n    end\r\n\r\n    --theList[obj.getGUID()] = {\r\n    --    pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\r\n    --    rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\r\n    --    lock=obj.getLock()\r\n    --}\r\n    moveList = {}\r\nend\r\n\r\nfunction onload(saved_data)\r\n    fresh = true\r\n    if saved_data ~= \"\" then\r\n        local loaded_data = JSON.decode(saved_data)\r\n        --Set up information off of loaded_data\r\n        memoryList = loaded_data.ml\r\n    else\r\n        --Set up information for if there is no saved saved data\r\n        memoryList = {}\r\n    end\r\n\r\n    moveList = {}\r\n    moveGuid = nil\r\n\r\n    if next(memoryList) == nil then\r\n        createSetupButton()\r\n    else\r\n        fresh = false\r\n        createMemoryActionButtons()\r\n    end\r\nend\r\n\r\n\r\n--Beginning Setup\r\n\r\n\r\n--Make setup button\r\nfunction createSetupButton()\r\n    self.createButton({\r\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\r\n        position={0,0.1,-6}, rotation={0,0,0}, height=500, width=1200,\r\n        font_size=350, color={0,0,0}, font_color={1,1,1}\r\n    })\r\nend\r\n\r\n--Triggered by Transpose button\r\nfunction buttonClick_transpose()\r\n    moveGuid = nil\r\n    broadcastToAll(\"Select one object and move it- all objects will move relative to the new location\", {0.75, 0.75, 1})\r\n    memoryListBackup = duplicateTable(memoryList)\r\n    memoryList = {}\r\n    moveList = {}\r\n    self.clearButtons()\r\n    createButtonsOnAllObjects(true)\r\n    createSetupActionButtons(true)\r\nend\r\n\r\n--Triggered by setup button,\r\nfunction buttonClick_setup()\r\n    memoryListBackup = duplicateTable(memoryList)\r\n    memoryList = {}\r\n    self.clearButtons()\r\n    createButtonsOnAllObjects(false)\r\n    createSetupActionButtons(false)\r\nend\r\n\r\nfunction getAllObjectsInMemory()\r\n  local objTable = {}\r\n  local curObj = {}\r\n\r\n  for guid in pairs(memoryListBackup) do\r\n    curObj = getObjectFromGUID(guid)\r\n    table.insert(objTable, curObj)\r\n  end\r\n\r\n  return objTable\r\n  -- return getAllObjects()\r\nend\r\n\r\n--Creates selection buttons on objects\r\nfunction createButtonsOnAllObjects(move)\r\n    local howManyButtons = 0\r\n\r\n    local objsToHaveButtons = {}\r\n    if move == true then\r\n      objsToHaveButtons = getAllObjectsInMemory()\r\n    else\r\n      objsToHaveButtons = getAllObjects()\r\n    end\r\n\r\n    for _, obj in ipairs(objsToHaveButtons) do\r\n        if obj ~= self then\r\n            local dummyIndex = howManyButtons\r\n            --On a normal bag, the button positions aren't the same size as the bag.\r\n            globalScaleFactor = 1 * 1/self.getScale().x\r\n            --Super sweet math to set button positions\r\n            local selfPos = self.getPosition()\r\n            local objPos = obj.getPosition()\r\n            local deltaPos = findOffsetDistance(selfPos, objPos, obj)\r\n            local objPos = rotateLocalCoordinates(deltaPos, self)\r\n            objPos.x = -objPos.x * globalScaleFactor\r\n            objPos.y = objPos.y * globalScaleFactor + 4\r\n            objPos.z = objPos.z * globalScaleFactor\r\n            --Offset rotation of bag\r\n            local rot = self.getRotation()\r\n            rot.y = -rot.y + 180\r\n            --Create function\r\n            local funcName = \"selectButton_\" .. howManyButtons\r\n            local func = function() buttonClick_selection(dummyIndex, obj, move) end\r\n            local color = {0.75,0.25,0.25,0.6}\r\n            local colorMove = {0,0,1,0.6}\r\n            if move == true then\r\n              color = colorMove\r\n            end\r\n            self.setVar(funcName, func)\r\n            self.createButton({\r\n                click_function=funcName, function_owner=self,\r\n                position=objPos, rotation=rot, height=1000, width=1000,\r\n                color=color,\r\n            })\r\n            howManyButtons = howManyButtons + 1\r\n        end\r\n    end\r\nend\r\n\r\n--Creates submit and cancel buttons\r\nfunction createSetupActionButtons(move)\r\n    self.createButton({\r\n        label=\"Cancel\", click_function=\"buttonClick_cancel\", function_owner=self,\r\n      position={-1.25,0.1,-6}, rotation={0,0,0}, height=500, width=1200,\r\n        font_size=350, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n\r\n    self.createButton({\r\n        label=\"Submit\", click_function=\"buttonClick_submit\", function_owner=self,\r\n        position={-1.25,0.3,-7}, rotation={0,0,0}, height=500, width=1200,\r\n        font_size=350, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n\r\n    if move == false then\r\n      self.createButton({\r\n          label=\"Add\", click_function=\"buttonClick_add\", function_owner=self,\r\n          position={1.25,0.3,-6}, rotation={0,0,0}, height=500, width=1200,\r\n          font_size=350, color={0,0,0}, font_color={0.25,1,0.25}\r\n      })\r\n\r\n        if fresh == false then\r\n            self.createButton({\r\n                label=\"Set New\", click_function=\"buttonClick_setNew\", function_owner=self,\r\n                position={1.25,0.3,-8}, rotation={0,0,0}, height=500, width=1200,\r\n                font_size=350, color={0,0,0}, font_color={0.75,0.75,1}\r\n            })\r\n            self.createButton({\r\n                label=\"Remove\", click_function=\"buttonClick_remove\", function_owner=self,\r\n                position={1.25,0.3,-7}, rotation={0,0,0}, height=500, width=1200,\r\n                font_size=350, color={0,0,0}, font_color={1,0.25,0.25}\r\n            })\r\n        end\r\n    end\r\n\r\n    self.createButton({\r\n        label=\"Reset\", click_function=\"buttonClick_reset\", function_owner=self,\r\n        position={-1.25,0.3,-8}, rotation={0,0,0}, height=500, width=1200,\r\n        font_size=350, color={0,0,0}, font_color={1,1,1}\r\n    })\r\nend\r\n\r\n\r\n--During Setup\r\n\r\n\r\n--Checks or unchecks buttons\r\nfunction buttonClick_selection(index, obj, move)\r\n    local colorMove = {0,0,1,0.6}\r\n    local color = {0,1,0,0.6}\r\n\r\n    previousGuid = selectedGuid\r\n    selectedGuid = obj.getGUID()\r\n\r\n    theList = memoryList\r\n    if move == true then\r\n       theList = moveList\r\n       if previousGuid ~= nil and previousGuid ~= selectedGuid then\r\n         local prevObj = getObjectFromGUID(previousGuid)\r\n         prevObj.highlightOff()\r\n         self.editButton({index=previousIndex, color=colorMove})\r\n         theList[previousGuid] = nil\r\n       end\r\n       previousIndex = index\r\n    end\r\n\r\n    if theList[selectedGuid] == nil then\r\n        self.editButton({index=index, color=color})\r\n        --Adding pos/rot to memory table\r\n        local pos, rot = obj.getPosition(), obj.getRotation()\r\n        --I need to add it like this or it won't save due to indexing issue\r\n        theList[obj.getGUID()] = {\r\n            pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\r\n            rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\r\n            lock=obj.getLock()\r\n        }\r\n        obj.highlightOn({0,1,0})\r\n    else\r\n      color = {0.75,0.25,0.25,0.6}\r\n      if move == true then\r\n        color = colorMove\r\n      end\r\n        self.editButton({index=index, color=color})\r\n        theList[obj.getGUID()] = nil\r\n        obj.highlightOff()\r\n    end\r\nend\r\n\r\n--Cancels selection process\r\nfunction buttonClick_cancel()\r\n    memoryList = memoryListBackup\r\n    moveList = {}\r\n    self.clearButtons()\r\n    if next(memoryList) == nil then\r\n        createSetupButton()\r\n    else\r\n        createMemoryActionButtons()\r\n    end\r\n    removeAllHighlights()\r\n    broadcastToAll(\"Selection Canceled\", {1,1,1})\r\n    moveGuid = nil\r\nend\r\n\r\n--Saves selections\r\nfunction buttonClick_submit()\r\n    fresh = false\r\n    if next(moveList) ~= nil then\r\n        for guid in pairs(moveList) do\r\n            moveGuid = guid\r\n        end\r\n        if memoryListBackup[moveGuid] == nil then\r\n            broadcastToAll(\"Item selected for moving is not already in memory\", {1, 0.25, 0.25})\r\n        else\r\n            broadcastToAll(\"Moving all items in memory relative to new objects position!\", {0.75, 0.75, 1})\r\n            self.clearButtons()\r\n            createMemoryActionButtons()\r\n            local count = 0\r\n            for guid in pairs(moveList) do\r\n                moveGuid = guid\r\n                count = count + 1\r\n                local obj = getObjectFromGUID(guid)\r\n                if obj ~= nil then obj.highlightOff() end\r\n            end\r\n            updateMemoryWithMoves()\r\n            updateSave()\r\n            buttonClick_place()\r\n        end\r\n    elseif next(memoryList) == nil and moveGuid == nil then\r\n      memoryList = memoryListBackup\r\n      broadcastToAll(\"No selections made.\", {0.75, 0.25, 0.25})\r\n    end\r\n    combineMemoryFromBagsWithin()\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for guid in pairs(memoryList) do\r\n        count = count + 1\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then obj.highlightOff() end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    updateSave()\r\n    moveGuid = nil\r\nend\r\n\r\nfunction combineTables(first_table, second_table)\r\n  for k,v in pairs(second_table) do first_table[k] = v end\r\nend\r\n\r\nfunction buttonClick_add()\r\n    fresh = false\r\n    combineTables(memoryList, memoryListBackup)\r\n    broadcastToAll(\"Adding internal bags and selections to existing memory\", {0.25, 0.75, 0.25})\r\n    combineMemoryFromBagsWithin()\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for guid in pairs(memoryList) do\r\n        count = count + 1\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then obj.highlightOff() end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    updateSave()\r\nend\r\n\r\nfunction buttonClick_remove()\r\n        broadcastToAll(\"Removing Selected Entries From Memory\", {1.0, 0.25, 0.25})\r\n        self.clearButtons()\r\n        createMemoryActionButtons()\r\n        local count = 0\r\n        for guid in pairs(memoryList) do\r\n            count = count + 1\r\n            memoryListBackup[guid] = nil\r\n            local obj = getObjectFromGUID(guid)\r\n            if obj ~= nil then obj.highlightOff() end\r\n        end\r\n        broadcastToAll(count..\" Objects Removed\", {1,1,1})\r\n        memoryList = memoryListBackup\r\n        updateSave()\r\nend\r\n\r\nfunction buttonClick_setNew()\r\n    broadcastToAll(\"Setting new position relative to items in memory\", {0.75, 0.75, 1})\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for _, obj in ipairs(getAllObjects()) do\r\n        guid = obj.guid\r\n        if memoryListBackup[guid] ~= nil then\r\n            count = count + 1\r\n            memoryListBackup[guid].pos = obj.getPosition()\r\n            memoryListBackup[guid].rot = obj.getRotation()\r\n            memoryListBackup[guid].lock = obj.getLock()\r\n        end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    memoryList = memoryListBackup\r\n    updateSave()\r\nend\r\n\r\n--Resets bag to starting status\r\nfunction buttonClick_reset()\r\n    fresh = true\r\n    memoryList = {}\r\n    self.clearButtons()\r\n    createSetupButton()\r\n    removeAllHighlights()\r\n    broadcastToAll(\"Tool Reset\", {1,1,1})\r\n    updateSave()\r\nend\r\n\r\n\r\n--After Setup\r\n\r\n\r\n--Creates recall and place buttons\r\nfunction createMemoryActionButtons()\r\n    self.createButton({\r\n        label=\"Place\", click_function=\"buttonClick_place\", function_owner=self,\r\n        position={1.35,1,6}, rotation={0,0,0}, height=500, width=1200,\r\n        font_size=350, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n    self.createButton({\r\n        label=\"Recall\", click_function=\"buttonClick_recall\", function_owner=self,\r\n        position={-1.25,1,6}, rotation={0,0,0}, height=500, width=1200,\r\n        font_size=350, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n    self.createButton({\r\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\r\n        position={0,0.1,-6}, rotation={0,0,0}, height=500, width=1200,\r\n        font_size=350, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n---    self.createButton({\r\n---      label=\"Move\", click_function=\"buttonClick_transpose\", function_owner=self,\r\n---      position={-2.8,0.3,0}, rotation={0,0,0}, height=350, width=800,\r\n---      font_size=250, color={0,0,0}, font_color={0.75,0.75,1}\r\n---    })\r\nend\r\n\r\n--Sends objects from bag/table to their saved position/rotation\r\nfunction buttonClick_place()\r\n    local bagObjList = self.getObjects()\r\n    for guid, entry in pairs(memoryList) do\r\n        local obj = getObjectFromGUID(guid)\r\n        --If obj is out on the table, move it to the saved pos/rot\r\n        if obj ~= nil then\r\n            obj.setPositionSmooth(entry.pos)\r\n            obj.setRotationSmooth(entry.rot)\r\n            obj.setLock(entry.lock)\r\n        else\r\n            --If obj is inside of the bag\r\n            for _, bagObj in ipairs(bagObjList) do\r\n                if bagObj.guid == guid then\r\n                    local item = self.takeObject({\r\n                        guid=guid, position=entry.pos, rotation=entry.rot, smooth=false\r\n                    })\r\n                    item.setLock(entry.lock)\r\n                    break\r\n                end\r\n            end\r\n        end\r\n    end\r\n    broadcastToAll(\"Objects Placed\", {1,1,1})\r\nend\r\n\r\n--Recalls objects to bag from table\r\nfunction buttonClick_recall()\r\n    for guid, entry in pairs(memoryList) do\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then self.putObject(obj) end\r\n    end\r\n    broadcastToAll(\"Objects Recalled\", {1,1,1})\r\nend\r\n\r\n\r\n--Utility functions\r\n\r\n\r\n--Find delta (difference) between 2 x/y/z coordinates\r\nfunction findOffsetDistance(p1, p2, obj)\r\n    local yOffset = 0\r\n    if obj ~= nil then\r\n        local bounds = obj.getBounds()\r\n        yOffset = (bounds.size.y - bounds.offset.y)\r\n    end\r\n    local deltaPos = {}\r\n    deltaPos.x = (p2.x-p1.x)\r\n    deltaPos.y = (p2.y-p1.y) + yOffset\r\n    deltaPos.z = (p2.z-p1.z)\r\n    return deltaPos\r\nend\r\n\r\n--Used to rotate a set of coordinates by an angle\r\nfunction rotateLocalCoordinates(desiredPos, obj)\r\n\tlocal objPos, objRot = obj.getPosition(), obj.getRotation()\r\n    local angle = math.rad(objRot.y)\r\n\tlocal x = desiredPos.x * math.cos(angle) - desiredPos.z * math.sin(angle)\r\n\tlocal z = desiredPos.x * math.sin(angle) + desiredPos.z * math.cos(angle)\r\n\t--return {x=objPos.x+x, y=objPos.y+desiredPos.y, z=objPos.z+z}\r\n    return {x=x, y=desiredPos.y, z=z}\r\nend\r\n\r\nfunction rotateMyCoordinates(desiredPos, obj)\r\n\tlocal angle = math.rad(obj.getRotation().y)\r\n  local x = desiredPos.x * math.sin(angle)\r\n\tlocal z = desiredPos.z * math.cos(angle)\r\n    return {x=x, y=desiredPos.y, z=z}\r\nend\r\n\r\n--Coroutine delay, in seconds\r\nfunction wait(time)\r\n    local start = os.time()\r\n    repeat coroutine.yield(0) until os.time() > start + time\r\nend\r\n\r\n--Duplicates a table (needed to prevent it making reference to the same objects)\r\nfunction duplicateTable(oldTable)\r\n    local newTable = {}\r\n    for k, v in pairs(oldTable) do\r\n        newTable[k] = v\r\n    end\r\n    return newTable\r\nend\r\n\r\n--Moves scripted highlight from all objects\r\nfunction removeAllHighlights()\r\n    for _, obj in ipairs(getAllObjects()) do\r\n        obj.highlightOff()\r\n    end\r\nend\r\n\r\n--Round number (num) to the Nth decimal (dec)\r\nfunction round(num, dec)\r\n  local mult = 10^(dec or 0)\r\n  return math.floor(num * mult + 0.5) / mult\r\nend",
+  "LuaScriptState": "{\"ml\":{\"17ceaf\":{\"lock\":false,\"pos\":{\"x\":47.9045,\"y\":1.4951,\"z\":74.0436},\"rot\":{\"x\":0,\"y\":269.999,\"z\":0}},\"2c90a2\":{\"lock\":false,\"pos\":{\"x\":45.2298,\"y\":1.4951,\"z\":68.3736},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"2f2538\":{\"lock\":false,\"pos\":{\"x\":45.1764,\"y\":1.4951,\"z\":80.0239},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"38d62e\":{\"lock\":false,\"pos\":{\"x\":45.2207,\"y\":1.4951,\"z\":56.9764},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"453cad\":{\"lock\":false,\"pos\":{\"x\":45.1742,\"y\":1.4951,\"z\":74.1195},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"5afec5\":{\"lock\":false,\"pos\":{\"x\":41.9048,\"y\":1.4597,\"z\":62.712},\"rot\":{\"x\":0,\"y\":89.9893,\"z\":0}},\"5c5f38\":{\"lock\":false,\"pos\":{\"x\":47.9248,\"y\":1.4951,\"z\":68.2059},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"635516\":{\"lock\":false,\"pos\":{\"x\":47.8897,\"y\":1.4951,\"z\":85.8227},\"rot\":{\"x\":0,\"y\":270.0008,\"z\":0}},\"664050\":{\"lock\":false,\"pos\":{\"x\":41.8234,\"y\":1.4597,\"z\":68.4191},\"rot\":{\"x\":0,\"y\":90.0051,\"z\":0}},\"7980bc\":{\"lock\":false,\"pos\":{\"x\":41.9918,\"y\":1.4597,\"z\":80.0886},\"rot\":{\"x\":0,\"y\":90.0093,\"z\":0}},\"890eba\":{\"lock\":false,\"pos\":{\"x\":47.9027,\"y\":1.4951,\"z\":79.9588},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"a6cdd2\":{\"lock\":false,\"pos\":{\"x\":41.9205,\"y\":1.4597,\"z\":56.9595},\"rot\":{\"x\":0,\"y\":89.9893,\"z\":0}},\"ae39ed\":{\"lock\":false,\"pos\":{\"x\":42.0449,\"y\":1.4597,\"z\":85.9758},\"rot\":{\"x\":0,\"y\":89.9676,\"z\":0}},\"c3bb50\":{\"lock\":false,\"pos\":{\"x\":45.1667,\"y\":1.4951,\"z\":85.9219},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"ce82a7\":{\"lock\":false,\"pos\":{\"x\":47.9541,\"y\":1.4951,\"z\":56.7796},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"e514c5\":{\"lock\":false,\"pos\":{\"x\":47.9373,\"y\":1.4951,\"z\":62.5316},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"e770f6\":{\"lock\":false,\"pos\":{\"x\":45.2039,\"y\":1.4951,\"z\":62.7284},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"f9d6fe\":{\"lock\":false,\"pos\":{\"x\":41.8823,\"y\":1.4597,\"z\":74.2664},\"rot\":{\"x\":0,\"y\":90.0277,\"z\":0}}}}",
+  "XmlUI": "",
+  "ContainedObjects": [
+    {
+      "GUID": "c3bb50",
+      "Name": "CardCustom",
+      "Transform": {
+        "posX": 45.1667,
+        "posY": 1.49510384,
+        "posZ": 85.9219,
+        "rotX": -3.289599E-08,
+        "rotY": 180.0,
+        "rotZ": -1.57232137E-07,
+        "scaleX": 1.1700722,
+        "scaleY": 1.0,
+        "scaleZ": 1.1700722
+      },
+      "Nickname": "Anastasia Bernhardt: The Justiciar",
+      "Description": "",
+      "GMNotes": "{\r\n  \"id\": \"MD001\",\r\r\n  \"type\": \"Investigator\",\r\n  \"class\": \"Guardian\",\r\n  \"traits\": \"Templar. Believer.\",\n  \"willpowerIcons\": 4,\n  \"intellectIcons\": 1,\n  \"combatIcons\": 5,\n  \"agilityIcons\": 2,\n  \"cycle\": \"The Blood of Drakul\"\n\r}\r",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Investigator",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 8632300,
+      "SidewaysCard": true,
+      "CustomDeck": {
+        "86323": {
+          "FaceURL": "https://i.imgur.com/gxdzEZM.png",
+          "BackURL": "https://i.imgur.com/24nFh9d.png",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "635516",
+      "Name": "CardCustom",
+      "Transform": {
+        "posX": 47.8897,
+        "posY": 1.49510384,
+        "posZ": 85.8227,
+        "rotX": -9.31641964E-08,
+        "rotY": 270.0008,
+        "rotZ": 1.75440661E-07,
+        "scaleX": 0.6,
+        "scaleY": 1.0,
+        "scaleZ": 0.6
+      },
+      "Nickname": "Anastasia Bernhardt",
+      "Description": "",
+      "GMNotes": "{\r\n  \"id\": \"MD001-m\",\r\r\n  \"type\": \"Minicard\",\n  \"cycle\": \"The Blood of Drakul\"\r\n}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Minicard",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 8594600,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "85946": {
+          "FaceURL": "https://i.imgur.com/OZejbub.png",
+          "BackURL": "https://i.imgur.com/XDWksdt.png",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "2f2538",
+      "Name": "CardCustom",
+      "Transform": {
+        "posX": 45.1764,
+        "posY": 1.49510384,
+        "posZ": 80.0239,
+        "rotX": -3.289599E-08,
+        "rotY": 180.0,
+        "rotZ": -1.57232137E-07,
+        "scaleX": 1.1700722,
+        "scaleY": 1.0,
+        "scaleZ": 1.1700722
+      },
+      "Nickname": "Sanaz al-Bashir: The Grandmaster",
+      "Description": "",
+      "GMNotes": "{\r\n  \"id\": \"MD002\",\r\r\n  \"type\": \"Investigator\",\r\n  \"class\": \"Seeker\",\r\n  \"traits\": \"Templar. Scholar.\",\n  \"willpowerIcons\": 4,\n  \"intellectIcons\": 5,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 2,\n  \"cycle\": \"The Blood of Drakul\"\n\r}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Investigator",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 8633300,
+      "SidewaysCard": true,
+      "CustomDeck": {
+        "86333": {
+          "FaceURL": "https://i.imgur.com/SAqrfUK.png",
+          "BackURL": "https://i.imgur.com/43uh0ge.png",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "890eba",
+      "Name": "CardCustom",
+      "Transform": {
+        "posX": 47.9027,
+        "posY": 1.49510384,
+        "posZ": 79.9588,
+        "rotX": -1.43240072E-07,
+        "rotY": 270.0,
+        "rotZ": 1.20051908E-07,
+        "scaleX": 0.6,
+        "scaleY": 1.0,
+        "scaleZ": 0.6
+      },
+      "Nickname": "Sanaz al-Bashir",
+      "Description": "",
+      "GMNotes": "{\r\n  \"id\": \"MD002-m\",\r\r\n  \"type\": \"Minicard\",\n  \"cycle\": \"The Blood of Drakul\"\r\n}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Minicard",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 8594700,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "85947": {
+          "FaceURL": "https://i.imgur.com/1yKIV3R.png",
+          "BackURL": "https://i.imgur.com/11UZF5E.png",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "17ceaf",
+      "Name": "CardCustom",
+      "Transform": {
+        "posX": 47.9045,
+        "posY": 1.49510384,
+        "posZ": 74.0436,
+        "rotX": -1.12552989E-07,
+        "rotY": 269.999,
+        "rotZ": -6.797812E-08,
+        "scaleX": 0.6,
+        "scaleY": 1.0,
+        "scaleZ": 0.6
+      },
+      "Nickname": "Mercer Kincaid",
+      "Description": "",
+      "GMNotes": "{\r\n  \"id\": \"MD003-m\",\r\r\n  \"type\": \"Minicard\",\n  \"cycle\": \"The Blood of Drakul\"\r\n}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Minicard",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 8631400,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "86314": {
+          "FaceURL": "https://i.imgur.com/R05ipJi.png",
+          "BackURL": "https://i.imgur.com/4e3U9pn.png",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "453cad",
+      "Name": "CardCustom",
+      "Transform": {
+        "posX": 45.1742,
+        "posY": 1.49510384,
+        "posZ": 74.1195,
+        "rotX": -3.289599E-08,
+        "rotY": 180.0,
+        "rotZ": -1.57232137E-07,
+        "scaleX": 1.1700722,
+        "scaleY": 1.0,
+        "scaleZ": 1.1700722
+      },
+      "Nickname": "Mercer Kincaid: The Renegade",
+      "Description": "",
+      "GMNotes": "{\r\n  \"id\": \"MD003\",\r\r\n  \"type\": \"Investigator\",\r\n  \"class\": \"Rogue\",\r\n  \"traits\": \"Vampyr. Cursed.\",\n  \"willpowerIcons\": 2,\n  \"intellectIcons\": 3,\n  \"combatIcons\": 3,\n  \"agilityIcons\": 4,\n  \"cycle\": \"The Blood of Drakul\"\n\r}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Investigator",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 8632800,
+      "SidewaysCard": true,
+      "CustomDeck": {
+        "86328": {
+          "FaceURL": "https://i.imgur.com/zhBRs21.png",
+          "BackURL": "https://i.imgur.com/yUDRHg9.png",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "2c90a2",
+      "Name": "CardCustom",
+      "Transform": {
+        "posX": 45.2298,
+        "posY": 1.49510384,
+        "posZ": 68.3736,
+        "rotX": -3.289599E-08,
+        "rotY": 180.0,
+        "rotZ": -1.57232137E-07,
+        "scaleX": 1.1700722,
+        "scaleY": 1.0,
+        "scaleZ": 1.1700722
+      },
+      "Nickname": "Luther Payne: The Summoner",
+      "Description": "",
+      "GMNotes": "{\r\n  \"id\": \"MD004\",\r\r\n  \"type\": \"Investigator\",\r\n  \"class\": \"Mystic\",\r\n  \"traits\": \"Sorcerer. Porssessed.\",\n  \"willpowerIcons\": 4,\n  \"intellectIcons\": 4,\n  \"combatIcons\": 2,\n  \"agilityIcons\": 2,\n  \"cycle\": \"The Blood of Drakul\"\n\r}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Investigator",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 8633700,
+      "SidewaysCard": true,
+      "CustomDeck": {
+        "86337": {
+          "FaceURL": "https://i.imgur.com/ieypfPt.png",
+          "BackURL": "https://i.imgur.com/rOfC5Og.png",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "5c5f38",
+      "Name": "CardCustom",
+      "Transform": {
+        "posX": 47.9248,
+        "posY": 1.49510384,
+        "posZ": 68.2059,
+        "rotX": -1.43240072E-07,
+        "rotY": 270.0,
+        "rotZ": 1.20051908E-07,
+        "scaleX": 0.6,
+        "scaleY": 1.0,
+        "scaleZ": 0.6
+      },
+      "Nickname": "Luther Payne",
+      "Description": "",
+      "GMNotes": "{\r\n  \"id\": \"MD004-m\",\r\r\n  \"type\": \"Minicard\",\n  \"cycle\": \"The Blood of Drakul\"\r\n}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Minicard",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 8595000,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "85950": {
+          "FaceURL": "https://i.imgur.com/HpPLG4j.png",
+          "BackURL": "https://i.imgur.com/Y5NcUHU.png",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "e514c5",
+      "Name": "CardCustom",
+      "Transform": {
+        "posX": 47.9373,
+        "posY": 1.49510384,
+        "posZ": 62.5316,
+        "rotX": -2.29899655E-07,
+        "rotY": 270.0,
+        "rotZ": 1.98930238E-07,
+        "scaleX": 0.6,
+        "scaleY": 1.0,
+        "scaleZ": 0.6
+      },
+      "Nickname": "Holden Whitaker",
+      "Description": "",
+      "GMNotes": "{\r\n  \"id\": \"MD005-m\",\r\r\n  \"type\": \"Minicard\",\n  \"cycle\": \"The Blood of Drakul\"\r\n}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Minicard",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 8595100,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "85951": {
+          "FaceURL": "https://i.imgur.com/sdlpOpo.png",
+          "BackURL": "https://i.imgur.com/juLDhDE.png",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "e770f6",
+      "Name": "CardCustom",
+      "Transform": {
+        "posX": 45.2039,
+        "posY": 1.49510384,
+        "posZ": 62.7284,
+        "rotX": -1.09635465E-07,
+        "rotY": 180.0,
+        "rotZ": -1.836812E-07,
+        "scaleX": 1.1687429,
+        "scaleY": 1.0,
+        "scaleZ": 1.1687429
+      },
+      "Nickname": "Holden Whitaker: The Lycanthrope",
+      "Description": "",
+      "GMNotes": "{\r\n  \"id\": \"MD005\",\r\r\n  \"type\": \"Investigator\",\r\n  \"class\": \"Survivor\",\r\n  \"traits\": \"Shifter. Hunter.\",\n  \"willpowerIcons\": 2,\n  \"intellectIcons\": 2,\n  \"combatIcons\": 4,\n  \"agilityIcons\": 4,\n  \"cycle\": \"The Blood of Drakul\"\n\r}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Investigator",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 8634700,
+      "SidewaysCard": true,
+      "CustomDeck": {
+        "86347": {
+          "FaceURL": "https://i.imgur.com/VLlxFBg.png",
+          "BackURL": "https://i.imgur.com/oOcPsLC.png",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "ce82a7",
+      "Name": "CardCustom",
+      "Transform": {
+        "posX": 47.9541,
+        "posY": 1.49510384,
+        "posZ": 56.7796,
+        "rotX": -2.29899655E-07,
+        "rotY": 270.0,
+        "rotZ": 1.98930238E-07,
+        "scaleX": 0.6,
+        "scaleY": 1.0,
+        "scaleZ": 0.6
+      },
+      "Nickname": "Adrian Tepesh",
+      "Description": "",
+      "GMNotes": "{\r\n  \"id\": \"MD006-m\",\r\r\n  \"type\": \"Minicard\",\n  \"cycle\": \"The Blood of Drakul\"\r\n}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Minicard",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 8629900,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "86299": {
+          "FaceURL": "https://i.imgur.com/VrtLYaD.png",
+          "BackURL": "https://i.imgur.com/MNkzSOK.png",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "38d62e",
+      "Name": "CardCustom",
+      "Transform": {
+        "posX": 45.2207,
+        "posY": 1.49510384,
+        "posZ": 56.9764,
+        "rotX": -3.289599E-08,
+        "rotY": 180.0,
+        "rotZ": -1.57232137E-07,
+        "scaleX": 1.1700722,
+        "scaleY": 1.0,
+        "scaleZ": 1.1700722
+      },
+      "Nickname": "Adrian Tepesh: The Scion",
+      "Description": "",
+      "GMNotes": "{\r\n  \"id\": \"MD006\",\r\r\n  \"type\": \"Investigator\",\r\n  \"class\": \"Seeker\",\r\n  \"traits\": \"Vampyr. Hybrid. Curesd.\",\n  \"willpowerIcons\": 4,\n  \"intellectIcons\": 3,\n  \"combatIcons\": 3,\n  \"agilityIcons\": 2,\n  \"cycle\": \"The Blood of Drakul\"\n\r}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Investigator",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 8634600,
+      "SidewaysCard": true,
+      "CustomDeck": {
+        "86346": {
+          "FaceURL": "https://i.imgur.com/mlB3oqV.png",
+          "BackURL": "https://i.imgur.com/ABwhinm.png",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "664050",
+      "Name": "Custom_Model_Bag",
+      "Transform": {
+        "posX": 41.8234,
+        "posY": 1.45965588,
+        "posZ": 68.4191,
+        "rotX": 1.065216E-07,
+        "rotY": 90.0051,
+        "rotZ": 4.46463977E-09,
+        "scaleX": 1.75000024,
+        "scaleY": 1.75000024,
+        "scaleZ": 1.75000024
+      },
+      "Nickname": "Signatures",
+      "Description": "",
+      "GMNotes": "",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.35685876,
+        "g": 0.0,
+        "b": 0.6901961
+      },
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": false,
+      "MaterialIndex": -1,
+      "MeshIndex": -1,
+      "CustomMesh": {
+        "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334964971/3078F312706FC974833ECD2A359B87FD4F283509/",
+        "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960553/C518D80E31E27DB23EEAC8CF9253E59798865790/",
+        "NormalURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960069/E70E4A58A1B7827F1E5E2AF9FF44DF0BD5DA33F7/",
+        "ColliderURL": "",
+        "Convex": true,
+        "MaterialIndex": 1,
+        "TypeIndex": 6,
+        "CastShadows": true
+      },
+      "Bag": {
+        "Order": 0
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": "",
+      "PhysicsMaterial": {
+        "StaticFriction": 0.6,
+        "DynamicFriction": 0.6,
+        "Bounciness": 0.0,
+        "FrictionCombine": 0,
+        "BounceCombine": 0
+      },
+      "Rigidbody": {
+        "Mass": 1.375,
+        "Drag": 5.0,
+        "AngularDrag": 5.0,
+        "UseGravity": true
+      },
+      "ContainedObjects": [
+        {
+          "GUID": "23df92",
+          "Name": "CardCustom",
+          "Transform": {
+            "posX": 41.94135,
+            "posY": 3.31141973,
+            "posZ": 68.02226,
+            "rotX": -0.00017273397,
+            "rotY": 270.000061,
+            "rotZ": -6.47257548E-05,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Shade of Zul'khan: One Hell of a Bargain",
+          "Description": "",
+          "GMNotes": "{\r\n  \"id\": \"MD014\",\r\n  \"type\": \"Asset\",\r\r\n  \"traits\": \"Ally. Summon. Demon.\",\n  \"weakness\": true,\n  \"cycle\": \"The Blood of Drakul\"\r\r\r\n}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "Asset",
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 8633800,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "86338": {
+              "FaceURL": "https://i.imgur.com/s0f5lcF.png",
+              "BackURL": "https://github.com/ArkhamDotCards/adc-meta/blob/main/img/cardback-player-tts.png?raw=true",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "a26787",
+          "Name": "CardCustom",
+          "Transform": {
+            "posX": 41.69275,
+            "posY": 3.31143117,
+            "posZ": 68.96106,
+            "rotX": -3.77142278E-05,
+            "rotY": 270.0001,
+            "rotZ": -1.9919642E-05,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Dominion Torque: Choker of Cerberus",
+          "Description": "",
+          "GMNotes": "{\r\n  \"id\": \"MD013\",\r\n  \"type\": \"Asset\",\r\r\n  \"traits\": \"Item. Relic. Occult. Cursed.\",\n  \"cost\": 2,\n  \"wildIcons\": 2,\n  \"cycle\": \"The Ghosts of Onigawa\"\r\r\r\n}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "Asset",
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 8633600,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "86336": {
+              "FaceURL": "https://i.imgur.com/soFSY3o.jpg",
+              "BackURL": "https://github.com/ArkhamDotCards/adc-meta/blob/main/img/cardback-player-tts.png?raw=true",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        }
+      ]
+    },
+    {
+      "GUID": "f9d6fe",
+      "Name": "Custom_Model_Bag",
+      "Transform": {
+        "posX": 41.8823,
+        "posY": 1.459656,
+        "posZ": 74.2664,
+        "rotX": -1.32754124E-07,
+        "rotY": 90.0277,
+        "rotZ": -1.11234284E-08,
+        "scaleX": 1.75000024,
+        "scaleY": 1.75000024,
+        "scaleZ": 1.75000024
+      },
+      "Nickname": "Signatures",
+      "Description": "",
+      "GMNotes": "",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.191996217,
+        "g": 0.701,
+        "b": 0.1679962
+      },
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": false,
+      "MaterialIndex": -1,
+      "MeshIndex": -1,
+      "CustomMesh": {
+        "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334964971/3078F312706FC974833ECD2A359B87FD4F283509/",
+        "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960553/C518D80E31E27DB23EEAC8CF9253E59798865790/",
+        "NormalURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960069/E70E4A58A1B7827F1E5E2AF9FF44DF0BD5DA33F7/",
+        "ColliderURL": "",
+        "Convex": true,
+        "MaterialIndex": 1,
+        "TypeIndex": 6,
+        "CastShadows": true
+      },
+      "Bag": {
+        "Order": 0
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": "",
+      "PhysicsMaterial": {
+        "StaticFriction": 0.6,
+        "DynamicFriction": 0.6,
+        "Bounciness": 0.0,
+        "FrictionCombine": 0,
+        "BounceCombine": 0
+      },
+      "Rigidbody": {
+        "Mass": 1.375,
+        "Drag": 5.0,
+        "AngularDrag": 5.0,
+        "UseGravity": true
+      },
+      "ContainedObjects": [
+        {
+          "GUID": "536558",
+          "Name": "CardCustom",
+          "Transform": {
+            "posX": 41.55602,
+            "posY": 3.31141472,
+            "posZ": 74.1829453,
+            "rotX": 3.81277368E-06,
+            "rotY": 269.999939,
+            "rotZ": -5.396123E-06,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Until Dawn",
+          "Description": "",
+          "GMNotes": "{\r\n  \"id\": \"MD012\",\r\n  \"type\": \"Treachery\",\r\r\n  \"traits\": \"Curse.\",\r\n  \"weakness\": true,\r\n  \"cycle\": \"The Blood of Drakul\"\r\n}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 8632200,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "86322": {
+              "FaceURL": "https://i.imgur.com/m7EBmAB.png",
+              "BackURL": "https://github.com/ArkhamDotCards/adc-meta/blob/main/img/cardback-player-tts.png?raw=true",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "ede5af",
+          "Name": "CardCustom",
+          "Transform": {
+            "posX": 42.5660172,
+            "posY": 3.311508,
+            "posZ": 74.3114,
+            "rotX": 6.624239E-05,
+            "rotY": 270.0,
+            "rotZ": -0.0008974495,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Hope Watson: Universal Donor",
+          "Description": "",
+          "GMNotes": "{\r\n  \"id\": \"MD011\",\r\n  \"type\": \"Asset\",\r\r\n  \"traits\": \"Ally. Human.\",\n  \"cost\": 3,\n  \"willpowerIcons\": 1,\n  \"combatIcons\": 1,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Blood of Drakul\"\r\r\r\n}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "Asset",
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 8632000,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "86320": {
+              "FaceURL": "https://i.imgur.com/khgupRh.jpg",
+              "BackURL": "https://github.com/ArkhamDotCards/adc-meta/blob/main/img/cardback-player-tts.png?raw=true",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        }
+      ]
+    },
+    {
+      "GUID": "7980bc",
+      "Name": "Custom_Model_Bag",
+      "Transform": {
+        "posX": 41.9918,
+        "posY": 1.459656,
+        "posZ": 80.0886,
+        "rotX": 7.537081E-09,
+        "rotY": 90.0093,
+        "rotZ": 1.58648575E-07,
+        "scaleX": 1.75000024,
+        "scaleY": 1.75000024,
+        "scaleZ": 1.75000024
+      },
+      "Nickname": "Signatures",
+      "Description": "",
+      "GMNotes": "",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.905,
+        "g": 0.898,
+        "b": 0.1719962
+      },
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": false,
+      "MaterialIndex": -1,
+      "MeshIndex": -1,
+      "CustomMesh": {
+        "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334964971/3078F312706FC974833ECD2A359B87FD4F283509/",
+        "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960553/C518D80E31E27DB23EEAC8CF9253E59798865790/",
+        "NormalURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960069/E70E4A58A1B7827F1E5E2AF9FF44DF0BD5DA33F7/",
+        "ColliderURL": "",
+        "Convex": true,
+        "MaterialIndex": 1,
+        "TypeIndex": 6,
+        "CastShadows": true
+      },
+      "Bag": {
+        "Order": 0
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": "",
+      "PhysicsMaterial": {
+        "StaticFriction": 0.6,
+        "DynamicFriction": 0.6,
+        "Bounciness": 0.0,
+        "FrictionCombine": 0,
+        "BounceCombine": 0
+      },
+      "Rigidbody": {
+        "Mass": 1.375,
+        "Drag": 5.0,
+        "AngularDrag": 5.0,
+        "UseGravity": true
+      },
+      "ContainedObjects": [
+        {
+          "GUID": "ca2b83",
+          "Name": "CardCustom",
+          "Transform": {
+            "posX": 41.93559,
+            "posY": 3.31143165,
+            "posZ": 80.08499,
+            "rotX": -5.00044844E-05,
+            "rotY": 270.0155,
+            "rotZ": -2.18033638E-05,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Fool's Mate",
+          "Description": "",
+          "GMNotes": "{\r\n  \"id\": \"MD010\",\r\n  \"type\": \"Treachery\",\r\r\n  \"traits\": \"Blunder.\",\r\n  \"weakness\": true,\r\n  \"cycle\": \"The Blood of Drakul\"\r\n}\r",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 8633000,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "86330": {
+              "FaceURL": "https://i.imgur.com/i9CMK3a.png",
+              "BackURL": "https://github.com/ArkhamDotCards/adc-meta/blob/main/img/cardback-player-tts.png?raw=true",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "7f91d2",
+          "Name": "CardCustom",
+          "Transform": {
+            "posX": 42.19972,
+            "posY": 3.31145883,
+            "posZ": 80.16959,
+            "rotX": -0.000297024264,
+            "rotY": 269.999969,
+            "rotZ": -0.00013038858,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Competitive Advantage: Metagame Theory",
+          "Description": "",
+          "GMNotes": "{\r\n  \"id\": \"MD009\",\r\n  \"type\": \"Asset\",\r\r\n  \"traits\": \"Tactic.\",\n  \"cost\": 2,\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Blood of Drakul\"\r\r\r\n}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "Asset",
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 8633900,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "86339": {
+              "FaceURL": "https://i.imgur.com/cSEu7CV.jpg",
+              "BackURL": "https://github.com/ArkhamDotCards/adc-meta/blob/main/img/cardback-player-tts.png?raw=true",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        }
+      ]
+    },
+    {
+      "GUID": "ae39ed",
+      "Name": "Custom_Model_Bag",
+      "Transform": {
+        "posX": 42.0449,
+        "posY": 1.45965552,
+        "posZ": 85.9758,
+        "rotX": -1.647281E-07,
+        "rotY": 89.9676,
+        "rotZ": 6.4038117E-09,
+        "scaleX": 1.75000024,
+        "scaleY": 1.75000024,
+        "scaleZ": 1.75000024
+      },
+      "Nickname": "Signatures",
+      "Description": "",
+      "GMNotes": "",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.117996462,
+        "g": 0.53,
+        "b": 1.0
+      },
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": false,
+      "MaterialIndex": -1,
+      "MeshIndex": -1,
+      "CustomMesh": {
+        "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334964971/3078F312706FC974833ECD2A359B87FD4F283509/",
+        "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960553/C518D80E31E27DB23EEAC8CF9253E59798865790/",
+        "NormalURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960069/E70E4A58A1B7827F1E5E2AF9FF44DF0BD5DA33F7/",
+        "ColliderURL": "",
+        "Convex": true,
+        "MaterialIndex": 1,
+        "TypeIndex": 6,
+        "CastShadows": true
+      },
+      "Bag": {
+        "Order": 0
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": "",
+      "PhysicsMaterial": {
+        "StaticFriction": 0.6,
+        "DynamicFriction": 0.6,
+        "Bounciness": 0.0,
+        "FrictionCombine": 0,
+        "BounceCombine": 0
+      },
+      "Rigidbody": {
+        "Mass": 1.375,
+        "Drag": 5.0,
+        "AngularDrag": 5.0,
+        "UseGravity": true
+      },
+      "ContainedObjects": [
+        {
+          "GUID": "08805f",
+          "Name": "CardCustom",
+          "Transform": {
+            "posX": 41.89643,
+            "posY": 3.31146216,
+            "posZ": 85.68883,
+            "rotX": -2.37500262E-05,
+            "rotY": 269.999939,
+            "rotZ": -1.159842E-05,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Wicked Thoughts",
+          "Description": "",
+          "GMNotes": "{\r\n  \"id\": \"MD008\",\r\n  \"type\": \"Treachery\",\r\r\n  \"traits\": \"Madness.\",\n  \"weakness\": true,\n  \"cycle\": \"The Blood of Drakul\"\r\r\r\n}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 8630500,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "86305": {
+              "FaceURL": "https://i.imgur.com/nZIidOe.png",
+              "BackURL": "https://github.com/ArkhamDotCards/adc-meta/blob/main/img/cardback-player-tts.png?raw=true",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "01ad72",
+          "Name": "CardCustom",
+          "Transform": {
+            "posX": 42.2327423,
+            "posY": 3.31146026,
+            "posZ": 85.96661,
+            "rotX": -0.000259542983,
+            "rotY": 270.008972,
+            "rotZ": -0.000111021764,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Lash of Thanatos: The Justiciar's Mercy",
+          "Description": "",
+          "GMNotes": "{\r\n  \"id\": \"MD007\",\r\n  \"type\": \"Asset\",\r\r\n  \"traits\": \"Item. Relic. Weapon. Melee.\",\n  \"cost\": 4,\n  \"willpowerIcons\": 1,\n  \"combatIcons\": 1,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Blood of Drakul\"\r\r\r\n}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "Asset",
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 8630400,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "86304": {
+              "FaceURL": "https://i.imgur.com/RyJQKH4.png",
+              "BackURL": "https://github.com/ArkhamDotCards/adc-meta/blob/main/img/cardback-player-tts.png?raw=true",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        }
+      ]
+    },
+    {
+      "GUID": "5afec5",
+      "Name": "Custom_Model_Bag",
+      "Transform": {
+        "posX": 41.9048,
+        "posY": 1.459655,
+        "posZ": 62.712,
+        "rotX": -9.730712E-07,
+        "rotY": 89.9893,
+        "rotZ": -8.512545E-07,
+        "scaleX": 1.75000024,
+        "scaleY": 1.75000024,
+        "scaleZ": 1.75000024
+      },
+      "Nickname": "Signatures",
+      "Description": "",
+      "GMNotes": "",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 1.0,
+        "g": 0.0,
+        "b": 0.0
+      },
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": false,
+      "MaterialIndex": -1,
+      "MeshIndex": -1,
+      "CustomMesh": {
+        "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334964971/3078F312706FC974833ECD2A359B87FD4F283509/",
+        "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960553/C518D80E31E27DB23EEAC8CF9253E59798865790/",
+        "NormalURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960069/E70E4A58A1B7827F1E5E2AF9FF44DF0BD5DA33F7/",
+        "ColliderURL": "",
+        "Convex": true,
+        "MaterialIndex": 1,
+        "TypeIndex": 6,
+        "CastShadows": true
+      },
+      "Bag": {
+        "Order": 0
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": "",
+      "PhysicsMaterial": {
+        "StaticFriction": 0.6,
+        "DynamicFriction": 0.6,
+        "Bounciness": 0.0,
+        "FrictionCombine": 0,
+        "BounceCombine": 0
+      },
+      "Rigidbody": {
+        "Mass": 1.375,
+        "Drag": 5.0,
+        "AngularDrag": 5.0,
+        "UseGravity": true
+      },
+      "ContainedObjects": [
+        {
+          "GUID": "215e66",
+          "Name": "CardCustom",
+          "Transform": {
+            "posX": 41.79571,
+            "posY": 3.31145382,
+            "posZ": 63.361515,
+            "rotX": -4.737722E-05,
+            "rotY": 270.006165,
+            "rotZ": -2.47384942E-05,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Apex Predator",
+          "Description": "",
+          "GMNotes": "{\r\n  \"id\": \"MD016\",\r\n  \"type\": \"Skill\",\r\r\n  \"traits\": \"Innate.\",\r\n  \"combatIcons\": 2,\n  \"agilityIcons\": 2,\r\n  \"cycle\": \"The Blood of Drakul\"\r\n}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 8634200,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "86342": {
+              "FaceURL": "https://i.imgur.com/2GZjRbC.jpg",
+              "BackURL": "https://github.com/ArkhamDotCards/adc-meta/blob/main/img/cardback-player-tts.png?raw=true",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "c11760",
+          "Name": "CardCustom",
+          "Transform": {
+            "posX": 41.7384949,
+            "posY": 3.311459,
+            "posZ": 62.79188,
+            "rotX": -2.19929971E-05,
+            "rotY": 270.0,
+            "rotZ": -1.13734941E-05,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Eye of the Storm",
+          "Description": "",
+          "GMNotes": "{\r\n  \"id\": \"MD015\",\r\n  \"type\": \"Asset\",\r\r\n  \"traits\": \"Condition\",\n  \"permanent\": true,\n  \"cycle\": \"The Blood of Drakul\"\r\r\r\n}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 8634800,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "86348": {
+              "FaceURL": "https://i.imgur.com/LOh11Nz.jpg",
+              "BackURL": "https://i.imgur.com/PxvHRKG.png",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        }
+      ]
+    },
+    {
+      "GUID": "a6cdd2",
+      "Name": "Custom_Model_Bag",
+      "Transform": {
+        "posX": 41.9205,
+        "posY": 1.45965528,
+        "posZ": 56.9595,
+        "rotX": -6.804565E-08,
+        "rotY": 89.9893,
+        "rotZ": -3.010841E-08,
+        "scaleX": 1.75000024,
+        "scaleY": 1.75000024,
+        "scaleZ": 1.75000024
+      },
+      "Nickname": "Signatures",
+      "Description": "",
+      "GMNotes": "",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.905,
+        "g": 0.898,
+        "b": 0.1719962
+      },
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": false,
+      "MaterialIndex": -1,
+      "MeshIndex": -1,
+      "CustomMesh": {
+        "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334964971/3078F312706FC974833ECD2A359B87FD4F283509/",
+        "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960553/C518D80E31E27DB23EEAC8CF9253E59798865790/",
+        "NormalURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960069/E70E4A58A1B7827F1E5E2AF9FF44DF0BD5DA33F7/",
+        "ColliderURL": "",
+        "Convex": true,
+        "MaterialIndex": 1,
+        "TypeIndex": 6,
+        "CastShadows": true
+      },
+      "Bag": {
+        "Order": 0
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": "",
+      "PhysicsMaterial": {
+        "StaticFriction": 0.6,
+        "DynamicFriction": 0.6,
+        "Bounciness": 0.0,
+        "FrictionCombine": 0,
+        "BounceCombine": 0
+      },
+      "Rigidbody": {
+        "Mass": 1.375,
+        "Drag": 5.0,
+        "AngularDrag": 5.0,
+        "UseGravity": true
+      },
+      "ContainedObjects": [
+        {
+          "GUID": "81c931",
+          "Name": "CardCustom",
+          "Transform": {
+            "posX": 41.4337044,
+            "posY": 3.31144738,
+            "posZ": 56.518158,
+            "rotX": 6.257268E-05,
+            "rotY": 270.0,
+            "rotZ": -6.572894E-06,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Profligate Temptation",
+          "Description": "",
+          "GMNotes": "{\r\n  \"id\": \"MD019\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\r\r\n  \"traits\": \"Blunder.\",\n  \"weakness\": true,\r\n  \"cycle\": \"The Blood of Drakul\"\r\n}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 8634300,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "86343": {
+              "FaceURL": "https://i.imgur.com/lum4dRF.png",
+              "BackURL": "https://github.com/ArkhamDotCards/adc-meta/blob/main/img/cardback-player-tts.png?raw=true",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "c44863",
+          "Name": "CardCustom",
+          "Transform": {
+            "posX": 41.5120926,
+            "posY": 3.31145859,
+            "posZ": 57.0368347,
+            "rotX": 1.84269138E-05,
+            "rotY": 269.999969,
+            "rotZ": -7.01378758E-06,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "In the House of My Father",
+          "Description": "",
+          "GMNotes": "{\r\n  \"id\": \"MD018\",\r\n  \"type\": \"Skill\",\r\r\n  \"traits\": \"Innate.\",\r\n  \"wildIcons\": 3,\r\n  \"cycle\": \"The Blood of Drakul\"\r\n}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 8634400,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "86344": {
+              "FaceURL": "https://i.imgur.com/6ozIYgh.jpg",
+              "BackURL": "https://github.com/ArkhamDotCards/adc-meta/blob/main/img/cardback-player-tts.png?raw=true",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "d64d50",
+          "Name": "CardCustom",
+          "Transform": {
+            "posX": 42.3359261,
+            "posY": 3.31140852,
+            "posZ": 56.9846649,
+            "rotX": -0.00105084933,
+            "rotY": 270.0,
+            "rotZ": -0.000457659684,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Bloodstained Centuries: The Legacy of Drakul",
+          "Description": "",
+          "GMNotes": "{\r\n  \"id\": \"MD017\",\n  \"class\": \"Neutral\",\r\n  \"type\": \"Asset\",\r\r\n  \"traits\": \"Pact. Cursed.\",\n  \"permanent\": true,\n  \"cycle\": \"The Blood of Drakul\"\r\r\r\n}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "Asset",
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 8634500,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "86345": {
+              "FaceURL": "https://i.imgur.com/I9oMESW.jpg",
+              "BackURL": "https://github.com/ArkhamDotCards/adc-meta/blob/main/img/cardback-player-tts.png?raw=true",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        }
+      ]
+    }
+  ]
+}
