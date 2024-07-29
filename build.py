@@ -1,11 +1,9 @@
 import json
-import shutil
 import subprocess
 from pathlib import Path
 
 PATHS = {
     "decomposed": "./decomposed",
-    "downloadable": "./downloadable",
     "library": "./library.json",
     "moddir": "./SCED",
     "modexec": "./TTSModManager-Linux",
@@ -51,9 +49,6 @@ def __main__():
             ),
             output_dir.joinpath(f'{item["filename"]}.json'),
         )
-
-    for f in resolve(PATHS["downloadable"]).glob("**/*.json"):
-        shutil.copy(f, output_dir)
 
 
 if __name__ == "__main__":
