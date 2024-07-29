@@ -1,0 +1,90 @@
+TT_DECK_GUID = "3d5b6e"
+DR_DECK_GUID = "df464a"
+UD_DECK_GUIDS = { "2dea23", "db3d41", "03f2d2" }
+
+DR_POSITIONS = {
+    {-23.68, 1.63, -0.03},
+    {-30.22, 1.64, 7.57},
+    {-30.22, 1.63, -7.70},
+    {-36.77, 1.65, 7.57},
+    {-36.77, 1.64, -7.70}
+}
+
+CHEST = {
+    position = {1.70, 3.56, 14.28}
+}
+UD_DECK = {
+    position = {0.75, 2.59, 3.03},
+    rotation = { x=0, y=270, z=180 }
+}
+
+function onLoad()
+    self.createButton({
+        label="Set Up",
+        click_function="setup",
+        function_owner=self,
+        position={0,0.1,-0.4},
+        height=120,
+        width=400,
+        scale={x=1.75, y=1.75, z=1.75},
+        font_size=100
+    })
+
+    math.randomseed(os.time())
+end
+
+function setup(obj, color, alt_click)
+    if DISABLED then return end
+    DISABLED = true
+
+    local deck = getObjectFromGUID(TT_DECK_GUID)
+    deck.shuffle()
+    
+    -- reset clue spawned status for locations
+    local tokenSpawnTracker = getObjectFromGUID("e3ffc9")
+    if tokenSpawnTracker then
+        tokenSpawnTracker.call("resetAllLocations")
+    else
+        broadcastToColor("Couldn't find token spawn tracker to reset spawned status for locations", color)
+    end
+
+    deck = getObjectFromGUID(DR_DECK_GUID)
+    deck.shuffle()
+    for i=1,4 do
+        deck.takeObject({
+            position = DR_POSITIONS[i],
+            smooth = false
+        })
+    end
+    deck.remainder.setPosition(DR_POSITIONS[5])
+
+    for i=1,3 do
+        deck = getObjectFromGUID(UD_DECK_GUIDS[i])
+        deck.shuffle()
+        deck.takeObject({
+            position = UD_DECK.position,
+            smooth = false
+        })
+        deck.remainder.setPosition(CHEST.position)
+    end
+
+    Wait.time(setup_2, 1)
+end
+
+function setup_2()
+    local objs = Physics.cast({
+        origin = UD_DECK.position,
+        direction = { x=0, y=-1, z=0 },
+        type = 3,
+        size = { x=1, y=1, z=1 },
+        orientation = UD_DECK.rotation
+    })
+
+    for i,v in ipairs(objs) do
+        local obj = v.hit_object
+        if obj.type == "Deck" then
+            obj.shuffle()
+            obj.setName("Unfathomable Depths Deck")
+        end
+    end
+end

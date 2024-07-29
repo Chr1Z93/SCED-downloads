@@ -1,0 +1,96 @@
+CHEST_GUID = "7a167a"
+FLOORS = {
+  { guid = "b7b094", pos = { -30.22, 1.65, -7.70 } },
+  { guid = "f92601", pos = { -23.68, 1.65, -7.70 } }
+}
+TT_DECK_GUID = "3d5b6e"
+TT_POSITIONS = {
+  Vector({ -23.68, 1.65, 7.57 }),
+  Vector({ -23.68, 1.65, -0.03 }),
+  Vector({ -23.68, 1.65, -7.70 }),
+  Vector({ -30.22, 1.65, 7.57 }),
+  Vector({ -30.22, 1.65, -7.70 }),
+  Vector({ -36.77, 1.65, 7.57 }),
+  Vector({ -36.77, 1.65, -7.70 })
+}
+ROTATION = { 0, 270, 0 }
+
+function onLoad()
+  self.createButton({
+    label = "Set Up",
+    click_function = "setup",
+    function_owner = self,
+    position = { 0, 0.1, 0},
+    height = 150,
+    width = 450,
+    scale = { x = 1.75, y = 1.75, z = 1.75 },
+    font_size = 110
+  })
+end
+
+function setup(obj, color, alt_click)
+  for i, floor in ipairs(FLOORS) do
+    local deck = getObjectFromGUID(floor.guid)
+    deck.shuffle()
+    deck.takeObject({
+      position = floor.pos,
+      rotation = ROTATION,
+      smooth = false
+    })
+  end
+
+  self.editButton({
+    label = "Place Tidal\nTunnels",
+    click_function = "setup_2",
+    function_owner = self,
+    position = { 0, 0.1, 0 },
+    height = 240,
+    width = 500,
+    scale = { x = 1.75, y = 1.75, z = 1.75 },
+    font_size = 85
+  })
+end
+
+function setup_2(obj, color, alt_click)
+  if DISABLED then return end
+  if not alt_click and not WARNED then
+    broadcastToColor("Clean up first (see Act 1b), then click the Place " ..
+      "Tidal Tunnels button again. Right-click this button in the " ..
+      "future to skip this message.", color)
+    WARNED = true
+    return
+  end
+  DISABLED = true
+
+  local chest = getObjectFromGUID(CHEST_GUID)
+  chest.takeObject({
+    guid = TT_DECK_GUID,
+    position = TT_POSITIONS[1] + Vector(0, 1, 0),
+    rotation = ROTATION,
+    smooth = false,
+    callback_function = placeTidalTunnels
+  })
+end
+
+function placeTidalTunnels(deck)
+  Wait.frames(function()
+    deck.shuffle()
+    resetSpawnStatus()
+    local objs = deck.getObjects()
+    for i = 2, #objs do
+      deck.takeObject({
+        position = TT_POSITIONS[i],
+        rotation = ROTATION,
+        smooth = false
+      })
+    end
+  end)
+end
+
+function resetSpawnStatus()
+  local tokenSpawntracker = getObjectFromGUID("e3ffc9")
+  if tokenSpawntracker then
+    tokenSpawntracker.call("resetAllLocations")
+  end
+end
+

@@ -1,0 +1,82 @@
+local MIN_VALUE = 1
+local val = 1
+
+function onload()
+  self.createButton({
+    label = "Rotate",
+    click_function = "doRotation",
+    function_owner = self,
+    position = { 0, 0.1, -0.4 },
+    height = 120,
+    width = 450,
+    scale = { x = 1.75, y = 1.75, z = 1.75 },
+    font_size = 100
+  })
+
+  self.createButton({
+    label = val,
+    click_function = "add_subtract",
+    function_owner = self,
+    position = { 0, 0.1, 0.4 },
+    height = 120,
+    width = 250,
+    scale = { x = 1.75, y = 1.75, z = 1.75 },
+    font_size = 100
+  })
+end
+
+function add_subtract(_, _, isRightClick)
+  local mod = isRightClick and -1 or 1
+  new_value = math.max(val + mod, MIN_VALUE)
+  if val ~= new_value then
+    val = new_value
+    self.editButton({
+      index = 1,
+      label = tostring(val)
+    })
+  end
+end
+
+function doRotation(_, playercolor)
+  if IS_ROTATING then return end
+
+  IS_ROTATING = true
+  local body = getObjectFromGUID("a2f955")
+  if body == nil then
+    printToColor("Place Atlach-Nacha first, then try again", playercolor)
+  end
+
+  local objs = Physics.cast({
+    origin = body.getPosition(),
+    direction = { 0, 1, 0 },
+    type = 2,
+    size = { 6, 6, 6 },
+    max_distance = 0
+  })
+
+  local numAttachments = 0
+  for i, v in ipairs(objs) do
+    local obj = v.hit_object
+    local type = obj.getData().Name
+    local guid = obj.getGUID()
+    if guid ~= "a2f955" and
+        guid ~= "721ba2" and
+        guid ~= "4ee1f2" and
+        (obj.tag == "Card" or type == "Custom_Tile" or type == "Custom_Token") then
+      numAttachments = numAttachments + 1
+      body.addAttachment(obj)
+    end
+  end
+
+  local r = body.getRotation()
+  body.setRotationSmooth({ r.x, r.y + (45 * val), r.z }, false, true)
+  Wait.time(function() detachLegs(body, numAttachments) end, 0.5)
+end
+
+function detachLegs(body, numAttachments)
+  for i = numAttachments - 1, 0, -1 do
+    body.removeAttachment(i)
+  end
+  Wait.time(function() IS_ROTATING = false end, 0.5)
+end
+

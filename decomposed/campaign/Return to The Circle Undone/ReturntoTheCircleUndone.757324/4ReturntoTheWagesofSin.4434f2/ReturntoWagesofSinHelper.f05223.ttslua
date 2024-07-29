@@ -1,0 +1,115 @@
+LOCATIONS = {
+  {
+    name = "Heretics' Graves",
+    guids = { "34b9e9", "5bcc5d" },
+    position = Vector({ -30.22, 1.64, 15.20 })
+  },
+  {
+    name = "The Gallows",
+    guids = { "62d69d", "1042cb" },
+    position = Vector({ -23.68, 1.63, 7.57 })
+  },
+  {
+    name = "Chapel Attic",
+    guids = { "55d8f1", "e2b8fc" },
+    position = Vector({ -23.68, 1.63, -7.70 })
+  },
+  {
+    name = "Chapel Crypt",
+    guids = { "06bdb3", "e2ad21" },
+    position = Vector({ -30.22, 1.63, -15.28 })
+  }
+}
+
+OTHER_LOCATION_GUIDS = { "58b8c5", "6d3a3b", "82d626", "42fbac" }
+
+HERETICS_GUID = "a9af08"
+HERETIC_OFFSET = Vector({ 3.25, 0, 0 })
+HANGMANS_BROOK = "1e9b4c"
+
+SET_ASIDE = {
+  position = { -5.75, 1.54, 19.25 },
+  rotation = { x = 0, y = 270, z = 0 }
+}
+
+function onLoad()
+  self.createButton({
+    label = "Set Up",
+    click_function = "setup",
+    function_owner = self,
+    position = { 0, 0.1, -0.6 },
+    height = 120,
+    width = 525,
+    scale = { x = 1.75, y = 1.75, z = 1.75 },
+    font_size = 80
+  })
+
+  self.createButton({
+    label = "Spawn Clues\nand Heretics",
+    click_function = "spawnHeretics",
+    function_owner = self,
+    position = { 0, 0.1, 0.4 },
+    height = 240,
+    width = 525,
+    scale = { x = 1.75, y = 1.75, z = 1.75 },
+    font_size = 80
+  })
+
+  playarea = getObjectFromGUID("721ba2")
+  math.randomseed(os.time())
+end
+
+function setup(_obj, _color, alt_click)
+  if SETUP_DONE then return end
+  for i, loc in ipairs(LOCATIONS) do
+    local chosen = math.random(2)
+    local guid = loc.guids[chosen]
+    local card = getObjectFromGUID(loc.guids[3 - chosen])
+    card.setPosition(SET_ASIDE.position)
+    card.setRotation({ 0, 270, 180 })
+    card = getObjectFromGUID(guid)
+    card.setPosition(loc.position)
+    card.setRotation({ 0, 270, 180 })
+  end
+  SETUP_DONE = true
+  local deck = getObjectFromGUID(HANGMANS_BROOK)
+  deck.shuffle()
+  deck.takeObject({
+    position = SET_ASIDE.position,
+    rotation = { 0, 270, 180 },
+    smooth = false
+  })
+end
+
+function spawnHeretics()
+  if HERETIC_DONE then return end
+  heretics = getObjectFromGUID(HERETICS_GUID)
+  heretics.shuffle()
+  for i = 1, 4 do
+    heretics.takeObject({
+      position = LOCATIONS[i].position + HERETIC_OFFSET,
+      rotation = { 0, 270, 0 },
+      smooth = false
+    })
+  end
+
+  local count = getObjectFromGUID('f182ee').getVar("val")
+  for i, loc in ipairs(LOCATIONS) do
+    local pos = loc.position
+    for j = 0, (count * 2) - 1 do
+      Global.call("spawnToken", { pos + Vector(0.3 + 0.55 * (math.floor(j / 4)), 0.2, 0.55 * (j % 4) - 0.8), "clue" })
+    end
+  end
+
+  for i, guid in ipairs(OTHER_LOCATION_GUIDS) do
+    local card = getObjectFromGUID(guid)
+    if card ~= nil then
+      local pos = card.getPosition()
+      for j = 0, count - 1 do
+        Global.call("spawnToken", { pos + Vector(-0.25, 0.2, 0.55 * (j % 4) - 0.8), "clue" })
+      end
+    end
+  end
+  HERETIC_DONE = true
+end
+

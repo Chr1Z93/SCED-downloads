@@ -1,0 +1,115 @@
+START_POSITIONS = { { -30.22, 1.64, 7.57 }, { -30.22, 1.63, -7.70 }, { -36.77, 1.65, -0.03 } }
+ACT1_POSITIONS = {
+  TL = { -30.22, 1.64, 15.19 },
+  ML = { -36.77, 1.65, 7.57 },
+  B = { -43.37, 1.66, -0.03 },
+  MR = { -36.77, 1.64, -7.70 },
+  TR = { -30.22, 1.63, -15.28 }
+}
+
+function onLoad()
+  self.createButton({
+    label = "Set Up",
+    click_function = "setup",
+    function_owner = self,
+    position = { 0, 0.1, 0.4 },
+    height = 120,
+    width = 400,
+    scale = { x = 1.75, y = 1.75, z = 1.75 },
+    font_size = 100
+  })
+
+  ttDeck = getObjectFromGUID("3c838d")
+  chest = getObjectFromGUID("7a167a")
+  math.randomseed(os.time())
+end
+
+function setup(obj, color, alt_click)
+  if SETUP_DONE then return end
+  SETUP_DONE = true
+
+  ttDeck.shuffle()
+  for i, pos in ipairs(START_POSITIONS) do
+    ttDeck.takeObject({
+      position = pos,
+      smooth = false
+    })
+  end
+
+  self.editButton({
+    index = 0,
+    label = "Place New\nLocations",
+    height = 240,
+    width = 550,
+    position = { 0, 0.1, 0 },
+    click_function = "setup_2"
+  })
+end
+
+function setup_2(obj, color, alt_click)
+  if SETUP2_DONE then return end
+  SETUP2_DONE = true
+
+  local ttIndexes = {}
+  for i, obj in ipairs(chest.getObjects()) do
+    if obj.name == "Tidal Tunnel" then
+      table.insert(ttIndexes, obj.index)
+    end
+  end
+  for i = #ttIndexes, 1, -1 do
+    chest.takeObject({
+      index = ttIndexes[i],
+      position = ttDeck.getPosition() + Vector(0, 1, 0),
+      smooth = false
+    })
+  end
+
+  Wait.time(setup_3, 1)
+end
+
+function setup_3()
+  ttDeck.shuffle()
+  local play = {}
+
+  if isRevealed(START_POSITIONS[1]) then
+    play.TL = true;
+    play.ML = true;
+  end
+  if isRevealed(START_POSITIONS[2]) then
+    play.TR = true;
+    play.MR = true;
+  end
+  if isRevealed(START_POSITIONS[3]) then
+    play.ML = true;
+    play.B = true;
+    play.MR = true;
+  end
+
+  for key, pos in pairs(ACT1_POSITIONS) do
+    if play[key] == true then
+      ttDeck.takeObject({
+        position = pos,
+        smooth = false
+      })
+    end
+  end
+end
+
+function isRevealed(pos)
+  local objs = Physics.cast({
+    origin = pos,
+    direction = { x = 0, y = -1, z = 0 },
+    type = 3
+  })
+  local card = nil
+  for i, v in ipairs(objs) do
+    local obj = v.hit_object
+    if obj.type == "Card" then
+      card = obj
+      break
+    end
+  end
+
+  if card ~= nil and card.is_face_down then return true end
+  return false
+end

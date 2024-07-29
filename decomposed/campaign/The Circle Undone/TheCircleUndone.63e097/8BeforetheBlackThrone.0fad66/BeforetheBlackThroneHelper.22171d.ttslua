@@ -1,0 +1,321 @@
+CHEST_GUID = "7a167a"
+
+COSMIC_INGRESS_GUID = "910e54"
+HIDEOUS_PALACE_GUID = "a8d84d"
+COURT_OF_THE_GOO_GUID = "7a3ece"
+BLACK_THRONE_GUID = "311eb1"
+COSMOS_DECK_GUID = "752424"
+
+COSMOS_DECK_POSITION = { -11.53, 1.6, -7.76 }
+SET_ASIDE_POSITION = { -4.64, 2.25, 14.57 }
+X_COLOR = Color(160 / 255, 32 / 255, 240 / 255)
+
+-- play area positions
+COSMOS = {
+  A1 = Vector({ -17.04, 1.55, 15.3 }),
+  B1 = Vector({ -17.04, 1.55, 7.65 }),
+  C1 = Vector({ -17.04, 1.55, 0 }),
+  D1 = Vector({ -17.04, 1.55, -7.65 }),
+  E1 = Vector({ -17.04, 1.55, -15.3 }),
+
+  A2 = Vector({ -23.64, 1.55, 15.3 }),
+  B2 = Vector({ -23.64, 1.55, 7.65 }),
+  C2 = Vector({ -23.64, 1.55, 0 }),
+  D2 = Vector({ -23.64, 1.55, -7.65 }),
+  E2 = Vector({ -23.64, 1.55, -15.3 }),
+
+  A3 = Vector({ -30.24, 1.55, 15.3 }),
+  B3 = Vector({ -30.24, 1.55, 7.65 }),
+  C3 = Vector({ -30.24, 1.55, 0 }),
+  D3 = Vector({ -30.24, 1.55, -7.65 }),
+  E3 = Vector({ -30.24, 1.55, -15.3 }),
+
+  A4 = Vector({ -36.84, 1.55, 15.3 }),
+  B4 = Vector({ -36.84, 1.55, 7.65 }),
+  C4 = Vector({ -36.84, 1.55, 0 }),
+  D4 = Vector({ -36.84, 1.55, -7.65 }),
+  E4 = Vector({ -36.84, 1.55, -15.3 }),
+
+  A5 = Vector({ -43.44, 1.55, 15.3 }),
+  B5 = Vector({ -43.44, 1.55, 7.65 }),
+  C5 = Vector({ -43.44, 1.55, 0 }),
+  D5 = Vector({ -43.44, 1.55, -7.65 }),
+  E5 = Vector({ -43.44, 1.55, -15.3 })
+}
+
+ROTATION = { 0, 270, 0 }
+OFFSET = Vector(0, 0.1, 0)
+
+TOKEN_IMAGES = {
+  doom = "https://i.imgur.com/EoL7yaZ.png",
+  clue = "https://steamusercontent-a.akamaihd.net/ugc/1758068501357164917/1D06F1DC4D6888B6F57124BD2AFE20D0B0DA15A8/"
+}
+
+function onLoad()
+  self.createButton({
+    label = "Act 1\nSet Up",
+    click_function = "setup_1",
+    function_owner = self,
+    position = { 0, 0.1, 0 },
+    height = 300,
+    width = 450,
+    scale = { x = 1.75, y = 1.75, z = 1.75 },
+    font_size = 125
+  })
+end
+
+function resetSpawnStatus()
+  local tokenSpawnTracker = getObjectFromGUID("e3ffc9")
+  if tokenSpawnTracker then
+    tokenSpawnTracker.call("resetAllLocations")
+  end
+end
+
+function getDeck(pos)
+  local objs = Physics.cast({
+    origin = pos,
+    direction = { x = 0, y = 1, z = 0 },
+    type = 3
+  })
+  for _, v in ipairs(objs) do
+    local obj = v.hit_object
+    if obj.type == "Deck" then
+      return obj
+    end
+  end
+  return nil
+end
+
+function getCosmosDeck(color)
+  cosmos = getObjectFromGUID(COSMOS_DECK_GUID)
+  if cosmos == nil then
+    for _, obj in ipairs(getObjects()) do
+      if obj.type == "Deck" and obj.getName() == "The Cosmos" then
+        cosmos = obj
+        break
+      end
+    end
+  end
+  if cosmos == nil then
+    broadcastToColor("Cosmos deck not found. If it does exist, " ..
+      "right-click on it and set the name to 'The Cosmos' then try again.", color)
+    return
+  end
+
+  -- find all cosmos cards and add them back to the deck
+  local dropPos = cosmos.getPosition() + OFFSET
+  for i, obj in ipairs(getObjects()) do
+    if obj.getName() == "Cosmos" and
+        obj.getGUID() ~= HIDEOUS_PALACE_GUID and
+        obj.getGUID() ~= COURT_OF_THE_GOO_GUID
+    then
+      obj.setRotation(ROTATION)
+      obj.setPosition(dropPos)
+    end
+  end
+end
+
+function checkEmptySpace(color)
+  for coord, pos in pairs(COSMOS) do
+    local objs = Physics.cast({
+      origin = pos,
+      direction = { x = 0, y = 1, z = 0 },
+      type = 3,
+      size = { 2, 2, 2 }
+    })
+    local skipCleanUp = false
+    for _, v in ipairs(objs) do
+      local obj = v.hit_object
+      local exclude = obj.getGUID() == HIDEOUS_PALACE_GUID or obj.getGUID() == COURT_OF_THE_GOO_GUID
+      if exclude then skipCleanUp = true end
+      if obj.type == "Card" and obj.is_face_down and not exclude then
+        broadcastToColor("Remove non-Cosmos cards from the play area then try again", color)
+        return false
+      end
+    end
+    if not skipCleanUp then
+      for _, v in ipairs(objs) do
+        local obj = v.hit_object
+        if isClueDoom(obj) then obj.destruct() end
+      end
+    end
+  end
+  return true
+end
+
+function markEmptySpace(spaces)
+  lines = {}
+  for _, space in ipairs(spaces) do
+    drawX(COSMOS[space])
+  end
+  Global.setVectorLines(lines)
+end
+
+function moveLocationTo(loc, coord)
+  local objs = Physics.cast({
+    origin = loc.getPosition(),
+    direction = { 0, 1, 0 },
+    type = 2,
+    size = { 8, 8, 8 },
+    max_distance = 0
+  })
+  for i, v in ipairs(objs) do
+    local obj = v.hit_object
+    if obj ~= loc and obj.type == "Card" or isClueDoom(obj) then
+      loc.addAttachment(obj)
+    end
+  end
+  loc.setPosition(COSMOS[coord] + OFFSET)
+  Wait.time(function() loc.removeAttachments() end, 1)
+end
+
+function drawX(pos)
+  table.insert(lines, {
+    points = { { pos.x - 1, pos.y, pos.z + 0.5 }, { pos.x + 1, pos.y, pos.z - 0.5 } },
+    color = X_COLOR
+  })
+  table.insert(lines, {
+    points = { { pos.x - 1, pos.y, pos.z - 0.5 }, { pos.x + 1, pos.y, pos.z + 0.5 } },
+    color = X_COLOR
+  })
+end
+
+function isClueDoom(obj)
+  if obj.type ~= "Tile" then return false end
+  local props = obj.getCustomObject()
+  return (props.image == TOKEN_IMAGES.clue and props.image_bottom == TOKEN_IMAGES.doom)
+      or (props.image == TOKEN_IMAGES.doom and props.image_bottom == TOKEN_IMAGES.clue)
+end
+
+function setup_1(obj, color, alt_click)
+  local startloc = getObjectFromGUID(COSMIC_INGRESS_GUID)
+  local nextLoc = getObjectFromGUID(HIDEOUS_PALACE_GUID)
+  local cosmos = getObjectFromGUID(COSMOS_DECK_GUID)
+  cosmos.shuffle()
+
+  nextLoc.setRotation(ROTATION)
+  deckPos = nextLoc.getPosition()
+  cosmos.takeObject({
+    position = deckPos + OFFSET,
+    rotation = ROTATION,
+    smooth = false
+  })
+  cosmos.setPosition(COSMOS_DECK_POSITION)
+
+  Wait.time(place_locations_1, 1)
+end
+
+function place_locations_1()
+  local deck = getDeck(deckPos)
+  deck.shuffle()
+
+  deck.takeObject({
+    position = COSMOS["D1"] + OFFSET,
+    rotation = ROTATION,
+    smooth = false
+  })
+  deck.remainder.setPosition(COSMOS["D3"] + OFFSET)
+
+  markEmptySpace({ "B1", "C1", "C2", "D2", "B3", "C3" })
+
+  self.editButton({ label = "Act 2\nSet Up ", click_function = "setup_2" })
+end
+
+function setup_2(obj, color, alt_click)
+  getCosmosDeck(color)
+  if cosmos == nil then return end
+
+  local ingress = getObjectFromGUID(COSMIC_INGRESS_GUID)
+  if ingress ~= nil then ingress.setPosition(SET_ASIDE_POSITION) end
+  if not checkEmptySpace(color) then return end
+  local palace = getObjectFromGUID(HIDEOUS_PALACE_GUID)
+  moveLocationTo(palace, "B3")
+  Wait.time(place_locations_2, 1)
+end
+
+function place_locations_2()
+  cosmos.shuffle()
+  resetSpawnStatus()
+  markEmptySpace({ "B2", "C2", "D2", "C3", "B4", "C4", "D4" })
+
+  local chest = getObjectFromGUID(CHEST_GUID)
+  local props = {
+    position = COSMOS["C1"] + OFFSET,
+    rotation = ROTATION,
+    smooth = false
+  }
+  cosmos.takeObject(props)
+  cosmos.takeObject(props)
+  props.guid = COURT_OF_THE_GOO_GUID
+  chest.takeObject(props)
+
+  Wait.time(function()
+    local deck = getDeck(COSMOS["C1"])
+    deck.shuffle()
+    deck.takeObject({
+      position = COSMOS["D3"] + OFFSET,
+      rotation = ROTATION,
+      smooth = false
+    })
+    deck.takeObject({
+      position = COSMOS["C5"] + OFFSET,
+      rotation = ROTATION,
+      smooth = false
+    })
+  end, 1)
+
+  self.editButton({ label = "Act 3\nSet Up ", click_function = "setup_3" })
+end
+
+function setup_3(obj, color, alt_click)
+  if DISABLED then return end
+  getCosmosDeck(color)
+  if cosmos == nil then return end
+
+  local palace = getObjectFromGUID(HIDEOUS_PALACE_GUID)
+  if palace ~= nil then palace.setPosition(SET_ASIDE_POSITION) end
+  local goo = getObjectFromGUID(COURT_OF_THE_GOO_GUID)
+  if not checkEmptySpace(color) then return end
+  moveLocationTo(goo, "B3")
+  Wait.time(place_locations_3, 1)
+end
+
+function place_locations_3()
+  cosmos.shuffle()
+  resetSpawnStatus()
+  markEmptySpace({ "B2", "C2", "D2", "C3", "D3", "B4", "C4", "D4" })
+
+  local chest = getObjectFromGUID(CHEST_GUID)
+  local props = {
+    position = COSMOS["C1"] + OFFSET,
+    rotation = ROTATION,
+    smooth = false
+  }
+  cosmos.takeObject(props)
+  cosmos.takeObject(props)
+  cosmos.takeObject(props)
+  props.guid = BLACK_THRONE_GUID
+  chest.takeObject(props)
+
+  Wait.time(function()
+    local deck = getDeck(COSMOS["C1"])
+    deck.shuffle()
+    deck.takeObject({
+      position = COSMOS["E2"] + OFFSET,
+      rotation = ROTATION,
+      smooth = false
+    })
+    deck.takeObject({
+      position = COSMOS["E4"] + OFFSET,
+      rotation = ROTATION,
+      smooth = false
+    })
+    deck.takeObject({
+      position = COSMOS["C5"] + OFFSET,
+      rotation = ROTATION,
+      smooth = false
+    })
+  end, 1)
+  DISABLED = true
+end
+
