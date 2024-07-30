@@ -22,41 +22,34 @@ end
 
 function updateMemoryWithMoves()
   memoryList = memoryListBackup
-  -- get the first transposed object's coordinates
   local obj = getObjectFromGUID(moveGuid)
-
-  -- p1 is where needs to go, p2 is where it was
-  local refObjPos = Vector(memoryList[moveGuid].pos)
-  local deltaPos = findOffsetDistance(obj.getPosition(), refObjPos, nil)
+  local deltaPos = findOffsetDistance(obj.getPosition(), Vector(memoryList[moveGuid].pos))
   for _, entry in pairs(memoryList) do
     entry.pos.x = entry.pos.x - deltaPos.x
     entry.pos.y = entry.pos.y - deltaPos.y
     entry.pos.z = entry.pos.z - deltaPos.z
   end
-
   moveList = {}
 end
 
 function onLoad(savedData)
   fresh = true
+  memoryList = {}
+  moveList = {}
+
   if savedData ~= "" then
     memoryList = JSON.decode(savedData).ml
-  else
-    memoryList = {}
   end
-
-  moveList = {}
-  moveGuid = nil
 
   -- make sure the model is loaded so that we can use the bounds
   Wait.condition(function()
     selfScale = self.getScale()
     selfBounds = self.getBoundsNormalized()
-    buttonX = math.max(selfBounds.size.x / 5, 1 / selfScale.x)
+    buttonX = math.max(selfBounds.size.x / 5, 1.5) / selfScale.x
     buttonY = -(selfBounds.size.y / 2 + selfBounds.offset.y) / selfScale.y + 0.5
-    buttonZ = (selfBounds.size.z / 2 + 1.1) / selfScale.z
-    buttonZ2 = (selfBounds.size.z / 2 + 2.3) / selfScale.z
-    buttonZ3 = (selfBounds.size.z / 2 + 3.5) / selfScale.z
+    buttonZ = (selfBounds.size.z / 2 + 1) / selfScale.z
+    buttonZ2 = (selfBounds.size.z / 2 + 2.15) / selfScale.z
+    buttonZ3 = (selfBounds.size.z / 2 + 3.3) / selfScale.z
     buttonScale = Vector( 1 / selfScale.x, 1, 1 / selfScale.z )
 
     if next(memoryList) == nil then
@@ -69,8 +62,6 @@ function onLoad(savedData)
 end
 
 -- Beginning Setup
-
--- Make setup button
 function createSetupButton()
   self.createButton({
     label = "Setup",
@@ -89,7 +80,7 @@ end
 -- Triggered by Transpose button
 function buttonClick_transpose()
   moveGuid = nil
-  broadcastToAll("Select one object and move it- all objects will move relative to the new location", { 0.75, 0.75, 1 })
+  broadcastToAll("Select one object and move it - all objects will move relative to the new location", { 0.75, 0.75, 1 })
   memoryListBackup = duplicateTable(memoryList)
   memoryList = {}
   moveList = {}
@@ -109,8 +100,10 @@ end
 
 -- Creates selection buttons on objects
 function createButtonsOnAllObjects(move)
+  local color = { 0.75, 0.25, 0.25, 0.75 }
   local objsToHaveButtons = {}
   if move == true then
+    color = { 0, 0, 1, 0.75 }
     for guid in pairs(memoryListBackup) do
       local curObj = getObjectFromGUID(guid)
       table.insert(objsToHaveButtons, curObj)
@@ -119,15 +112,11 @@ function createButtonsOnAllObjects(move)
     objsToHaveButtons = getObjects()
   end
 
-  local color = { 0.75, 0.25, 0.25, 0.75 }
-  if move == true then
-    color = { 0, 0, 1, 0.75 }
-  end
-
   local buttonCount = 0
   for _, obj in ipairs(objsToHaveButtons) do
     if obj ~= self and obj.type ~= "Scripting" and obj.type ~= "Hand" then
-      local buttonPos = self.positionToLocal(obj.getPosition() + Vector(0, 2, 0))
+      local objBounds = obj.getBounds()
+      local buttonPos = self.positionToLocal(obj.getPosition() + Vector(0, objBounds.size.y / 2 + 1, 0))
       buttonPos.x = -buttonPos.x
 
       local funcName = "selectButton_" .. buttonCount
@@ -149,94 +138,55 @@ end
 
 -- Creates submit and cancel buttons
 function createSetupActionButtons(move)
-  local height = 500
-  local width = 1300
-  local fontSize = 350
-
-  self.createButton({
-    label = "Cancel",
-    click_function = "buttonClick_cancel",
+  local buttonParameters = {
     function_owner = self,
-    position = { x = -buttonX, y = buttonY, z = -buttonZ },
-    height = height,
-    width = width,
-    font_size = fontSize,
+    height = 500,
+    width = 1300,
+    font_size = 335,
     color = { 0, 0, 0 },
     font_color = { 1, 1, 1 },
     scale = buttonScale
-  })
+  }
 
-  self.createButton({
-    label = "Submit",
-    click_function = "buttonClick_submit",
-    function_owner = self,
-    position = { x = -buttonX, y = buttonY, z = -buttonZ2 },
-    height = height,
-    width = width,
-    font_size = fontSize,
-    color = { 0, 0, 0 },
-    font_color = { 1, 1, 1 },
-    scale = buttonScale
-  })
+  buttonParameters.label = "Cancel"
+  buttonParameters.click_function = "buttonClick_cancel"
+  buttonParameters.position = { x = -buttonX, y = buttonY, z = -buttonZ }
+  self.createButton(buttonParameters)
 
-  self.createButton({
-    label = "Reset",
-    click_function = "buttonClick_reset",
-    function_owner = self,
-    position = { x = -buttonX, y = buttonY, z = -buttonZ3 },
-    height = height,
-    width = width,
-    font_size = fontSize,
-    color = { 0, 0, 0 },
-    font_color = { 1, 1, 1 },
-    scale = buttonScale
-  })
+  buttonParameters.label = "Submit"
+  buttonParameters.click_function = "buttonClick_submit"
+  buttonParameters.position = { x = -buttonX, y = buttonY, z = -buttonZ2 }
+  self.createButton(buttonParameters)
+
+  buttonParameters.label = "Reset"
+  buttonParameters.click_function = "buttonClick_reset"
+  buttonParameters.position = { x = -buttonX, y = buttonY, z = -buttonZ3 }
+  self.createButton(buttonParameters)
 
   if move == false then
-    self.createButton({
-      label = "Add",
-      click_function = "buttonClick_add",
-      function_owner = self,
-      position = { x = buttonX, y = buttonY, z = -buttonZ },
-      height = height,
-      width = width,
-      font_size = fontSize,
-      color = { 0, 0, 0 },
-      font_color = { 0.25, 1, 0.25 },
-      scale = buttonScale
-    })
+    buttonParameters.label = "Add"
+    buttonParameters.click_function = "buttonClick_add"
+    buttonParameters.position = { x = buttonX, y = buttonY, z = -buttonZ }
+    buttonParameters.font_color = { 0.25, 1, 0.25 }
+    self.createButton(buttonParameters)
 
     if fresh == false then
-      self.createButton({
-        label = "Set New",
-        click_function = "buttonClick_setNew",
-        function_owner = self,
-        position = { x = buttonX, y = buttonY, z = -buttonZ3 },
-        height = height,
-        width = width,
-        font_size = fontSize,
-        color = { 0, 0, 0 },
-        font_color = { 0.75, 0.75, 1 },
-        scale = buttonScale
-      })
-      self.createButton({
-        label = "Remove",
-        click_function = "buttonClick_remove",
-        function_owner = self,
-        position = { x = buttonX, y = buttonY, z = -buttonZ2 },
-        height = height,
-        width = width,
-        font_size = fontSize,
-        color = { 0, 0, 0 },
-        font_color = { 1, 0.25, 0.25 },
-        scale = buttonScale
-      })
+      buttonParameters.label = "Set New"
+      buttonParameters.click_function = "buttonClick_setNew"
+      buttonParameters.position = { x = buttonX, y = buttonY, z = -buttonZ3 }
+      buttonParameters.font_color = { 0.75, 0.75, 1 }
+      self.createButton(buttonParameters)
+
+      buttonParameters.label = "Remove"
+      buttonParameters.click_function = "buttonClick_remove"
+      buttonParameters.position = { x = buttonX, y = buttonY, z = -buttonZ2 }
+      buttonParameters.font_color = { 1, 0.25, 0.25 }
+      self.createButton(buttonParameters)
     end
   end
 end
 
 -- During Setup
-
 -- Checks or unchecks buttons
 function buttonClick_selection(index, obj, move)
   local colorMove = { 0, 0, 1, 0.75 }
@@ -257,13 +207,9 @@ function buttonClick_selection(index, obj, move)
   end
 
   if theList[selectedGuid] == nil then
-    self.editButton({ index = index, color = color })
-
-    -- Adding pos/rot to memory table
     local pos = obj.getPosition()
     local rot = obj.getRotation()
 
-    -- I need to add it like this or it won't save due to indexing issue
     theList[obj.getGUID()] = {
       pos = { x = round(pos.x, 2), y = round(pos.y, 3), z = round(pos.z, 2) },
       rot = { x = round(rot.x, 0), y = round(rot.y, 0), z = round(rot.z, 0) },
@@ -275,18 +221,19 @@ function buttonClick_selection(index, obj, move)
     if move == true then
       color = colorMove
     end
-    self.editButton({ index = index, color = color })
     theList[obj.getGUID()] = nil
     obj.highlightOff()
   end
+
+  self.editButton({ index = index, color = color })
 end
 
 -- Cancels selection process
 function buttonClick_cancel()
   memoryList = memoryListBackup
   moveList = {}
-  self.clearButtons()
   if next(memoryList) == nil then
+    self.clearButtons()
     createSetupButton()
   else
     createMemoryActionButtons()
@@ -307,7 +254,6 @@ function buttonClick_submit()
       broadcastToAll("Item selected for moving is not already in memory", { 1, 0.25, 0.25 })
     else
       broadcastToAll("Moving all items in memory relative to new objects position!", { 0.75, 0.75, 1 })
-      self.clearButtons()
       createMemoryActionButtons()
       local count = 0
       for guid in pairs(moveList) do
@@ -325,7 +271,6 @@ function buttonClick_submit()
     broadcastToAll("No selections made.", { 0.75, 0.25, 0.25 })
   end
   combineMemoryFromBagsWithin()
-  self.clearButtons()
   createMemoryActionButtons()
   local count = 0
   for guid in pairs(memoryList) do
@@ -347,7 +292,6 @@ function buttonClick_add()
   combineTables(memoryList, memoryListBackup)
   broadcastToAll("Adding internal bags and selections to existing memory", { 0.25, 0.75, 0.25 })
   combineMemoryFromBagsWithin()
-  self.clearButtons()
   createMemoryActionButtons()
   local count = 0
   for guid in pairs(memoryList) do
@@ -361,7 +305,6 @@ end
 
 function buttonClick_remove()
   broadcastToAll("Removing Selected Entries From Memory", { 1.0, 0.25, 0.25 })
-  self.clearButtons()
   createMemoryActionButtons()
   local count = 0
   for guid in pairs(memoryList) do
@@ -377,16 +320,14 @@ end
 
 function buttonClick_setNew()
   broadcastToAll("Setting new position relative to items in memory", { 0.75, 0.75, 1 })
-  self.clearButtons()
   createMemoryActionButtons()
   local count = 0
   for _, obj in ipairs(getObjects()) do
-    guid = obj.guid
-    if memoryListBackup[guid] ~= nil then
+    if memoryListBackup[obj.guid] ~= nil then
       count = count + 1
-      memoryListBackup[guid].pos = obj.getPosition()
-      memoryListBackup[guid].rot = obj.getRotation()
-      memoryListBackup[guid].lock = obj.getLock()
+      memoryListBackup[obj.guid].pos = obj.getPosition()
+      memoryListBackup[obj.guid].rot = obj.getRotation()
+      memoryListBackup[obj.guid].lock = obj.getLock()
     end
   end
   broadcastToAll(count .. " Objects Saved", { 1, 1, 1 })
@@ -406,9 +347,10 @@ function buttonClick_reset()
 end
 
 -- After Setup
-
 -- Creates recall and place buttons
 function createMemoryActionButtons()
+  self.clearButtons()
+
   self.createButton({
     label = "Place",
     click_function = "buttonClick_place",
@@ -465,7 +407,6 @@ function buttonClick_place()
   broadcastToAll("Objects Placed", { 1, 1, 1 })
 end
 
--- Recalls objects to bag from table
 function buttonClick_recall()
   for guid, _ in pairs(memoryList) do
     local obj = getObjectFromGUID(guid)
@@ -475,7 +416,6 @@ function buttonClick_recall()
 end
 
 -- Utility functions
-
 -- Find delta (difference) between 2 x/y/z coordinates
 function findOffsetDistance(p1, p2, obj)
   local yOffset = 0
@@ -501,7 +441,7 @@ function wait(time)
   repeat coroutine.yield(0) until os.time() > start + time
 end
 
--- Duplicates a table (needed to prevent it making reference to the same objects)
+-- Duplicates a table (since Lua passes tables by reference)
 function duplicateTable(oldTable)
   local newTable = {}
   for k, v in pairs(oldTable) do
@@ -510,7 +450,7 @@ function duplicateTable(oldTable)
   return newTable
 end
 
--- Moves scripted highlight from all objects
+-- Removes scripted highlight from all objects
 function removeAllHighlights()
   for _, obj in ipairs(getObjects()) do
     obj.highlightOff()
