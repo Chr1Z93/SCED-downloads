@@ -1,8 +1,64 @@
 -- Utility memory bag
 -- based on Version 2.5.2 by Directsun (fork of Memory Bag 2.0 by MrStump)
 
+-- TODO:
+-- use selected objects to add / remove items (via additional button)
+
 function updateSave()
-  self.script_state = JSON.encode({ ["ml"] = memoryList })
+  self.script_state = JSON.encode({
+    ml = memoryList,
+    setupButton = setupButton
+  })
+end
+
+function onLoad(savedData)
+  fresh = true
+  memoryList = {}
+  moveList = {}
+
+  if savedData ~= "" then
+    local loadedData = JSON.decode(savedData)
+    memoryList = loadedData.ml
+    setupButton = loadedData.setupButton
+  end
+
+  self.addContextMenuItem("Toggle setup button", function()
+    if setupButton then
+      setupButton = false
+      broadcastToAll("Setup button disabled", { 1, 1, 1 })
+    else
+      setupButton = true
+      broadcastToAll("Setup button enabled", { 1, 1, 1 })
+    end
+    moveList = {}
+    updateSave()
+    self.clearButtons()
+    removeAllHighlights()
+    if fresh then
+      createSetupButton()
+    else
+      createMemoryActionButtons()
+    end
+  end)
+
+  -- make sure the model is loaded so that we can use the bounds
+  Wait.condition(function()
+    selfScale = self.getScale()
+    selfBounds = self.getBoundsNormalized()
+    buttonX = math.max(selfBounds.size.x / 5, 1.5) / selfScale.x
+    buttonY = -(selfBounds.size.y / 2 + selfBounds.offset.y) / selfScale.y + 0.5
+    buttonZ = (selfBounds.size.z / 2 + 1) / selfScale.z
+    buttonZ2 = (selfBounds.size.z / 2 + 2.15) / selfScale.z
+    buttonZ3 = (selfBounds.size.z / 2 + 3.3) / selfScale.z
+    buttonScale = Vector( 1 / selfScale.x, 1, 1 / selfScale.z )
+
+    if next(memoryList) == nil then
+      createSetupButton()
+    else
+      fresh = false
+      createMemoryActionButtons()
+    end
+  end, function() return not self.loading_custom end)
 end
 
 function combineMemoryFromBagsWithin()
@@ -32,37 +88,9 @@ function updateMemoryWithMoves()
   moveList = {}
 end
 
-function onLoad(savedData)
-  fresh = true
-  memoryList = {}
-  moveList = {}
-
-  if savedData ~= "" then
-    memoryList = JSON.decode(savedData).ml
-  end
-
-  -- make sure the model is loaded so that we can use the bounds
-  Wait.condition(function()
-    selfScale = self.getScale()
-    selfBounds = self.getBoundsNormalized()
-    buttonX = math.max(selfBounds.size.x / 5, 1.5) / selfScale.x
-    buttonY = -(selfBounds.size.y / 2 + selfBounds.offset.y) / selfScale.y + 0.5
-    buttonZ = (selfBounds.size.z / 2 + 1) / selfScale.z
-    buttonZ2 = (selfBounds.size.z / 2 + 2.15) / selfScale.z
-    buttonZ3 = (selfBounds.size.z / 2 + 3.3) / selfScale.z
-    buttonScale = Vector( 1 / selfScale.x, 1, 1 / selfScale.z )
-
-    if next(memoryList) == nil then
-      createSetupButton()
-    else
-      fresh = false
-      createMemoryActionButtons()
-    end
-  end, function() return not self.loading_custom end)
-end
-
 -- Beginning Setup
 function createSetupButton()
+  if setupButton ~= true then return end
   self.createButton({
     label = "Setup",
     click_function = "buttonClick_setup",
@@ -77,7 +105,6 @@ function createSetupButton()
   })
 end
 
--- Triggered by Transpose button
 function buttonClick_transpose()
   moveGuid = nil
   broadcastToAll("Select one object and move it - all objects will move relative to the new location", { 0.75, 0.75, 1 })
@@ -89,7 +116,6 @@ function buttonClick_transpose()
   createSetupActionButtons(true)
 end
 
--- Triggered by setup button
 function buttonClick_setup()
   memoryListBackup = duplicateTable(memoryList)
   memoryList = {}
@@ -207,12 +233,9 @@ function buttonClick_selection(index, obj, move)
   end
 
   if theList[selectedGuid] == nil then
-    local pos = obj.getPosition()
-    local rot = obj.getRotation()
-
-    theList[obj.getGUID()] = {
-      pos = { x = round(pos.x, 2), y = round(pos.y, 3), z = round(pos.z, 2) },
-      rot = { x = round(rot.x, 0), y = round(rot.y, 0), z = round(rot.z, 0) },
+    theList[selectedGuid] = {
+      pos = roundVector(obj.getPosition(), 3),
+      rot = roundVector(obj.getRotation(), 0),
       lock = obj.getLock()
     }
     obj.highlightOn({ 0, 1, 0 })
@@ -221,7 +244,7 @@ function buttonClick_selection(index, obj, move)
     if move == true then
       color = colorMove
     end
-    theList[obj.getGUID()] = nil
+    theList[selectedGuid] = nil
     obj.highlightOff()
   end
 
@@ -281,10 +304,6 @@ function buttonClick_submit()
   broadcastToAll(count .. " Objects Saved", { 1, 1, 1 })
   updateSave()
   moveGuid = nil
-end
-
-function combineTables(first_table, second_table)
-  for k, v in pairs(second_table) do first_table[k] = v end
 end
 
 function buttonClick_add()
@@ -380,31 +399,57 @@ end
 
 -- Sends objects from bag/table to their saved position/rotation
 function buttonClick_place()
-  local bagObjList = self.getObjects()
+  memoryListBackup = duplicateTable(memoryList)
+  local data = self.getData()
+
+  if not data.ContainedObjects then
+    broadcastToAll("Bag is already empty", { 1, 1, 1 })
+    return
+  end
+
+  -- get names of contained objects
+  local guidToName = {}
+  for _, bagObjData in ipairs(data.ContainedObjects or {}) do
+    guidToName[bagObjData["GUID"]] = bagObjData["Nickname"]
+  end
+
+  local placeCount = 0
+  local moveCount = 0
   for guid, entry in pairs(memoryList) do
     local obj = getObjectFromGUID(guid)
-    -- If obj is out on the table, move it to the saved pos/rot
-    if obj ~= nil then
+    if obj ~= nil and obj.getName() == guidToName[guid] then
+      -- If obj is out on the table and has the same name, move it
+      moveCount = moveCount + 1
       obj.setPositionSmooth(entry.pos)
       obj.setRotationSmooth(entry.rot)
       obj.setLock(entry.lock)
-    else
+    elseif guidToName[guid] then
       -- If obj is inside of the bag
-      for _, bagObj in ipairs(bagObjList) do
-        if bagObj.guid == guid then
-          local item = self.takeObject({
-            guid = guid,
-            position = entry.pos,
-            rotation = entry.rot,
-            smooth = false
-          })
-          item.setLock(entry.lock)
-          break
-        end
+      placeCount = placeCount + 1
+      local item = self.takeObject({
+        guid = guid,
+        position = entry.pos,
+        rotation = entry.rot,
+        smooth = false
+      })
+      item.setLock(entry.lock)
+
+      -- update the memory list since we just placed an item that got a new GUID
+      if obj ~= nil then
+        memoryListBackup[item.getGUID()] = entry
+        memoryListBackup[guid] = nil
       end
     end
   end
-  broadcastToAll("Objects Placed", { 1, 1, 1 })
+  memoryList = memoryListBackup
+
+  if placeCount > 0 then
+    broadcastToAll(placeCount .. " Object(s) Placed", { 1, 1, 1 })
+  end
+
+  if moveCount > 0 then
+    broadcastToAll(moveCount .. " Object(s) Moved", { 1, 1, 1 })
+  end
 end
 
 function buttonClick_recall()
@@ -427,20 +472,6 @@ function findOffsetDistance(p1, p2, obj)
   return deltaPos
 end
 
--- Used to rotate a set of coordinates by an angle
-function rotateLocalCoordinates(desiredPos, obj)
-  local angle = math.rad(obj.getRotation().y)
-  local x = desiredPos.x * math.cos(angle) - desiredPos.z * math.sin(angle)
-  local z = desiredPos.x * math.sin(angle) + desiredPos.z * math.cos(angle)
-  return { x = x, y = desiredPos.y, z = z }
-end
-
--- Coroutine delay, in seconds
-function wait(time)
-  local start = os.time()
-  repeat coroutine.yield(0) until os.time() > start + time
-end
-
 -- Duplicates a table (since Lua passes tables by reference)
 function duplicateTable(oldTable)
   local newTable = {}
@@ -450,15 +481,22 @@ function duplicateTable(oldTable)
   return newTable
 end
 
--- Removes scripted highlight from all objects
 function removeAllHighlights()
   for _, obj in ipairs(getObjects()) do
     obj.highlightOff()
   end
 end
 
--- Round number (num) to the Nth decimal (dec)
-function round(num, dec)
+function combineTables(t1, t2)
+  for k, v in pairs(t2) do t1[k] = v end
+end
+
+-- Round vector to the Nth decimal
+function roundVector(vec, dec)
   local mult = 10 ^ (dec or 0)
-  return math.floor(num * mult + 0.5) / mult
+  local t = {}
+  for _, k in ipairs({"x", "y", "z"}) do
+    t[k] = math.floor(vec[k] * mult + 0.5) / mult
+  end
+  return t
 end
