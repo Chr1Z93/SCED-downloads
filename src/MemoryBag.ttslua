@@ -14,20 +14,83 @@ function onLoad(savedData)
 
   -- make sure the model is loaded so that we can use the bounds
   Wait.condition(function()
-    selfScale = self.getScale()
-    selfBounds = self.getBoundsNormalized()
-    buttonX = math.max(selfBounds.size.x / 5, 1.5) / selfScale.x
-    buttonY = -(selfBounds.size.y / 2 + selfBounds.offset.y) / selfScale.y + 0.5
-
-    -- get z-positions
-    buttonZ = {}
-    for i = 1, 3 do
-      buttonZ[i] = (selfBounds.size.z / 2 + i * 1.15 - 0.15) / selfScale.z
-    end
-    buttonScale = Vector(1 / selfScale.x, 1, 1 / selfScale.z)
-
+    generateButtonData()
     createMemoryActionButtons()
   end, function() return not self.loading_custom end)
+end
+
+function generateButtonData()
+  local selfScale = self.getScale()
+  local selfBounds = self.getBoundsNormalized()
+  buttonX = math.max(selfBounds.size.x / 5, 1.5) / selfScale.x
+  buttonY = -(selfBounds.size.y / 2 + selfBounds.offset.y) / selfScale.y + 0.5
+
+  -- get z-positions
+  buttonZ = {}
+  for i = 1, 3 do
+    buttonZ[i] = (selfBounds.size.z / 2 + i * 1.15 - 0.15) / selfScale.z
+  end
+  buttonScale = Vector(1 / selfScale.x, 1, 1 / selfScale.z)
+
+  buttonData = {
+    ["Add"]       = {
+      tooltip = "Add highlighted objects to memory",
+      pos = { buttonX, buttonY, -buttonZ[1] },
+      fColor = { 0.25, 1, 0.25 }
+    },
+    ["Cancel"]    = {
+      tooltip = "Abort setup mode",
+      pos = { -buttonX, buttonY, -buttonZ[1] },
+    },
+    ["Place"]     = {
+      pos = { buttonX, buttonY, buttonZ[1] },
+      fSize = 350,
+      w = 1200
+    },
+    ["Recall"]    = {
+      pos = { -buttonX, buttonY, buttonZ[1] },
+      fSize = 350,
+      w = 1200
+    },
+    ["Remove"]    = {
+      tooltip = "Remove highlighted objects from memory",
+      pos = { buttonX, buttonY, -buttonZ[2] },
+      fColor = { 1, 0.25, 0.25 }
+    },
+    ["Reset"]     = {
+      tooltip = "Completely reset memory",
+      pos = { -buttonX, buttonY, -buttonZ[3] },
+    },
+    ["Selection"] = {
+      tooltip = "Add / Remove highlight for selected objects",
+      pos = { -buttonX, buttonY, -buttonZ[2] },
+    },
+    ["Setup"]     = {
+      pos = { 0, buttonY, -buttonZ[1] },
+      fSize = 350
+    },
+    ["Update"]   = {
+      tooltip = "Update memory for placed objects",
+      pos = { buttonX, buttonY, -buttonZ[3] },
+      fColor = { 0.75, 0.75, 1 }
+    }
+  }
+end
+
+function createButtonByName(label)
+  self.createButton({
+    label = label,
+    tooltip = buttonData[label].tooltip or "",
+    click_function = string.lower(string.gsub(label, "%s+", "")), --TODO
+    function_owner = self,
+    position = buttonData[label].pos,
+    height = buttonData[label].h or 500,
+    width = buttonData[label].w or 1500,
+    font_size = buttonData[label].fSize or 325,
+    color = { 0, 0, 0 },
+    font_color = buttonData[label].fColor or { 1, 1, 1 },
+    scale = buttonScale
+  })
 end
 
 -- context menu function to toggle the setup button visibility
@@ -56,23 +119,6 @@ function combineMemoryFromBagsWithin()
       end
     end
   end
-end
-
--- Beginning Setup
-function createSetupButton()
-  if setupButton ~= true then return end
-  self.createButton({
-    label = "Setup",
-    click_function = "buttonClick_setup",
-    function_owner = self,
-    position = { x = 0, y = buttonY, z = -buttonZ[1] },
-    height = 500,
-    width = 1200,
-    font_size = 350,
-    color = { 0, 0, 0 },
-    font_color = { 1, 1, 1 },
-    scale = buttonScale
-  })
 end
 
 function buttonClick_setup()
@@ -113,59 +159,18 @@ function createButtonsOnAllObjects()
   end
 end
 
--- Creates submit and cancel buttons
 function createSetupActionButtons()
-  local bWidth = 1500
-  local bHeight = 500
-  local bParams = {
-    function_owner = self,
-    height = bHeight,
-    width = bWidth,
-    font_size = 325,
-    color = { 0, 0, 0 },
-    font_color = { 1, 1, 1 },
-    scale = buttonScale
-  }
-
-  bParams.label = "Cancel"
-  bParams.tooltip = "Abort setup mode"
-  bParams.click_function = "buttonClick_cancel"
-  bParams.position = { x = -buttonX, y = buttonY, z = -buttonZ[1] }
-  self.createButton(bParams)
-
-  bParams.label = "Selection"
-  bParams.click_function = "buttonClick_selection"
-  bParams.position = { x = -buttonX, y = buttonY, z = -buttonZ[2] }
-  self.createButton(bParams)
-
-  bParams.label = "Reset"
-  bParams.click_function = "buttonClick_reset"
-  bParams.position = { x = -buttonX, y = buttonY, z = -buttonZ[3]}
-  self.createButton(bParams)
-
-  bParams.label = "Add"
-  bParams.click_function = "buttonClick_add"
-  bParams.position = { x = buttonX, y = buttonY, z = -buttonZ[1] }
-  bParams.font_color = { 0.25, 1, 0.25 }
-  self.createButton(bParams)
+  createButtonByName("Cancel")
+  createButtonByName("Selection")
+  createButtonByName("Reset")
+  createButtonByName("Add")
 
   if next(memoryList) then
-    bParams.label = "Set New"
-    bParams.click_function = "buttonClick_setNew"
-    bParams.position = { x = buttonX, y = buttonY, z = -buttonZ[3] }
-    bParams.font_color = { 0.75, 0.75, 1 }
-    self.createButton(bParams)
-
-    bParams.label = "Remove"
-    bParams.click_function = "buttonClick_remove"
-    bParams.position = { x = buttonX, y = buttonY, z = -buttonZ[2] }
-    bParams.font_color = { 1, 0.25, 0.25 }
-    self.createButton(bParams)
+    createButtonByName("Update")
+    createButtonByName("Remove")
   end
 end
 
--- During Setup
--- Checks or unchecks buttons
 function buttonClick_selectObject(obj)
   local guid = obj.getGUID()
   local index = buttonIndexMap[guid]
@@ -189,17 +194,14 @@ function buttonClick_selectObject(obj)
   self.editButton({ index = index, color = color })
 end
 
--- Cancels selection process
 function buttonClick_cancel()
   broadcastToAll("Setup Canceled", { 1, 1, 1 })
   removeAllHighlights()
   createMemoryActionButtons()
 end
 
--- Executes the selectObject function for each selected object
 function buttonClick_selection(_, playerColor)
-  local selectedObjs = Player[playerColor].getSelectedObjects()
-  for _, obj in ipairs(selectedObjs) do
+  for _, obj in ipairs(Player[playerColor].getSelectedObjects()) do
     buttonClick_selectObject(obj)
   end
 end
@@ -248,49 +250,29 @@ function buttonClick_setNew()
   createMemoryActionButtons()
 end
 
--- Resets bag to starting status
 function buttonClick_reset()
-  self.clearButtons()
   memoryList = {}
   updateSave()
-
-  createSetupButton()
   removeAllHighlights()
   broadcastToAll("Tool Reset", { 1, 1, 1 })
+  self.clearButtons()
+
+  if setupButton == true then
+    createButtonByName("Setup")
+  end
 end
 
--- After Setup
--- Creates recall and place buttons
 function createMemoryActionButtons()
   self.clearButtons()
 
   if next(memoryList) then
-    self.createButton({
-      label = "Place",
-      click_function = "buttonClick_place",
-      function_owner = self,
-      position = { x = buttonX, y = buttonY, z = buttonZ[1] },
-      height = 500,
-      width = 1200,
-      font_size = 350,
-      color = { 0, 0, 0 },
-      font_color = { 1, 1, 1 },
-      scale = buttonScale
-    })
-    self.createButton({
-      label = "Recall",
-      click_function = "buttonClick_recall",
-      function_owner = self,
-      position = { x = -buttonX, y = buttonY, z = buttonZ[1] },
-      height = 500,
-      width = 1200,
-      font_size = 350,
-      color = { 0, 0, 0 },
-      font_color = { 1, 1, 1 },
-      scale = buttonScale
-    })
+    createButtonByName("Place")
+    createButtonByName("Recall")
   end
-  createSetupButton()
+
+  if setupButton == true then
+    createButtonByName("Setup")
+  end
 end
 
 -- Sends objects from bag/table to their saved position/rotation
