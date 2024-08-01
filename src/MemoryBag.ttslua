@@ -39,7 +39,6 @@ function toggleSetupButton()
     setupButton = true
     broadcastToAll("Setup button enabled", { 1, 1, 1 })
   end
-  updateSave()
   removeAllHighlights()
   createMemoryActionButtons()
 end
@@ -77,8 +76,7 @@ function createSetupButton()
 end
 
 function buttonClick_setup()
-  memoryListBackup = duplicateTable(memoryList)
-  memoryList = {}
+  tempList = {}
   self.clearButtons()
   createButtonsOnAllObjects()
   createSetupActionButtons()
@@ -89,13 +87,14 @@ function createButtonsOnAllObjects()
   buttonIndexMap = {}
 
   local color = { 0.75, 0.25, 0.25, 0.75 }
-  local objsToHaveButtons = getObjects()
   local buttonCount = 0
-  for _, obj in ipairs(objsToHaveButtons) do
+  for _, obj in ipairs(getObjects()) do
     if obj ~= self and obj.type ~= "Scripting" and obj.type ~= "Hand" then
+      local objPos = obj.getPosition()
       local objBounds = obj.getBounds()
-      local buttonPos = self.positionToLocal(obj.getPosition() + Vector(0, objBounds.size.y / 2 + 1, 0))
-      buttonPos.x = -buttonPos.x
+      local offSet = Vector(0, objBounds.size.y / 2 + 1, 0)
+      local scaleVec = Vector(-1, 1, 1)
+      local buttonPos = self.positionToLocal(objPos + offSet):scale(scaleVec)
 
       local fName = "selectButton_" .. buttonCount
       _G[fName] = function() buttonClick_selectObject(obj) end
@@ -118,7 +117,7 @@ end
 function createSetupActionButtons()
   local bWidth = 1500
   local bHeight = 500
-  local buttonParameters = {
+  local bParams = {
     function_owner = self,
     height = bHeight,
     width = bWidth,
@@ -128,40 +127,40 @@ function createSetupActionButtons()
     scale = buttonScale
   }
 
-  buttonParameters.label = "Cancel"
-  buttonParameters.tooltip = "Abort setup mode"
-  buttonParameters.click_function = "buttonClick_cancel"
-  buttonParameters.position = { x = -buttonX, y = buttonY, z = -buttonZ[1] }
-  self.createButton(buttonParameters)
+  bParams.label = "Cancel"
+  bParams.tooltip = "Abort setup mode"
+  bParams.click_function = "buttonClick_cancel"
+  bParams.position = { x = -buttonX, y = buttonY, z = -buttonZ[1] }
+  self.createButton(bParams)
 
-  buttonParameters.label = "Selection"
-  buttonParameters.click_function = "buttonClick_selection"
-  buttonParameters.position = { x = -buttonX, y = buttonY, z = -buttonZ[2] }
-  self.createButton(buttonParameters)
+  bParams.label = "Selection"
+  bParams.click_function = "buttonClick_selection"
+  bParams.position = { x = -buttonX, y = buttonY, z = -buttonZ[2] }
+  self.createButton(bParams)
 
-  buttonParameters.label = "Reset"
-  buttonParameters.click_function = "buttonClick_reset"
-  buttonParameters.position = { x = -buttonX, y = buttonY, z = -buttonZ[3]}
-  self.createButton(buttonParameters)
+  bParams.label = "Reset"
+  bParams.click_function = "buttonClick_reset"
+  bParams.position = { x = -buttonX, y = buttonY, z = -buttonZ[3]}
+  self.createButton(bParams)
 
-  buttonParameters.label = "Add"
-  buttonParameters.click_function = "buttonClick_add"
-  buttonParameters.position = { x = buttonX, y = buttonY, z = -buttonZ[1] }
-  buttonParameters.font_color = { 0.25, 1, 0.25 }
-  self.createButton(buttonParameters)
+  bParams.label = "Add"
+  bParams.click_function = "buttonClick_add"
+  bParams.position = { x = buttonX, y = buttonY, z = -buttonZ[1] }
+  bParams.font_color = { 0.25, 1, 0.25 }
+  self.createButton(bParams)
 
-  if next(memoryListBackup) then
-    buttonParameters.label = "Set New"
-    buttonParameters.click_function = "buttonClick_setNew"
-    buttonParameters.position = { x = buttonX, y = buttonY, z = -buttonZ[3] }
-    buttonParameters.font_color = { 0.75, 0.75, 1 }
-    self.createButton(buttonParameters)
+  if next(memoryList) then
+    bParams.label = "Set New"
+    bParams.click_function = "buttonClick_setNew"
+    bParams.position = { x = buttonX, y = buttonY, z = -buttonZ[3] }
+    bParams.font_color = { 0.75, 0.75, 1 }
+    self.createButton(bParams)
 
-    buttonParameters.label = "Remove"
-    buttonParameters.click_function = "buttonClick_remove"
-    buttonParameters.position = { x = buttonX, y = buttonY, z = -buttonZ[2] }
-    buttonParameters.font_color = { 1, 0.25, 0.25 }
-    self.createButton(buttonParameters)
+    bParams.label = "Remove"
+    bParams.click_function = "buttonClick_remove"
+    bParams.position = { x = buttonX, y = buttonY, z = -buttonZ[2] }
+    bParams.font_color = { 1, 0.25, 0.25 }
+    self.createButton(bParams)
   end
 end
 
@@ -173,9 +172,9 @@ function buttonClick_selectObject(obj)
   if not index then return end
 
   local color
-  if memoryList[guid] == nil then
+  if tempList[guid] == nil then
     color = { 0, 1, 0, 0.75 }
-    memoryList[guid] = {
+    tempList[guid] = {
       pos = roundVector(obj.getPosition(), 3),
       rot = roundVector(obj.getRotation(), 0),
       lock = obj.getLock()
@@ -183,7 +182,7 @@ function buttonClick_selectObject(obj)
     obj.highlightOn({ 0, 1, 0 })
   else
     color = { 0.75, 0.25, 0.25, 0.75 }
-    memoryList[guid] = nil
+    tempList[guid] = nil
     obj.highlightOff()
   end
 
@@ -192,10 +191,9 @@ end
 
 -- Cancels selection process
 function buttonClick_cancel()
-  memoryList = memoryListBackup
+  broadcastToAll("Setup Canceled", { 1, 1, 1 })
   removeAllHighlights()
   createMemoryActionButtons()
-  broadcastToAll("Selection Canceled", { 1, 1, 1 })
 end
 
 -- Executes the selectObject function for each selected object
@@ -207,59 +205,58 @@ function buttonClick_selection(_, playerColor)
 end
 
 function buttonClick_add()
-  combineTables(memoryList, memoryListBackup)
-  broadcastToAll("Adding internal bags and selections to existing memory", { 0.25, 0.75, 0.25 })
+  combineTables(memoryList, tempList)
+  broadcastToAll("Adding internal bags to existing memory", { 0.25, 0.75, 0.25 })
   combineMemoryFromBagsWithin()
 
   local count = 0
-  for guid in pairs(memoryList) do
+  for _ in pairs(tempList) do
     count = count + 1
-    local obj = getObjectFromGUID(guid)
-    if obj ~= nil then obj.highlightOff() end
   end
-  broadcastToAll(count .. " Object(s) Saved", { 1, 1, 1 })
+  broadcastToAll("Added " .. count .. " Object(s) from selection", { 1, 1, 1 })
+
   updateSave()
+  removeAllHighlights()
   createMemoryActionButtons()
 end
 
 function buttonClick_remove()
   local count = 0
-  for guid in pairs(memoryList) do
+  for guid in pairs(tempList) do
     count = count + 1
-    memoryListBackup[guid] = nil
-    local obj = getObjectFromGUID(guid)
-    if obj ~= nil then obj.highlightOff() end
+    memoryList[guid] = nil
   end
   broadcastToAll(count .. " Object(s) Removed", { 1, 1, 1 })
-  memoryList = memoryListBackup
+
   updateSave()
+  removeAllHighlights()
   createMemoryActionButtons()
 end
 
 function buttonClick_setNew()
   local count = 0
   for _, obj in ipairs(getObjects()) do
-    if memoryListBackup[obj.guid] ~= nil then
+    if memoryList[obj.guid] then
       count = count + 1
-      memoryListBackup[obj.guid].pos = obj.getPosition()
-      memoryListBackup[obj.guid].rot = obj.getRotation()
-      memoryListBackup[obj.guid].lock = obj.getLock()
+      memoryList[obj.guid].pos = roundVector(obj.getPosition(), 3)
+      memoryList[obj.guid].rot = roundVector(obj.getRotation(), 0)
+      memoryList[obj.guid].lock = obj.getLock()
     end
   end
-  broadcastToAll("Updated Position for " .. count .. " Object(s)", { 1, 1, 1 })
-  memoryList = memoryListBackup
+  broadcastToAll("Updated Data for " .. count .. " Object(s)", { 1, 1, 1 })
   updateSave()
   createMemoryActionButtons()
 end
 
 -- Resets bag to starting status
 function buttonClick_reset()
-  memoryList = {}
   self.clearButtons()
+  memoryList = {}
+  updateSave()
+
   createSetupButton()
   removeAllHighlights()
   broadcastToAll("Tool Reset", { 1, 1, 1 })
-  updateSave()
 end
 
 -- After Setup
@@ -298,13 +295,7 @@ end
 
 -- Sends objects from bag/table to their saved position/rotation
 function buttonClick_place()
-  memoryListBackup = duplicateTable(memoryList)
   local data = self.getData()
-
-  if not data.ContainedObjects then
-    broadcastToAll("Bag is already empty", { 1, 1, 1 })
-    return
-  end
 
   -- get names of contained objects
   local guidToName = {}
@@ -312,6 +303,7 @@ function buttonClick_place()
     guidToName[bagObjData["GUID"]] = bagObjData["Nickname"]
   end
 
+  local updateGuids = {}
   local placeCount = 0
   local moveCount = 0
   for guid, entry in pairs(memoryList) do
@@ -333,14 +325,20 @@ function buttonClick_place()
       })
       item.setLock(entry.lock)
 
-      -- update the memory list since we just placed an item that got a new GUID
       if obj ~= nil then
-        memoryListBackup[item.getGUID()] = entry
-        memoryListBackup[guid] = nil
+        updateGuids[guid] = item.getGUID()
       end
     end
   end
-  memoryList = memoryListBackup
+
+  -- update memoryList if we placed an item that got a new GUID
+  if next(updateGuids) then
+    for oldGuid, newGuid in pairs(updateGuids) do
+      memoryList[newGuid] = memoryList[oldGuid]
+      memoryList[oldGuid] = nil
+    end
+    updateSave()
+  end
 
   if placeCount > 0 then
     broadcastToAll(placeCount .. " Object(s) Placed", { 1, 1, 1 })
@@ -349,14 +347,22 @@ function buttonClick_place()
   if moveCount > 0 then
     broadcastToAll(moveCount .. " Object(s) Moved", { 1, 1, 1 })
   end
+
+  if placeCount == 0 and moveCount == 0 then
+    broadcastToAll("Bag is empty and no matching objects were found in play", { 1, 1, 1 })
+  end
 end
 
 function buttonClick_recall()
+  local count = 0
   for guid, _ in pairs(memoryList) do
     local obj = getObjectFromGUID(guid)
-    if obj ~= nil then self.putObject(obj) end
+    if obj ~= nil then
+      self.putObject(obj)
+      count = count + 1
+    end
   end
-  broadcastToAll("Objects Recalled", { 1, 1, 1 })
+  broadcastToAll(count .. " Object(s) Recalled", { 1, 1, 1 })
 end
 
 -- Utility functions
