@@ -22,15 +22,14 @@ end
 function generateButtonData()
   local selfScale = self.getScale()
   local selfBounds = self.getBoundsNormalized()
+  buttonScale = Vector(1 / selfScale.x, 1, 1 / selfScale.z)
+
   buttonX = math.max(selfBounds.size.x / 5, 1.5) / selfScale.x
   buttonY = -(selfBounds.size.y / 2 + selfBounds.offset.y) / selfScale.y + 0.5
-
-  -- get z-positions
   buttonZ = {}
-  for i = 1, 3 do
+  for i = 1, 4 do
     buttonZ[i] = (selfBounds.size.z / 2 + i * 1.15 - 0.15) / selfScale.z
   end
-  buttonScale = Vector(1 / selfScale.x, 1, 1 / selfScale.z)
 
   buttonData = {
     ["Add"]       = {
@@ -41,6 +40,10 @@ function generateButtonData()
     ["Cancel"]    = {
       tooltip = "Abort setup mode",
       pos = { -buttonX, buttonY, -buttonZ[1] },
+    },
+    ["Internal"]    = {
+      tooltip = "Copy memory from internal bags",
+      pos = { -buttonX, buttonY, -buttonZ[4] },
     },
     ["Place"]     = {
       pos = { buttonX, buttonY, buttonZ[1] },
@@ -81,15 +84,15 @@ function createButtonByName(label)
   self.createButton({
     label = label,
     tooltip = buttonData[label].tooltip or "",
-    click_function = string.lower(string.gsub(label, "%s+", "")), --TODO
-    function_owner = self,
     position = buttonData[label].pos,
     height = buttonData[label].h or 500,
     width = buttonData[label].w or 1500,
     font_size = buttonData[label].fSize or 325,
-    color = { 0, 0, 0 },
     font_color = buttonData[label].fColor or { 1, 1, 1 },
-    scale = buttonScale
+    function_owner = self,
+    color = { 0, 0, 0 },
+    scale = buttonScale,
+    click_function = "buttonClick_" .. string.lower(string.gsub(label, "%s+", ""))
   })
 end
 
@@ -97,28 +100,13 @@ end
 function toggleSetupButton()
   if setupButton then
     setupButton = false
-    broadcastToAll("Setup button disabled", { 1, 1, 1 })
+    broadcastToAll("Setup button disabled")
   else
     setupButton = true
-    broadcastToAll("Setup button enabled", { 1, 1, 1 })
+    broadcastToAll("Setup button enabled")
   end
   removeAllHighlights()
   createMemoryActionButtons()
-end
-
-function combineMemoryFromBagsWithin()
-  local bagObjList = self.getObjects()
-  for _, bagObj in ipairs(bagObjList) do
-    local data = bagObj.lua_script_state
-    if data ~= nil then
-      local j = JSON.decode(data)
-      if j ~= nil and j.ml ~= nil then
-        for guid, entry in pairs(j.ml) do
-          memoryList[guid] = entry
-        end
-      end
-    end
-  end
 end
 
 function buttonClick_setup()
@@ -128,11 +116,9 @@ function buttonClick_setup()
   createSetupActionButtons()
 end
 
--- Creates selection buttons on objects
 function createButtonsOnAllObjects()
   buttonIndexMap = {}
 
-  local color = { 0.75, 0.25, 0.25, 0.75 }
   local buttonCount = 0
   for _, obj in ipairs(getObjects()) do
     if obj ~= self and obj.type ~= "Scripting" and obj.type ~= "Hand" then
@@ -150,7 +136,7 @@ function createButtonsOnAllObjects()
         position = buttonPos,
         height = 600,
         width = 600,
-        color = color,
+        color = { 0.75, 0.25, 0.25, 0.75 },
         scale = buttonScale
       })
       buttonIndexMap[obj.getGUID()] = buttonCount
@@ -163,11 +149,12 @@ function createSetupActionButtons()
   createButtonByName("Cancel")
   createButtonByName("Selection")
   createButtonByName("Reset")
-  createButtonByName("Add")
+  createButtonByName("Internal")
 
+  createButtonByName("Add")
   if next(memoryList) then
-    createButtonByName("Update")
     createButtonByName("Remove")
+    createButtonByName("Update")
   end
 end
 
@@ -176,9 +163,8 @@ function buttonClick_selectObject(obj)
   local index = buttonIndexMap[guid]
   if not index then return end
 
-  local color
   if tempList[guid] == nil then
-    color = { 0, 1, 0, 0.75 }
+    self.editButton({ index = index, color = { 0, 1, 0, 0.75 } })
     tempList[guid] = {
       pos = roundVector(obj.getPosition(), 3),
       rot = roundVector(obj.getRotation(), 0),
@@ -186,36 +172,42 @@ function buttonClick_selectObject(obj)
     }
     obj.highlightOn({ 0, 1, 0 })
   else
-    color = { 0.75, 0.25, 0.25, 0.75 }
+    self.editButton({ index = index, color = { 0.75, 0.25, 0.25, 0.75 } })
     tempList[guid] = nil
     obj.highlightOff()
   end
-
-  self.editButton({ index = index, color = color })
 end
 
 function buttonClick_cancel()
-  broadcastToAll("Setup Canceled", { 1, 1, 1 })
+  broadcastToAll("Setup Canceled")
   removeAllHighlights()
   createMemoryActionButtons()
 end
 
 function buttonClick_selection(_, playerColor)
-  for _, obj in ipairs(Player[playerColor].getSelectedObjects()) do
-    buttonClick_selectObject(obj)
+  local objList = Player[playerColor].getSelectedObjects()
+
+  if #objList == 0 then
+    broadcastToAll("No objects selected!")
+  else
+    broadcastToAll("Toggled selection for " .. #objList .. " Object(s)")
+    for _, obj in ipairs(objList) do
+      buttonClick_selectObject(obj)
+    end
   end
 end
 
 function buttonClick_add()
-  combineTables(memoryList, tempList)
-  broadcastToAll("Adding internal bags to existing memory", { 0.25, 0.75, 0.25 })
-  combineMemoryFromBagsWithin()
-
   local count = 0
   for _ in pairs(tempList) do
     count = count + 1
   end
-  broadcastToAll("Added " .. count .. " Object(s) from selection", { 1, 1, 1 })
+  broadcastToAll("Added " .. count .. " Object(s) from selection")
+
+  -- copy data from tempList to memoryList
+  for guid, entry in pairs(tempList) do
+    memoryList[guid] = entry
+  end
 
   updateSave()
   removeAllHighlights()
@@ -259,6 +251,26 @@ function buttonClick_reset()
 
   if setupButton == true then
     createButtonByName("Setup")
+  end
+end
+
+function buttonClick_internal()
+  local count = 0
+  for _, bagObj in ipairs(self.getObjects()) do
+    local data = bagObj.lua_script_state
+    if data ~= nil then
+      local j = JSON.decode(data)
+      if j ~= nil and j.ml ~= nil then
+        count = count + 1
+        for guid, entry in pairs(j.ml) do
+          memoryList[guid] = entry
+        end
+      end
+    end
+  end
+
+  if count > 0 then
+    broadcastToAll("Added " .. count .. " internal bag(s) to existing memory")
   end
 end
 
@@ -347,24 +359,10 @@ function buttonClick_recall()
   broadcastToAll(count .. " Object(s) Recalled", { 1, 1, 1 })
 end
 
--- Utility functions
--- Duplicates a table (since Lua passes tables by reference)
-function duplicateTable(oldTable)
-  local newTable = {}
-  for k, v in pairs(oldTable) do
-    newTable[k] = v
-  end
-  return newTable
-end
-
 function removeAllHighlights()
   for _, obj in ipairs(getObjects()) do
     obj.highlightOff()
   end
-end
-
-function combineTables(t1, t2)
-  for k, v in pairs(t2) do t1[k] = v end
 end
 
 -- Round vector to the Nth decimal
