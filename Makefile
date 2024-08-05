@@ -2,7 +2,7 @@
 SCED_TAG := main
 
 # Define the version for TTS Mod Manager
-TTS_MOD_MANAGER_VERSION := v1.1.1
+TTS_MOD_MANAGER_VERSION := V1.1.1
 
 # Determine the URL for TTS Mod Manager based on version
 ifeq ($(TTS_MOD_MANAGER_VERSION), latest)
