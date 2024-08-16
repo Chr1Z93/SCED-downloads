@@ -7,6 +7,7 @@ function updateSave()
 end
 
 function onLoad(savedData)
+  self.addTag("ScenarioReference")
   if savedData and savedData ~= "" then
     val = JSON.decode(savedData) or 0
   end
@@ -21,7 +22,10 @@ function getXmlParameters()
   }
 
   local md = JSON.decode(self.getGMNotes()) or {}
-  if md.id == "09545" then
+
+  -- store the ID in a global variable for later referring
+  id = md.id or "00000"
+  if id == "09545" then
     -- special handling for Sanguine Shadows (box has less height)
     params.height = 150
     params.fontSize = 95
@@ -32,7 +36,6 @@ end
 
 function createButtons()
   local params = getXmlParameters()
-
   local xml = {
     {
       tag = "Defaults",
@@ -83,17 +86,26 @@ function addOrSubtract(_, clickType)
     return
   end
   local newVal = math.min(math.max(val + mod, MIN_VALUE), MAX_VALUE)
-  updateVal(newVal)
+  updateVal(newVal, true)
 end
 
-function updateVal(newVal)
+function updateVal(newVal, updateCopies)
   val = newVal
   updateSave()
   self.UI.setAttribute("textFront", "text", val)
   self.UI.setAttribute("textBack", "text", val)
+
+  -- this will update any copies of this card
+  if updateCopies then
+    for _, obj in ipairs(getObjectsWithTag("ScenarioReference")) do
+      if obj ~= self and obj.getVar("id") == id then
+        obj.call("updateVal", val)
+      end
+    end
+  end
 end
 
 function resetVal()
   printToAll("Reset counter on scenario card to 0 from " .. val .. ".")
-  updateVal(0)
+  updateVal(0, true)
 end
