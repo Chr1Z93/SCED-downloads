@@ -1,45 +1,67 @@
 MIN_VALUE = -99
 MAX_VALUE = 999
+val = 0
 
 function updateSave()
   self.script_state = JSON.encode(val)
 end
 
 function onLoad(savedData)
-  val = 0
-
-  if savedData ~= "" then
+  if savedData and savedData ~= "" then
     val = JSON.decode(savedData) or 0
   end
-
   createButtons()
 end
 
 function createButtons()
-  local bParams = {
-    label = tostring(val),
-    click_function = "addOrSubtract",
-    function_owner = self,
-    position = { 0, 0.05, 1.45 },
-    height = 600,
-    width = 1000,
-    alignment = 3,
-    scale = { x = 1, y = 1, z = 1 },
-    font_size = 350,
-    font_color = { 0, 0, 0, 98 },
-    color = { 0, 0, 0, 0 }
+  local xml = {
+    {
+      tag = "Defaults",
+      children = {
+        {
+          tag = "Panel",
+          attributes = {
+            onClick = "addOrSubtract",
+            scale = "0.3 0.3 1",
+            color = "#FFFFFF00",
+            height = 175,
+            width = 575
+          }
+        },
+        {
+          tag = "Text",
+          attributes = {
+            text = val,
+            fontSize = 120,
+            font = "font_teutonic-arkham",
+            offsetXY = "0 -30"
+          }
+        }
+      }
+    },
+    {
+      tag = "Panel",
+      attributes = { position = "0 90 -25", rotation = "0 0 180" },
+      children = { { tag = "Text", attributes = { id = "textFront" } } }
+    },
+    {
+      tag = "Panel",
+      attributes = { position = "0 90 25", rotation = "0 180 180" },
+      children = { { tag = "Text", attributes = { id = "textBack" } } }
+    }
   }
-
-  self.createButton(bParams)
-
-  -- create 2nd button on the other side
-  bParams.rotation = { 0, 0, 180 }
-  bParams.position = { 0, -0.05, 1.45 }
-  self.createButton(bParams)
+  self.UI.setXmlTable(xml)
 end
 
-function addOrSubtract(_, _, isRightClick)
-  local mod = isRightClick and -1 or 1
+-- left-click: increase / right-click: decrease / middle-click: reset
+function addOrSubtract(_, clickType)
+  local mod = 1
+  if clickType == "-2" then
+    mod = -1
+  elseif clickType == "-3" then
+    resetVal()
+    return
+  end
   local newVal = math.min(math.max(val + mod, MIN_VALUE), MAX_VALUE)
   updateVal(newVal)
 end
@@ -47,10 +69,11 @@ end
 function updateVal(newVal)
   val = newVal
   updateSave()
-  self.editButton({ index = 0, label = tostring(val) })
-  self.editButton({ index = 1, label = tostring(val) })
+  self.UI.setAttribute("textFront", "text", val)
+  self.UI.setAttribute("textBack", "text", val)
 end
 
 function resetVal()
+  printToAll("Reset counter on scenario card to 0 from " .. val .. ".")
   updateVal(0)
 end
