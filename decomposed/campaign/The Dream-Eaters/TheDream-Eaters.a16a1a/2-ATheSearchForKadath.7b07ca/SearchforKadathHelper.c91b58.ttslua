@@ -1,3 +1,7 @@
+local mythosAreaApi              = require("core/MythosAreaApi")
+local playAreaApi                = require("core/PlayAreaApi")
+local victoryDisplayApi          = require("core/VictoryDisplayApi")
+
 PLAYAREA = {
   position = { x = -25, y = 4, z = 0 },
   rotation = { x = 0, y = 90, z = 0 },
@@ -19,11 +23,6 @@ RIGHT = Vector({ 0, 0, -2.5 })
 LEFT = Vector({ 0, 0, 2.5 })
 
 CRAWLING_MIST = "aa76f7"
-
-VICTORY_DISPLAY = {
-  { position = { 0.27, 3, 33.65 }, rotation = { x = 0, y = 270, z = 0 } },
-  { position = { 0.27, 3, 28.78 }, rotation = { x = 0, y = 270, z = 0 } }
-}
 
 TOKEN_IMAGES = {
   doom = "https://i.imgur.com/EoL7yaZ.png",
@@ -162,7 +161,7 @@ function setup(region, color)
       rotation = SET_ASIDE.rotation
     })
   end
-  Wait.time(function() reshuffleEncounterDeck() end, 0.1)
+  Wait.time(function() mythosAreaApi.reshuffleEncounterDeck() end, 0.1)
   Wait.time(function() cleanZone() end, 1)
   Wait.time(function() placeLocations(region) end, 2)
 end
@@ -170,7 +169,7 @@ end
 function cleanZone()
   -- clean the encounter deck
   if not ACT1_ADVANCED then
-    local deck = getEncounterDeck()
+    local deck = mythosAreaApi.getEncounterDeck()
     local cardsToRemove = {}
 
     for i, card in ipairs(deck.getObjects()) do
@@ -228,8 +227,8 @@ function cleanZone()
     -- move locations to victory display or set aside
     if obj.tag == "Card" and loc ~= nil then
       if loc.vp ~= nil and not obj.is_face_down and not hasClues(obj) then
-        broadcastToAll(loc.name .. " added to victory display", Color.Yellow)
-        obj.setPosition(VICTORY_DISPLAY[loc.vp].position)
+        playAreaApi.maybeUntrackLocation(obj)
+        victoryDisplayApi.placeCard(obj)
       else
         obj.setPosition(SET_ASIDE.position + Vector(0, 1, 0))
       end
@@ -258,7 +257,7 @@ function cleanZone()
   end
 
   ACT1_ADVANCED = true
-  Wait.time(function() reshuffleEncounterDeck() end, 2)
+  Wait.time(function() mythosAreaApi.reshuffleEncounterDeck() end, 2)
 end
 
 function placeLocations(region)
@@ -278,10 +277,10 @@ function placeLocations(region)
     end
   end
 
-  reshuffleEncounterDeck()
+  mythosAreaApi.reshuffleEncounterDeck()
 
   local numPlayers = COUNTER.getVar("val")
-  local deck = getEncounterDeck()
+  local deck = mythosAreaApi.getEncounterDeck()
 
   if lastRegion == TIMELESS_REALM then
     placeEnemy("The Crawling Mist", deck, RFG.position, Vector({ 0, 1, 0 }))
@@ -327,44 +326,6 @@ function placeEnemy(name, container, position, side)
     end
   end
   broadcastToAll("Couldn't find " .. name, Color.Yellow)
-end
-
-function reshuffleEncounterDeck()
-  local objs = Physics.cast({
-    origin = ENCOUNTER_DECK_DISCARD_POSITION,
-    direction = { 0, 1, 0 },
-    type = 2,
-    size = { 4, 4, 4 },
-    max_distance = 0
-  })
-  for i, v in ipairs(objs) do
-    local obj = v.hit_object
-    if obj.tag == "Deck" or obj.tag == "Card" then
-      if not obj.is_face_down then obj.flip() end
-      obj.setPosition(ENCOUNTER_DECK_SPAWN_POS)
-    end
-  end
-
-  Wait.time(function() shuffleEncounterDeck() end, 1)
-end
-
-function shuffleEncounterDeck()
-  local deck = getEncounterDeck()
-  if deck ~= nil then deck.shuffle() end
-end
-
-function getEncounterDeck()
-  local objs = Physics.cast({
-    origin = ENCOUNTER_DECK_POS,
-    direction = { 0, 1, 0 },
-    type = 2,
-    size = { 4, 4, 4 },
-    max_distance = 0
-  })
-  for i, v in ipairs(objs) do
-    local obj = v.hit_object
-    if obj.tag == "Deck" then return obj end
-  end
 end
 
 function hasClues(card)
