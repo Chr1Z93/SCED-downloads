@@ -1,3 +1,4 @@
+local deckLib                    = require("util/DeckLib")
 local mythosAreaApi              = require("core/MythosAreaApi")
 local playAreaApi                = require("core/PlayAreaApi")
 local victoryDisplayApi          = require("core/VictoryDisplayApi")
@@ -137,12 +138,8 @@ function setup_forbidden_lands(_, color) setup(FORBIDDEN_LANDS, color) end
 
 function setup_timeless_realm(_, color)
   setup(TIMELESS_REALM, color)
-  chest.takeObject({
-    guid = CRAWLING_MIST,
-    smooth = false,
-    position = ENCOUNTER_DECK_SPAWN_POS,
-    rotation = ROTATION
-  })
+  local card = chest.TakeObject({guid = CRAWLING_MIST})
+  deckLib.placeOrMergeIntoDeck(card, ENCOUNTER_DECK_POS, ROTATION)
 end
 
 function setup(region, color)
@@ -164,6 +161,7 @@ function setup(region, color)
   Wait.time(function() mythosAreaApi.reshuffleEncounterDeck() end, 0.1)
   Wait.time(function() cleanZone() end, 1)
   Wait.time(function() placeLocations(region) end, 2)
+  Wait.time(function() mythosAreaApi.getEncounterDeck().shuffle() end, 0.1)
 end
 
 function cleanZone()
@@ -220,8 +218,7 @@ function cleanZone()
 
     -- move enemies and treacheries to the encounter deck
     if obj.tag == "Card" and obj.hasTag("ScenarioCard") and not obj.hasTag("Location") then
-      obj.setPosition(ENCOUNTER_DECK_SPAWN_POS)
-      obj.setRotation({0, 270, 180})
+      deckLib.placeOrMergeIntoDeck(obj, ENCOUNTER_DECK_POS, ROTATION)
     end
 
     -- move locations to victory display or set aside
@@ -247,17 +244,12 @@ function cleanZone()
     ::continue::
   end
 
-  if not ACT1_ADVANCED then
-    chest.takeObject({
-      guid = "678204", -- Priest of a Thousand Masks
-      smooth = false,
-      position = ENCOUNTER_DECK_SPAWN_POS,
-      rotation = ROTATION
-    })
+  if not ACT1_ADVANCED then -- add in copies of Priest of A Thousand Masks
+    local card = chest.takeObject({guid = "678204"})
+    deckLib.placeOrMergeIntoDeck(card, ENCOUNTER_DECK_POS, ROTATION, _, true)
   end
 
   ACT1_ADVANCED = true
-  Wait.time(function() mythosAreaApi.reshuffleEncounterDeck() end, 2)
 end
 
 function placeLocations(region)
@@ -276,8 +268,6 @@ function placeLocations(region)
       end
     end
   end
-
-  mythosAreaApi.reshuffleEncounterDeck()
 
   local numPlayers = COUNTER.getVar("val")
   local deck = mythosAreaApi.getEncounterDeck()
