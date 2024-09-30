@@ -1,8 +1,8 @@
-# Define the tag for SCED repository
-SCED_TAG := main
+# Define the branch for SCED repository
+SCED_BRANCH := main
 
 # Define the version for TTS Mod Manager
-TTS_MOD_MANAGER_VERSION := V1.1.1
+TTS_MOD_MANAGER_VERSION := latest
 
 # Determine the URL for TTS Mod Manager based on version
 ifeq ($(TTS_MOD_MANAGER_VERSION), latest)
@@ -15,7 +15,7 @@ endif
 # Copy contents of src/xml directory to the cloned SCED repository for Lua/XML bundling
 init:
 	curl -fOL $(TTS_MOD_MANAGER_URL) && chmod +x TTSModManager-Linux
-	git clone https://github.com/argonui/SCED --branch $(SCED_TAG) SCED
+	git clone https://github.com/argonui/SCED --branch $(SCED_BRANCH) SCED
 	cp -R src/* SCED/src/
 	cp -R xml/* SCED/xml/
 

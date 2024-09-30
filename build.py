@@ -22,6 +22,9 @@ def read_library():
 
 
 def exec_mod_manager(input_path, output_path):
+    print(f"Input: {input_path}")
+    print(f"Output: {output_path}")
+
     subprocess.run(
         [
             resolve(PATHS["modexec"]),
