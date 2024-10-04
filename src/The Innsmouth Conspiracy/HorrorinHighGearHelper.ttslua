@@ -1,0 +1,136 @@
+ROAD_DECK_GUID = "de80aa"
+FPA_GUID = "b4e0a1"
+NO_VP_GUIDS = { "bebfba", "48b819", "6bb83e", "fe2e46", "dd62cc", "f35c3d" }
+
+LOCATION_POSITIONS = {
+  Vector({ -30.22, 1.6, 15.19 }),
+  Vector({ -30.22, 1.6, 7.57 }),
+  Vector({ -30.22, 1.6, -0.03 })
+}
+VEHICLES = { "Hit Van", "Hybrid Assassin", "Pursuing Motorcar" }
+VEHICLE_OFFSET = Vector(3.25, 0, 0)
+ENCOUNTER_DECK_POSITION = { -3.93, 1.74, 5.76 }
+
+function onLoad()
+  self.createButton({
+    label = "Set Up",
+    click_function = "setup",
+    function_owner = self,
+    position = { 0, 0.1, 0.4 },
+    height = 120,
+    width = 400,
+    scale = { x = 1.75, y = 1.75, z = 1.75 },
+    font_size = 100
+  })
+
+  makeIndexes()
+  math.randomseed(os.time())
+end
+
+function makeIndexes()
+  noVPs = {}
+  for i, guid in ipairs(NO_VP_GUIDS) do
+    noVPs[guid] = true
+  end
+  vMap = {}
+  for i, name in ipairs(VEHICLES) do
+    vMap[name] = true
+  end
+end
+
+function getDeck(position)
+  local objs = Physics.cast({
+    origin = position,
+    direction = { x = 0, y = -1, z = 0 },
+    type = 3,
+    size = { x = 1, y = 1, z = 1 },
+    orientation = { x = 0, y = 270, z = 180 }
+  })
+
+  for i, v in ipairs(objs) do
+    if v.hit_object.tag == "Deck" then
+      return v.hit_object
+    end
+  end
+
+  return nil
+end
+
+function setup(obj, color, alt_click)
+  if DISABLED then return end
+  DISABLED = true
+
+  local fpa = getObjectFromGUID(FPA_GUID)
+  fpa.flip()
+  fpaPosition = fpa.getPosition()
+  roadDeck = getObjectFromGUID(ROAD_DECK_GUID)
+  roadDeck.shuffle()
+  local taken = 0
+  local cards = roadDeck.getObjects()
+
+  for i = #cards, 1, -1 do
+    local card = cards[i]
+    if alt_click and noVPs[card.guid] == nil then goto continue end
+    if taken < 2 then
+      -- shuffle with Falcon Point Approach
+      roadDeck.takeObject({
+        guid = card.guid,
+        position = fpaPosition + Vector(0, 1, 0),
+        smooth = false
+      })
+    else
+      -- starting locations
+      roadDeck.takeObject({
+        guid = card.guid,
+        position = LOCATION_POSITIONS[taken - 1],
+        smooth = false
+      })
+    end
+    taken = taken + 1
+
+    if taken == 4 then break end
+    ::continue::
+  end
+
+  roadDeck.takeObject({
+    position = LOCATION_POSITIONS[3],
+    smooth = false
+  })
+
+  local numPlayers = getObjectFromGUID('f182ee').getVar("val")
+  if numPlayers > 1 then
+    local deck = getDeck(ENCOUNTER_DECK_POSITION)
+    deck.shuffle()
+    cards = deck.getObjects()
+    local toSpawn = math.floor(numPlayers / 2)
+    for i = #cards, 1, -1 do
+      local card = cards[i]
+      local rear = LOCATION_POSITIONS[1]
+      if vMap[card.name] == nil then goto continue2 end
+      if toSpawn == 2 then
+        rear = rear - VEHICLE_OFFSET
+      else
+        rear = rear + VEHICLE_OFFSET
+      end
+      deck.takeObject({
+        position = rear,
+        guid = card.guid,
+        rotation = { 0, 270, 0 },
+        smooth = false
+      })
+      toSpawn = toSpawn - 1
+      if toSpawn == 0 then break end
+
+      ::continue2::
+    end
+  end
+
+  Wait.time(setup_2, 1)
+end
+
+function setup_2()
+  local deck = getDeck(fpaPosition)
+  deck.shuffle()
+  deck.setName("Road Deck")
+  roadDeck.setPosition(fpaPosition + Vector(0, 1, 0))
+end
