@@ -1,7 +1,8 @@
 local deckLib                    = require("util/DeckLib")
 local guidReferenceApi           = require("core/GUIDReferenceApi")
 local mythosAreaApi              = require("core/MythosAreaApi")
-local playermatApi               = require("playermat/PlayermatApi")
+local playmatApi                 = require("playermat/PlayermatApi")
+local playAreaApi                = require("core/PlayAreaApi")
 local searchLib                  = require("util/SearchLib")
 
 local options                    = {}
@@ -23,8 +24,10 @@ function optionButtonClick(_, id)
 
   if id == "toggleReturnTo" then
     toggleReturnTo(newState)
-  else
+  elseif id == "toggleCounter" then
     toggleCounter()
+  else
+    toggleHighlighting(newState)
   end
 end
 
@@ -43,7 +46,12 @@ end
 -- save / load function
 ---------------------------------------------------------
 
-function onSave() return JSON.encode({ loopId = loopId, options = options }) end
+function onSave()
+  return JSON.encode({
+    loopId = loopId,
+    options = options
+  })
+end
 
 function onLoad(savedData)
   if savedData ~= "" then
@@ -57,6 +65,8 @@ function onLoad(savedData)
       self.UI.setAttribute(id, "image", state and "option_on" or "option_off")
     end
   end
+
+  exploreHelperGUID = self.getGUID()
   Wait.time(getTopRevealedCard, 1, -1)
 end
 
@@ -65,29 +75,20 @@ end
 ---------------------------------------------------------
 
 function getExploreDeck()
-  local pos = self.positionToWorld(exploreDeckOffset)
-  local searchResult = searchLib.atPosition(pos, "isCardOrDeck")
-
-  for _, obj in ipairs(searchResult) do
-    if obj.type == 'Deck' then
-      return obj
-    end
-  end
-
-  -- if no deck was found, return the first hit (a card)
-  if #searchResult > 0 then
-    return searchResult[1]
-  end
+  return getDeckOrCardAtLocalOffset(exploreDeckOffset)
 end
 
 function getExploreDiscard()
-  local pos = self.positionToWorld(exploreDiscardOffset)
+  return getDeckOrCardAtLocalOffset(exploreDiscardOffset)
+end
+
+function getDeckOrCardAtLocalOffset(localOffset)
+  local pos = self.positionToWorld(localOffset)
   local searchResult = searchLib.atPosition(pos, "isCardOrDeck")
 
+  -- check if a deck was found
   for _, obj in ipairs(searchResult) do
-    if obj.type == 'Deck' then
-      return obj
-    end
+    if obj.type == 'Deck' then return obj end
   end
 
   -- if no deck was found, return the first hit (a card)
@@ -106,8 +107,28 @@ function explore()
   if isExploring then return end
   isExploring = true
 
-  local exploreDeck = getExploreDeck()
+  local maybeExplore = checkEmptyDiscard()
+  if maybeExplore == false then
+    Wait.time(function() isExploring = false end, 0.75)
+    return
+  end
 
+  if allHighlightedCards then
+    for i = 1, #allHighlightedCards do
+      allHighlightedCards[i].highlightOff("Red")
+      allHighlightedCards[i].highlightOff("Green")
+    end
+
+    local exploreDiscard = getExploreDiscard()
+    if exploreDiscard then
+      exploreDiscard.highlightOff("Green")
+      exploreDiscard.highlightOff("Yellow")
+      exploreDiscard.highlightOff("Red")
+    end
+    allHighlightedCards = {}
+  end
+
+  local exploreDeck = getExploreDeck()
   if exploreDeck then
     local card
     if exploreDeck.type == "Deck" then
@@ -117,6 +138,9 @@ function explore()
     end
     local pos = self.positionToWorld(exploreDiscardOffset)
     deckLib.placeOrMergeIntoDeck(card, pos, self.getRotation())
+
+    currentScenario = mythosAreaApi.returnTokenData().currentScenario
+    Wait.time(getTopRevealedCard, .5)
   else
     broadcastToAll("Exploration deck is already empty", "Red")
   end
@@ -128,14 +152,11 @@ end
 -- check if discard pile has a location on top or is empty
 function checkEmptyDiscard()
   local exploreDiscard = getExploreDiscard()
-  if not exploreDiscard then
-    return true
-  end
-
-  local data = exploreDiscard.getData()
-  local notes
+  if not exploreDiscard then return true end
 
   -- get notes of top card
+  local data = exploreDiscard.getData()
+  local notes
   if exploreDiscard.type == "Deck" then
     local deck = data.ContainedObjects
     notes = deck[#deck].GMNotes
@@ -143,11 +164,13 @@ function checkEmptyDiscard()
     notes = data.GMNotes
   end
 
+  local md = JSON.decode(notes) or {}
+  
   -- check via metadata if a location is revealed
-  if JSON.decode(notes).type == "Location" then
+  if md.type == "Location" then
     return true
   else
-    broadcastToAll("Remove revealed non-location before shuffling first.", "Yellow")
+    broadcastToAll("Remove revealed non-location first before continuing.", "Yellow")
     return false
   end
 end
@@ -160,18 +183,20 @@ function reshuffleButton()
 end
 
 -- shuffle revealed cards back into explore deck
-function shuffleBack()
+function shuffleBack(forceShuffle)
   local exploreDiscard = getExploreDiscard()
-  if exploreDiscard then
-    local deck = exploreDiscard
-    if not deck.is_face_down then deck.flip() end
-    local pos = self.positionToWorld(exploreDeckOffset)
-    deckLib.placeOrMergeIntoDeck(deck, pos)
-    broadcastToAll("Shuffled locations back into deck.", "White")
+  if (exploreDiscard or forceShuffle) then
+    if exploreDiscard then
+      if not exploreDiscard.is_face_down then
+        rot = exploreDiscard.getRotation():setAt("z", 180)
+      end
+      local pos = self.positionToWorld(exploreDeckOffset)
+      deckLib.placeOrMergeIntoDeck(exploreDiscard, pos, rot)
+      broadcastToAll("Shuffled locations back into deck.", "White")
+    end
+    -- wait until deck is in place .5 seconds, then shuffle
+    Wait.time(function() getExploreDeck().shuffle() end, .5)
   end
-
-  -- wait until deck is in place .5 seconds, then shuffle
-  Wait.time(function() getExploreDeck().shuffle() end, .5)
 end
 
 -- take top card of encounter deck and shuffle it in for return to TFA
@@ -187,7 +212,7 @@ function takeEncounter()
       end
       local pos = self.positionToWorld(exploreDeckOffset)
       deckLib.placeOrMergeIntoDeck(card, pos)
-      shuffleBack()
+      shuffleBack(true)
     else
       broadcastToAll("Encounter deck is empty", "Red")
     end
@@ -205,6 +230,17 @@ function getNumLocations()
     return
   end
 
+  currentScenario = mythosAreaApi.returnTokenData().currentScenario
+  if currentScenario == "Relics of the Past" then
+    self.UI.setValue("countingText", "in exploration deck are locations or assets")
+    self.UI.setAttribute("countingPanel", "height", 500)
+    self.UI.setAttribute("countingRow", "preferredHeight", 350)
+  else
+    self.UI.setValue("countingText", "in exploration deck are locations")
+    self.UI.setAttribute("countingPanel", "height", 430)
+    self.UI.setAttribute("countingRow", "preferredHeight", 270)
+  end
+
   local data = exploreDeck.getData()
   local numCardsInDeck
 
@@ -218,9 +254,8 @@ function getNumLocations()
       end
     end
   else
-    local cardData = exploreDeck.getData()
     numCardsInDeck = 1
-    if isLocationOrAsset(cardData.GMNotes) then
+    if isLocationOrAsset(data.GMNotes) then
       val = val + 1
     end
   end
@@ -232,12 +267,24 @@ end
 
 function isLocationOrAsset(notes)
   local metadata = JSON.decode(notes) or {}
-  return metadata.type == "Location" or metadata.type == "Asset"
+
+  -- handling for 'Between Worlds' which is technically a treachery
+  if metadata.id == "04340" then
+    return false
+  else
+    return metadata.type == "Location" or metadata.type == "Asset"
+  end
 end
 
 function isEnemyOrTreachery(notes)
   local metadata = JSON.decode(notes) or {}
-  return metadata.type == "Enemy" or metadata.type == "Treachery"
+
+  -- handling for 'Between Worlds' which is technically a treachery
+  if metadata.id == "04340" then
+    return false
+  else
+    return metadata.type == "Enemy" or metadata.type == "Treachery"
+  end
 end
 
 function getTopRevealedCard()
@@ -255,8 +302,7 @@ function getTopRevealedCard()
     local cardData = data.ContainedObjects
     notes = cardData[#cardData].GMNotes
   else
-    local cardData = exploreDiscard.getData()
-    notes = cardData.GMNotes
+    notes = data.GMNotes
   end
 
   if isEnemyOrTreachery(notes) then
@@ -269,6 +315,41 @@ function getTopRevealedCard()
       self.UI.hide("sideButton")
       discardHidden = true
     end
+  end
+
+  -- only continue if highlighting is turned on
+  if currentScenario == "The Boundary Beyond" or not maybeHighlight then return end
+
+  -- only continue for locations (04340 is Between Worlds)
+  local mdTopCard = JSON.decode(notes) or {}
+  if (mdTopCard.type ~= "Location" or mdTopCard.id == "04340") then return end
+
+  local green, red = false, false
+  allHighlightedCards = {}
+  for locGuid, metadata in pairs(playAreaApi.getTrackedLocations()) do
+    if string.find(metadata.connections, mdTopCard.locationFront.icons) then
+      local obj = getObjectFromGUID(locGuid)
+      if obj ~= nil then
+        obj.highlightOn("Green", 4)
+        green = true
+        allHighlightedCards[obj.getName()] = obj
+      end
+    else
+      local obj = getObjectFromGUID(locGuid)
+      if obj ~= nil then
+        obj.highlightOn("Red", 4)
+        red = true
+        allHighlightedCards[obj.getName()] = obj
+      end
+    end
+  end
+
+  if green == true and red == true then
+    exploreDiscard.highlightOn("Yellow", 4)
+  elseif green == true and red == false then
+    exploreDiscard.highlightOn("Green", 4)
+  else
+    exploreDiscard.highlightOn("Red", 4)
   end
 end
 
@@ -283,21 +364,26 @@ function discardTopRevealed()
     topCard = exploreDiscard
   end
 
-  Wait.frames(function() deckLib.placeOrMergeIntoDeck(topCard, ENCOUNTER_DISCARD_POSITION, { x = 0, y = -90, z = 0 }) end, 1)
+  Wait.time(
+    function()
+      deckLib.placeOrMergeIntoDeck(topCard, ENCOUNTER_DISCARD_POSITION, { x = 0, y = -90, z = 0 })
+    end, 0.1)
   self.UI.hide("sideButton")
   discardHidden = true
+
+  Wait.time(shuffleBack, 0.2)
 end
 
 function drawTopRevealed(player)
   local exploreDiscard = getExploreDiscard()
   if not exploreDiscard then return end
 
-  -- default to first player
   if player.color == "Black" then
-    player = Player.getPlayers()[1]
+    broadcastToAll("Draw function only available to seated players.", "Red")
+    return
   end
 
-  local matColor = playermatApi.getMatColor(player.color)
+  local matColor = playmatApi.getMatColor(player.color)
   local mat = guidReferenceApi.getObjectByOwnerAndType(matColor, "Playermat")
   local topCard
 
@@ -307,10 +393,226 @@ function drawTopRevealed(player)
     topCard = exploreDiscard
   end
 
-  local DRAWN_ENCOUNTER_CARD_OFFSET = { 1.365, 0.5, -0.625 }
-  local pos = mat.positionToWorld(DRAWN_ENCOUNTER_CARD_OFFSET)
+  pos = playmatApi.getEncounterCardDrawPosition(matColor, false)
 
   deckLib.placeOrMergeIntoDeck(topCard, pos, { 0, mat.getRotation().y, 0 })
+  Wait.frames(shuffleBack, 3)
+end
+
+---------------------------------------------------------
+-- Use supply function
+---------------------------------------------------------
+
+function useSupply()
+  local numberOfRevealed
+  -- figure out if using two or three cards
+
+  for locGuid, _ in pairs(playAreaApi.getTrackedLocations()) do
+    local obj = getObjectFromGUID(locGuid)
+    local metadata = JSON.decode(obj.getGMNotes())
+    if metadata.id == "04206" then
+      if obj.is_face_down then
+        numberOfRevealed = 2
+        supplyType = "discard"
+        break
+      else
+        numberOfRevealed = 3
+        supplyType = "reorder"
+        break
+      end
+    elseif metadata.id == "04050" then
+      numberOfRevealed = 3
+      supplyType = "reorder"
+      break
+    elseif metadata.id == "04060" then
+      numberOfRevealed = 2
+      supplyType = "discard"
+      break
+    elseif metadata.id == "53019" then
+      numberOfRevealed = 2
+      supplyType = "discard"
+      break
+    end
+  end
+
+  if not numberOfRevealed then
+    broadcastToAll("No supplies in this scenario", "Red")
+    return
+  end
+
+  -- see how many cards are left in the explore deck
+  local exploreDeck = getExploreDeck()
+  if not exploreDeck then
+    broadcastToAll("No cards in exploration deck", "Red")
+    return
+  end
+
+  if exploreDeck.type == 'Deck' then
+    if #exploreDeck.getObjects() < numberOfRevealed then
+      numberOfRevealed = #exploreDeck.getObjects()
+    end
+  else
+    numberOfRevealed = 1
+  end
+
+  revealCardPositions = {}
+  if numberOfRevealed == 2 then
+    revealCardPositions = {
+      Vector(-3.5, 0.25, 1.8),
+      Vector(-3.5, 0.25, -1.8)
+    }
+  elseif numberOfRevealed == 3 then
+    revealCardPositions = {
+      Vector(-3.5, 0.25, 3.6),
+      Vector(-3.5, 0.25, 0),
+      Vector(-3.5, 0.25, -3.6)
+    }
+  else
+    revealCardPositions = {
+      Vector(-3.5, 0.25, 0)
+    }
+  end
+  revealTopCards()
+end
+
+function isSomethingRevealed()
+  local exploreDeck = getExploreDeck()
+
+  for _, pos in ipairs(revealCardPositions) do
+    for _, obj in ipairs(searchLib.atPosition(exploreDeck.positionToWorld(pos), "isCard")) do
+      return true
+    end
+  end
+
+  return false
+end
+
+function revealTopCards()
+  if movingCards or isSomethingRevealed() then return end
+
+  local exploreDeck = getExploreDeck()
+  if exploreDeck.type == 'Deck' then
+    for i, _ in ipairs(exploreDeck.getObjects()) do
+      movingCards = true
+
+      exploreDeck.takeObject({
+        position = exploreDeck.positionToWorld(revealCardPositions[i]),
+        rotation = exploreDeck.getRotation() + Vector(0, 0, 180),
+        callback_function = function(obj) addSupplyXML(obj) end
+      })
+
+      if i == #revealCardPositions then break end
+    end
+  else
+    movingCards = true
+    exploreDeck.resting = true
+    exploreDeck.setPositionSmooth(exploreDeck.positionToWorld(revealCardPositions[1]))
+    exploreDeck.setRotationSmooth(exploreDeck.getRotation() + Vector(0, 0, 180))
+    addSupplyXML(exploreDeck)
+  end
+end
+
+function placeOnBottom(_, cardGUID)
+  local card = getObjectFromGUID(cardGUID)
+  card.UI.setXml("")
+  deckLib.placeOrMergeIntoDeck(card, self.positionToWorld(exploreDeckOffset), card.getRotation():setAt("z", 180), true)
+end
+
+function placeOnTop(_, cardGUID)
+  local card = getObjectFromGUID(cardGUID)
+  card.UI.setXml("")
+  deckLib.placeOrMergeIntoDeck(card, self.positionToWorld(exploreDeckOffset), card.getRotation():setAt("z", 180))
+end
+
+function discardSelf(_, cardGUID)
+  local card = getObjectFromGUID(cardGUID)
+  card.UI.setXml("")
+  deckLib.placeOrMergeIntoDeck(card, ENCOUNTER_DISCARD_POSITION, { x = 0, y = -90, z = 0 })
+end
+
+function shuffleRevealedBack(_, cardGUID)
+  local card = getObjectFromGUID(cardGUID)
+  card.UI.setXml("")
+  deckLib.placeOrMergeIntoDeck(card, self.positionToWorld(exploreDeckOffset), card.getRotation():setAt("z", 180))
+  Wait.time(function() getExploreDeck().shuffle() end, 1) -- necessary for 3.9.2
+end
+
+function addSupplyXML(obj)
+  local label1, label2
+  local guid = obj.getGUID()
+  obj.resting = true
+  movingCards = false
+  if supplyType == "discard" then
+    label1 = "Discard"
+    label2 = "Shuffle"
+    onClickFunction1 = exploreHelperGUID .. "/discardSelf(" .. guid .. ")"
+    onClickFunction2 = exploreHelperGUID .. "/shuffleRevealedBack(" .. guid .. ")"
+  else
+    label1 = "Top"
+    label2 = "Bottom"
+    onClickFunction1 = exploreHelperGUID .. "/placeOnTop(" .. guid .. ")"
+    onClickFunction2 = exploreHelperGUID .. "/placeOnBottom(" .. guid .. ")"
+  end
+
+  obj.UI.setXmlTable({
+    {
+      tag = "Defaults",
+      children = {
+        tag = "Button",
+        attributes = {
+          class = "sideButton",
+          font = "font_teutonic-arkham",
+          fontSize = "200",
+          colors = "#b6e2f0|#009acb|#005a77",
+          shadow = "#404450B3",
+          shadowDistance = "15 -15"
+        }
+      }
+    },
+    {
+      tag = "Panel",
+      attributes = {
+        height = 300,
+        width = 1200,
+        scale = ".2 .2 1",
+        rotation = "0 0 270",
+        position = "138 0 -11"
+      },
+      children = {
+        {
+          tag = "TableLayout",
+          attributes = { cellSpacing = "40" },
+          children = {
+            {
+              tag = "Row",
+              children = {
+                {
+                  tag = "Cell",
+                  children = {
+                    {
+                      tag = "Button",
+                      attributes = { class = "sideButton", onClick = onClickFunction2 },
+                      value = label2
+                    }
+                  }
+                },
+                {
+                  tag = "Cell",
+                  children = {
+                    {
+                      tag = "Button",
+                      attributes = { class = "sideButton", onClick = onClickFunction1 },
+                      value = label1
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  })
 end
 
 function toggleCounter()
@@ -332,5 +634,13 @@ function toggleReturnTo(currentState)
   else
     self.UI.show("3buttons")
     self.UI.hide("2buttons")
+  end
+end
+
+function toggleHighlighting(currentState)
+  if currentState == "option_off" then
+    maybeHighlight = false
+  else
+    maybeHighlight = true
   end
 end
