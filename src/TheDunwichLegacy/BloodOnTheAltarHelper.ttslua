@@ -1,9 +1,3 @@
-PLAYAREA = {
-  position = { -20.04, 4.13, 0.37 },
-  rotation = { x = 0, y = 90, z = 0 },
-  scale = { 34.11, 5.10, 49.91 }
-}
-
 ASSEMBLY = {
   position = { x = 68, y = 2, z = 36 },
   rotation = { x = 0, y = 270, z = 180 }
@@ -24,7 +18,6 @@ function onLoad()
     click_function = "setup",
     function_owner = self,
     position = { 2, 0.3, 0 },
-    rotation = { 0, 270, 0 },
     height = 600,
     width = 1200,
     font_size = 250,
@@ -66,7 +59,7 @@ end
 function setup(obj, color, alt_click)
   if DISABLED then return end
   DISABLED = true
-  playerColor = color
+
   local objs = self.getObjects()
   for i = #objs, 1, -1 do
     local name = objs[i].name
@@ -81,16 +74,24 @@ function setup(obj, color, alt_click)
     end
   end
 
-  Wait.time(setup_2, 1)
+  Player[color].showOptionsDialog(
+    "Check Campaign log. Does the O'Bannion gang have a bone to pick with the investigators?", { "Yes", "No" }, 1,
+    function(text)
+      boneToPick = (text == "Yes")
+      Wait.time(setup_2, 1)
+    end
+  )
 end
 
 function setup_2()
   for _, obj in ipairs(getObjects()) do
     local name = obj.getName()
     if name == "Set-aside" then
-      takeObjectiveCards(obj)
+      chest = obj
     elseif name == "Encounter Deck" then
-      takeEncounterCards(obj)
+      eDeck = obj
+    elseif name == "Naomi's Crew" then
+      naomisCrew = obj
     else
       local loc = locationMap[name]
       if loc ~= nil then
@@ -101,16 +102,51 @@ function setup_2()
             smooth = false
           })
         end
+      else
+        -- check if playing "Return to"
+        if obj.type == "Card" and obj.hasTag("ScenarioCard") and obj.hasTag("Location") then
+          local md = JSON.decode(obj.getGMNotes()) or {}
+          if md.id == "51033" then
+            playingReturnTo = true
+          end
+        end
       end
     end
   end
 
-  -- TODO: open dialog?
-  
-  broadcastToColor("Read setup and shuffle Naomi's Crew encounter set into the " ..
-    'encounter deck if necessary, then click "Place Key & Chamber"',
-    ---@diagnostic disable-next-line: param-type-mismatch
-    playerColor, { r = 1, g = 1, b = 0 })
+  takeObjectiveCards(chest)
+
+  -- if playing the regular version, shuffle Naomis Crew first into the encounter deck
+  if not playingReturnTo then
+    if boneToPick then
+      eDeck.putObject(naomisCrew)
+    end
+    takeEncounterCards(eDeck)
+  else
+    takeEncounterCards(eDeck)
+    if boneToPick then
+      eDeck.putObject(naomisCrew)
+
+      -- take hired guns from chest
+      for _, obj in ipairs(chest.getObjects()) do
+        if obj.name == "Hired Guns" then
+          chest.takeObject({
+            smooth = false,
+            index = obj.index,
+            callback_function = function(guns)
+              guns.takeObject({ position = Vector(-13, 1.55, -11) })
+              eDeck.putObject(guns.remainder)
+            end
+          })
+          broadcastToAll("Place the spawned Hired Gun at one of the locations not connected to Village Commons.")
+          break
+        end
+      end
+    end
+  end
+
+  eDeck.shuffle()
+  Wait.time(setup_3, 1)
 end
 
 function setup_3()
