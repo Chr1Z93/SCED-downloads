@@ -34,23 +34,9 @@ buttonScale = { 0.1, 0.1, 0.1 }
 --This is the button placement information
 defaultButtonData = {
   --Add checkboxes
-  checkbox = {
-    --[[
-        pos   = the position (pasted from the helper tool)
-        size  = height/width/font_size for checkbox
-        state = default starting value for checkbox (true=checked, false=not)
-        ]]
-
-    --End of checkboxes
-  },
+  checkbox = {},
   --Add counters that have a + and - button
   counter = {
-    --[[
-        pos    = the position (pasted from the helper tool)
-        size   = height/width/font_size for counter
-        value  = default starting value for counter
-        hideBG = if background of counter is hidden (true=hidden, false=not)
-        ]]
     --Slot one counter 1
     {
       pos    = { -0.7, 0.11, -0.45 },
@@ -147,16 +133,6 @@ defaultButtonData = {
   },
   --Add editable text boxes
   textbox = {
-    --[[
-        pos       = the position (pasted from the helper tool)
-        rows      = how many lines of text you want for this box
-        width     = how wide the text box is
-        font_size = size of text. This and "rows" effect overall height
-        label     = what is shown when there is no text. "" = nothing
-        value     = text entered into box. "" = nothing
-        alignment = Number to indicate how you want text aligned
-                    (1=Automatic, 2=Left, 3=Center, 4=Right, 5=Justified)
-        ]]
     --Slot one player
     {
       pos       = { -0.637, 0.11, -0.70 },
@@ -342,163 +318,12 @@ defaultButtonData = {
   }
 }
 
-
-
---Lua beyond this point, I recommend doing something more fun with your life
-
-
-
---Save function
-local alreadySaving = false -- Copy this too!
 function updateSave()
-  function string.replaceText(text, old, new)
-    local b, e = text:find(old, 1, true)
-    if b == nil then
-      return text
-    else
-      return text:sub(1, b - 1) .. new .. text:sub(e + 1)
-    end
+  if disableSave then
+    self.script_state = ""
+  else
+    self.script_state = JSON.encode(ref_buttonData)
   end
-
-  function wait(time)
-    local start = os.time()
-    repeat coroutine.yield(0) until os.time() > start + time
-  end
-
-  function deepcopy(orig)
-    local orig_type = type(orig)
-    local copy
-    if orig_type == 'table' then
-      copy = {}
-      for orig_key, orig_value in next, orig, nil do
-        copy[deepcopy(orig_key)] = deepcopy(orig_value)
-      end
-      setmetatable(copy, deepcopy(getmetatable(orig)))
-    else     -- number, string, boolean, etc
-      copy = orig
-    end
-    return copy
-  end
-
-  function startSaving()
-    while alreadySaving do
-      wait(0.01)
-    end
-    alreadySaving = true
-    local ref_buttonData = deepcopy(ref_buttonData)
-    local input_values = {}
-    local checkbox_values = {}
-    local counter_values = {}
-
-    local GUID = self.getGUID()
-    local counter = 1
-    for _, val in ipairs(ref_buttonData.textbox) do
-      if val.value ~= nil then
-        input_values[counter] = val.value
-        val.value = "u" .. GUID .. ":iv:" .. counter .. "u"
-        counter = counter + 1
-      end
-      if val.label ~= nil then
-        input_values[counter] = val.label
-        val.label = "u" .. GUID .. ":iv:" .. counter .. "u"
-        counter = counter + 1
-      end
-    end
-
-    local counter = 1
-    for _, val in ipairs(ref_buttonData.checkbox) do
-      if val.value ~= nil then
-        checkbox_values[counter] = val.value
-        val.value = "u" .. GUID .. ":bv:" .. counter .. "u"
-        counter = counter + 1
-      end
-    end
-
-    local counter = 1
-    for _, val in ipairs(ref_buttonData.counter) do
-      if val.value ~= nil then
-        counter_values[counter] = val.value
-        val.value = "u" .. GUID .. ":cv:" .. counter .. "u"
-        counter = counter + 1
-        if val.counters ~= nil then
-          for _, val2 in ipairs(val.counters) do
-            if val2.value ~= nil then
-              counter_values[counter] = val2.value
-              val2.value = "u" .. GUID .. ":cv:" .. counter .. "u"
-              counter = counter + 1
-            end
-            if val2.change_value ~= nil then
-              counter_values[counter] = val2.change_value
-              val2.change_value = "u" .. GUID .. ":cv:" .. counter .. "u"
-              counter = counter + 1
-            end
-          end
-        end
-      end
-    end
-
-    saved_data = JSON.encode(ref_buttonData)
-
-    local counter = 1
-    for _, val in ipairs(ref_buttonData.textbox) do
-      if val.value ~= nil then
-        saved_data = saved_data:replaceText("u" .. GUID .. ":iv:" .. counter .. "u",
-          string.gsub(input_values[counter], "[\\\"']", "\\%1"))
-        val.value = input_values[counter]
-        counter = counter + 1
-      end
-      if val.label ~= nil then
-        saved_data = saved_data:replaceText("u" .. GUID .. ":iv:" .. counter .. "u",
-          string.gsub(input_values[counter], "[\\\"']", "\\%1"))
-        val.label = input_values[counter]
-        counter = counter + 1
-      end
-    end
-
-    local counter = 1
-    for _, val in ipairs(ref_buttonData.checkbox) do
-      if val.value ~= nil then
-        val.value = checkbox_values[counter]
-        saved_data = saved_data:replaceText("u" .. GUID .. ":bv:" .. counter .. "u",
-          string.gsub(checkbox_values[counter], "[\\\"']", "\\%1"))
-        counter = counter + 1
-      end
-    end
-
-    local counter = 1
-    for _, val in ipairs(ref_buttonData.counter) do
-      if val.value ~= nil then
-        val.value = counter_values[counter]
-        saved_data = saved_data:replaceText("u" .. GUID .. ":cv:" .. counter .. "u",
-          string.gsub(counter_values[counter], "[\\\"']", "\\%1"))
-        counter = counter + 1
-
-        if val.counters ~= nil then
-          for _, val2 in ipairs(val.counters) do
-            if val2.value ~= nil then
-              val2.value = counter_values[counter]
-              saved_data = saved_data:replaceText("u" .. GUID .. ":cv:" .. counter .. "u",
-                string.gsub(counter_values[counter], "[\\\"']", "\\%1"))
-              counter = counter + 1
-            end
-            if val2.change_value ~= nil then
-              val2.change_value = counter_values[counter]
-              saved_data = saved_data:replaceText("u" .. GUID .. ":cv:" .. counter .. "u",
-                string.gsub(counter_values[counter], "[\\\"']", "\\%1"))
-              counter = counter + 1
-            end
-          end
-        end
-      end
-    end
-    if disableSave == true then saved_data = "" end
-    self.script_state = saved_data
-
-    alreadySaving = false
-    return 1
-  end
-
-  startLuaCoroutine(self, "startSaving")
 end
 
 --Startup procedure
