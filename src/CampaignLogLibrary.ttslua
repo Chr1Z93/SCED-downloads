@@ -1,0 +1,149 @@
+function onLoad(savedData)
+  if not disableSave and savedData and savedData ~= "" then
+    ref_buttonData = JSON.decode(savedData)
+  else
+    if createCampaignSpecificStuff ~= nil then
+      createCampaignSpecificStuff()
+    end
+    ref_buttonData = defaultButtonData
+  end
+
+  math.randomseed(seed or os.time())
+  createButtonsAndBoxes()
+end
+
+function updateSave()
+  self.script_state = disableSave and "" or JSON.encode(ref_buttonData)
+end
+
+-- generates a list of random characters from a list of eligible choices
+function generateCharList(num)
+  choices = choices or { 10007, 10008 }
+  local charList = {}
+  for i = 1, num do
+    table.insert(charList, choices[math.random(1, #choices)])
+  end
+  return charList
+end
+
+function click_checkbox(tableIndex, buttonIndex)
+  local state = ref_buttonData.checkbox[tableIndex].state
+  ref_buttonData.checkbox[tableIndex].state = not state
+  self.editButton({ index = buttonIndex, label = (state and "" or string.char(cb_unicode[buttonIndex + 1])) })
+  updateSave()
+end
+
+function click_counter(tableIndex, buttonIndex, mod)
+  ref_buttonData.counter[tableIndex].value = ref_buttonData.counter[tableIndex].value + mod
+  self.editButton({ index = buttonIndex, label = ref_buttonData.counter[tableIndex].value })
+  updateSave()
+end
+
+function click_textbox(i, value, selected)
+  if selected == false then
+    ref_buttonData.textbox[i].value = value
+    updateSave()
+  end
+end
+
+function createButtonsAndBoxes()
+  spawnedButtonCount = 0
+  cb_unicode = generateCharList(#ref_buttonData.checkbox)
+  createCheckboxes()
+  createCounters()
+  createTextboxes()
+end
+
+function createCheckboxes()
+  for i, data in ipairs(ref_buttonData.checkbox) do
+    local buttonIndex = spawnedButtonCount
+    local funcName = "checkbox" .. i
+    self.setVar(funcName, function() click_checkbox(i, buttonIndex) end)
+    self.createButton({
+      label          = data.state and string.char(cb_unicode[buttonIndex + 1]) or "",
+      click_function = funcName,
+      function_owner = self,
+      position       = data.pos,
+      rotation       = data.rot or { 0, 0, 0 },
+      height         = data.size or 300,
+      width          = data.size or 300,
+      font_size      = data.size or 300,
+      scale          = buttonScale,
+      color          = data.color or { 1, 1, 1, 0 },
+      font_color     = data.fontColor or { 1, 0, 0, 97 }
+    })
+    spawnedButtonCount = spawnedButtonCount + 1
+  end
+end
+
+function createCounters()
+  for i, data in ipairs(ref_buttonData.counter) do
+    -- common parameters
+    local size                      = data.size or 400
+    local offsetDistance            = 3 / 4 * size * buttonScale[1] * 0.002
+    local buttonParameters          = {}
+    buttonParameters.function_owner = self
+    buttonParameters.scale          = buttonScale
+    buttonParameters.color          = data.color or buttonColor
+    buttonParameters.font_color     = data.fontColor or buttonFontColor
+
+    -- Sets up display
+    local displayNumber             = spawnedButtonCount
+    buttonParameters.label          = data.value or 0
+    buttonParameters.click_function = "click_none"
+    buttonParameters.position       = data.pos
+    buttonParameters.height         = 0
+    buttonParameters.width          = 0
+    buttonParameters.font_size      = size
+    self.createButton(buttonParameters)
+    spawnedButtonCount = spawnedButtonCount + 1
+
+    -- Sets up add 1
+    local funcNameAdd = "counterAdd" .. i
+    self.setVar(funcNameAdd, function() click_counter(i, displayNumber, 1) end)
+    buttonParameters.label          = "+"
+    buttonParameters.click_function = funcNameAdd
+    buttonParameters.position       = { data.pos[1] + offsetDistance, data.pos[2], data.pos[3] - 0.005 }
+    buttonParameters.height         = size * 0.55
+    buttonParameters.width          = size * 0.55
+    buttonParameters.font_size      = size * 0.55
+    self.createButton(buttonParameters)
+    spawnedButtonCount = spawnedButtonCount + 1
+
+    -- Sets up subtract 1
+    local funcNameSub = "counterSub" .. i
+    self.setVar(funcNameSub, function() click_counter(i, displayNumber, -1) end)
+    buttonParameters.label          = "-"
+    buttonParameters.click_function = funcNameSub
+    buttonParameters.position       = { data.pos[1] - offsetDistance, data.pos[2], data.pos[3] - 0.005 }
+    self.createButton(buttonParameters)
+    spawnedButtonCount = spawnedButtonCount + 1
+  end
+end
+
+function createTextboxes()
+  for i, data in ipairs(ref_buttonData.textbox) do
+    -- default values
+    local rows = data.rows or 1
+    local fontSize = data.font_size or 175
+
+    -- textbox creation
+    local funcName = "textbox" .. i
+    self.setVar(funcName, function(_, _, val, sel) click_textbox(i, val, sel) end)
+    self.createInput({
+      input_function = funcName,
+      function_owner = self,
+      label          = data.label or "Click to type",
+      alignment      = data.alignment or 2,
+      position       = data.pos,
+      rotation       = data.rot or { 0, 0, 0 },
+      scale          = buttonScale,
+      width          = data.width or 2350,
+      height         = (fontSize * rows) + 40,
+      font_size      = fontSize,
+      color          = data.color or buttonColor,
+      font_color     = data.fontColor or buttonFontColor,
+      value          = data.value or ""
+    })
+  end
+end
