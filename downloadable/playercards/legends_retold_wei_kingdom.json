@@ -1,0 +1,1760 @@
+{
+  "GUID": "f85408",
+  "Name": "Custom_Model_Bag",
+  "Transform": {
+    "posX": 32,
+    "posY": 1.5,
+    "posZ": -22,
+    "rotX": 0,
+    "rotY": 270,
+    "rotZ": 0,
+    "scaleX": 2.21,
+    "scaleY": 0.46,
+    "scaleZ": 2.42
+  },
+  "Nickname": "Legends Retold - WEI Kingdom",
+  "Description": "by Popest\n\nLegends Retold Expansion - Investigators\r\nEach investigator from the Legends Retold expansion is double-sided. At the start of the game, each investigator begins on their regular form (designated by faction labels such as \"Shu,\" \"Wei,\" \"Wu,\" etc., located at the top left corner of the card).\r\n\r\nDuring gameplay, investigators may shift into their Legend form, which alters both their base skill values and abilities. This transformation is referred to as \"becoming a Legend\", and it causes the investigator card to be flipped to its Legend side. Conversely, \"reverting back to\" occurs when an investigator returns to the form they started the game with, flipping the investigator card back to its regular form.\r\n\r\nDeckbuilding instructions for these investigators are provided on a separate Deckbuilding card, included in the expansion box.",
+  "GMNotes": "",
+  "AltLookAngle": {
+    "x": 0.0,
+    "y": 0.0,
+    "z": 0.0
+  },
+  "ColorDiffuse": {
+    "r": 1.0,
+    "g": 1.0,
+    "b": 1.0
+  },
+  "LayoutGroupSortIndex": 0,
+  "Value": 0,
+  "Locked": false,
+  "Grid": true,
+  "Snap": true,
+  "IgnoreFoW": false,
+  "MeasureMovement": false,
+  "DragSelectable": true,
+  "Autoraise": true,
+  "Sticky": true,
+  "Tooltip": true,
+  "GridProjection": false,
+  "HideWhenFaceDown": false,
+  "Hands": false,
+  "MaterialIndex": -1,
+  "MeshIndex": -1,
+  "CustomMesh": {
+    "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/2469750756894231860/9F0BE0C211BE3BD1725B4B855F5D3C9C0D020394/",
+    "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435400/BD72012BE179582706D5A45844C92ECAA7AEB285/",
+    "NormalURL": "",
+    "ColliderURL": "",
+    "Convex": true,
+    "MaterialIndex": 1,
+    "TypeIndex": 6,
+    "CustomShader": {
+      "SpecularColor": {
+        "r": 0.367595822,
+        "g": 0.341824174,
+        "b": 0.3144418
+      },
+      "SpecularIntensity": 0.05,
+      "SpecularSharpness": 4.233323,
+      "FresnelStrength": 0.222220868
+    },
+    "CastShadows": true
+  },
+  "Bag": {
+    "Order": 0
+  },
+  "LuaScript": "-- Utility memory bag by Directsun\r\n-- Version 2.5.2\r\n-- Fork of Memory Bag 2.0 by MrStump\r\n\r\nfunction updateSave()\r\n    local data_to_save = {[\"ml\"]=memoryList}\r\n    saved_data = JSON.encode(data_to_save)\r\n    self.script_state = saved_data\r\nend\r\n\r\nfunction combineMemoryFromBagsWithin()\r\n  local bagObjList = self.getObjects()\r\n  for _, bagObj in ipairs(bagObjList) do\r\n    local data = bagObj.lua_script_state\r\n      if data ~= nil then\r\n        local j = JSON.decode(data)\r\n        if j ~= nil and j.ml ~= nil then\r\n          for guid, entry in pairs(j.ml) do\r\n            memoryList[guid] = entry\r\n          end\r\n        end\r\n      end\r\n    end\r\nend\r\n\r\nfunction updateMemoryWithMoves()\r\n    memoryList = memoryListBackup\r\n    --get the first transposed object's coordinates\r\n    local obj = getObjectFromGUID(moveGuid)\r\n\r\n    -- p1 is where needs to go, p2 is where it was\r\n    local refObjPos = memoryList[moveGuid].pos\r\n    local deltaPos = findOffsetDistance(obj.getPosition(), refObjPos, nil)\r\n    local movedRotation = obj.getRotation()\r\n    for guid, entry in pairs(memoryList) do\r\n        memoryList[guid].pos.x = entry.pos.x - deltaPos.x\r\n        memoryList[guid].pos.y = entry.pos.y - deltaPos.y\r\n        memoryList[guid].pos.z = entry.pos.z - deltaPos.z\r\n        -- memoryList[guid].rot.x = movedRotation.x\r\n        -- memoryList[guid].rot.y = movedRotation.y\r\n        -- memoryList[guid].rot.z = movedRotation.z\r\n    end\r\n\r\n    --theList[obj.getGUID()] = {\r\n    --    pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\r\n    --    rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\r\n    --    lock=obj.getLock()\r\n    --}\r\n    moveList = {}\r\nend\r\n\r\nfunction onload(saved_data)\r\n    fresh = true\r\n    if saved_data ~= \"\" then\r\n        local loaded_data = JSON.decode(saved_data)\r\n        --Set up information off of loaded_data\r\n        memoryList = loaded_data.ml\r\n    else\r\n        --Set up information for if there is no saved saved data\r\n        memoryList = {}\r\n    end\r\n\r\n    moveList = {}\r\n    moveGuid = nil\r\n\r\n    if next(memoryList) == nil then\r\n        createSetupButton()\r\n    else\r\n        fresh = false\r\n        createMemoryActionButtons()\r\n    end\r\nend\r\n\r\n\r\n--Beginning Setup\r\n\r\n\r\n--Make setup button\r\nfunction createSetupButton()\r\n    self.createButton({\r\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\r\n        position={0,0.1,-2.1}, rotation={0,0,0}, height=220, width=500,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\nend\r\n\r\n--Triggered by Transpose button\r\nfunction buttonClick_transpose()\r\n    moveGuid = nil\r\n    broadcastToAll(\"Select one object and move it- all objects will move relative to the new location\", {0.75, 0.75, 1})\r\n    memoryListBackup = duplicateTable(memoryList)\r\n    memoryList = {}\r\n    moveList = {}\r\n    self.clearButtons()\r\n    createButtonsOnAllObjects(true)\r\n    createSetupActionButtons(true)\r\nend\r\n\r\n--Triggered by setup button,\r\nfunction buttonClick_setup()\r\n    memoryListBackup = duplicateTable(memoryList)\r\n    memoryList = {}\r\n    self.clearButtons()\r\n    createButtonsOnAllObjects(false)\r\n    createSetupActionButtons(false)\r\nend\r\n\r\nfunction getAllObjectsInMemory()\r\n  local objTable = {}\r\n  local curObj = {}\r\n\r\n  for guid in pairs(memoryListBackup) do\r\n    curObj = getObjectFromGUID(guid)\r\n    table.insert(objTable, curObj)\r\n  end\r\n\r\n  return objTable\r\n  -- return getAllObjects()\r\nend\r\n\r\n--Creates selection buttons on objects\r\nfunction createButtonsOnAllObjects(move)\r\n    local howManyButtons = 0\r\n\r\n    local objsToHaveButtons = {}\r\n    if move == true then\r\n      objsToHaveButtons = getAllObjectsInMemory()\r\n    else\r\n      objsToHaveButtons = getAllObjects()\r\n    end\r\n\r\n    for _, obj in ipairs(objsToHaveButtons) do\r\n        if obj ~= self then\r\n            local dummyIndex = howManyButtons\r\n            --On a normal bag, the button positions aren't the same size as the bag.\r\n            globalScaleFactor = 1 * 1/self.getScale().x\r\n            --Super sweet math to set button positions\r\n            local selfPos = self.getPosition()\r\n            local objPos = obj.getPosition()\r\n            local deltaPos = findOffsetDistance(selfPos, objPos, obj)\r\n            local objPos = rotateLocalCoordinates(deltaPos, self)\r\n            objPos.x = -objPos.x * globalScaleFactor\r\n            objPos.y = objPos.y * globalScaleFactor + 2\r\n            objPos.z = objPos.z * globalScaleFactor * 0.9\r\n            --Offset rotation of bag\r\n            local rot = self.getRotation()\r\n            rot.y = -rot.y + 180\r\n            --Create function\r\n            local funcName = \"selectButton_\" .. howManyButtons\r\n            local func = function() buttonClick_selection(dummyIndex, obj, move) end\r\n            local color = {0.75,0.25,0.25,0.6}\r\n            local colorMove = {0,0,1,0.6}\r\n            if move == true then\r\n              color = colorMove\r\n            end\r\n            self.setVar(funcName, func)\r\n            self.createButton({\r\n                click_function=funcName, function_owner=self,\r\n                position=objPos, rotation=rot, height=500, width=500,\r\n                color=color,\r\n            })\r\n            howManyButtons = howManyButtons + 1\r\n        end\r\n    end\r\nend\r\n\r\n--Creates submit and cancel buttons\r\nfunction createSetupActionButtons(move)\r\n    self.createButton({\r\n        label=\"Cancel\", click_function=\"buttonClick_cancel\", function_owner=self,\r\n      position={-0.6,0.1,-2.1}, rotation={0,0,0}, height=220, width=550,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n\r\n    self.createButton({\r\n        label=\"Submit\", click_function=\"buttonClick_submit\", function_owner=self,\r\n        position={-0.6,0.3,-2.5}, rotation={0,0,0}, height=220, width=550,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n\r\n    if move == false then\r\n      self.createButton({\r\n          label=\"Add\", click_function=\"buttonClick_add\", function_owner=self,\r\n          position={0.6,0.3,-2.1}, rotation={0,0,0}, height=220, width=550,\r\n          font_size=130, color={0,0,0}, font_color={0.25,1,0.25}\r\n      })\r\n\r\n        if fresh == false then\r\n            self.createButton({\r\n                label=\"Set New\", click_function=\"buttonClick_setNew\", function_owner=self,\r\n                position={0.6,0.3,-2.9}, rotation={0,0,0}, height=220, width=550,\r\n                font_size=130, color={0,0,0}, font_color={0.75,0.75,1}\r\n            })\r\n            self.createButton({\r\n                label=\"Remove\", click_function=\"buttonClick_remove\", function_owner=self,\r\n                position={0.6,0.3,-2.5}, rotation={0,0,0}, height=220, width=550,\r\n                font_size=130, color={0,0,0}, font_color={1,0.25,0.25}\r\n            })\r\n        end\r\n    end\r\n\r\n    self.createButton({\r\n        label=\"Reset\", click_function=\"buttonClick_reset\", function_owner=self,\r\n        position={-0.6,0.3,-2.9}, rotation={0,0,0}, height=220, width=550,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\nend\r\n\r\n\r\n--During Setup\r\n\r\n\r\n--Checks or unchecks buttons\r\nfunction buttonClick_selection(index, obj, move)\r\n    local colorMove = {0,0,1,0.6}\r\n    local color = {0,1,0,0.6}\r\n\r\n    previousGuid = selectedGuid\r\n    selectedGuid = obj.getGUID()\r\n\r\n    theList = memoryList\r\n    if move == true then\r\n       theList = moveList\r\n       if previousGuid ~= nil and previousGuid ~= selectedGuid then\r\n         local prevObj = getObjectFromGUID(previousGuid)\r\n         prevObj.highlightOff()\r\n         self.editButton({index=previousIndex, color=colorMove})\r\n         theList[previousGuid] = nil\r\n       end\r\n       previousIndex = index\r\n    end\r\n\r\n    if theList[selectedGuid] == nil then\r\n        self.editButton({index=index, color=color})\r\n        --Adding pos/rot to memory table\r\n        local pos, rot = obj.getPosition(), obj.getRotation()\r\n        --I need to add it like this or it won't save due to indexing issue\r\n        theList[obj.getGUID()] = {\r\n            pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\r\n            rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\r\n            lock=obj.getLock()\r\n        }\r\n        obj.highlightOn({0,1,0})\r\n    else\r\n      color = {0.75,0.25,0.25,0.6}\r\n      if move == true then\r\n        color = colorMove\r\n      end\r\n        self.editButton({index=index, color=color})\r\n        theList[obj.getGUID()] = nil\r\n        obj.highlightOff()\r\n    end\r\nend\r\n\r\n--Cancels selection process\r\nfunction buttonClick_cancel()\r\n    memoryList = memoryListBackup\r\n    moveList = {}\r\n    self.clearButtons()\r\n    if next(memoryList) == nil then\r\n        createSetupButton()\r\n    else\r\n        createMemoryActionButtons()\r\n    end\r\n    removeAllHighlights()\r\n    broadcastToAll(\"Selection Canceled\", {1,1,1})\r\n    moveGuid = nil\r\nend\r\n\r\n--Saves selections\r\nfunction buttonClick_submit()\r\n    fresh = false\r\n    if next(moveList) ~= nil then\r\n        for guid in pairs(moveList) do\r\n            moveGuid = guid\r\n        end\r\n        if memoryListBackup[moveGuid] == nil then\r\n            broadcastToAll(\"Item selected for moving is not already in memory\", {1, 0.25, 0.25})\r\n        else\r\n            broadcastToAll(\"Moving all items in memory relative to new objects position!\", {0.75, 0.75, 1})\r\n            self.clearButtons()\r\n            createMemoryActionButtons()\r\n            local count = 0\r\n            for guid in pairs(moveList) do\r\n                moveGuid = guid\r\n                count = count + 1\r\n                local obj = getObjectFromGUID(guid)\r\n                if obj ~= nil then obj.highlightOff() end\r\n            end\r\n            updateMemoryWithMoves()\r\n            updateSave()\r\n            buttonClick_place()\r\n        end\r\n    elseif next(memoryList) == nil and moveGuid == nil then\r\n      memoryList = memoryListBackup\r\n      broadcastToAll(\"No selections made.\", {0.75, 0.25, 0.25})\r\n    end\r\n    combineMemoryFromBagsWithin()\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for guid in pairs(memoryList) do\r\n        count = count + 1\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then obj.highlightOff() end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    updateSave()\r\n    moveGuid = nil\r\nend\r\n\r\nfunction combineTables(first_table, second_table)\r\n  for k,v in pairs(second_table) do first_table[k] = v end\r\nend\r\n\r\nfunction buttonClick_add()\r\n    fresh = false\r\n    combineTables(memoryList, memoryListBackup)\r\n    broadcastToAll(\"Adding internal bags and selections to existing memory\", {0.25, 0.75, 0.25})\r\n    combineMemoryFromBagsWithin()\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for guid in pairs(memoryList) do\r\n        count = count + 1\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then obj.highlightOff() end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    updateSave()\r\nend\r\n\r\nfunction buttonClick_remove()\r\n        broadcastToAll(\"Removing Selected Entries From Memory\", {1.0, 0.25, 0.25})\r\n        self.clearButtons()\r\n        createMemoryActionButtons()\r\n        local count = 0\r\n        for guid in pairs(memoryList) do\r\n            count = count + 1\r\n            memoryListBackup[guid] = nil\r\n            local obj = getObjectFromGUID(guid)\r\n            if obj ~= nil then obj.highlightOff() end\r\n        end\r\n        broadcastToAll(count..\" Objects Removed\", {1,1,1})\r\n        memoryList = memoryListBackup\r\n        updateSave()\r\nend\r\n\r\nfunction buttonClick_setNew()\r\n    broadcastToAll(\"Setting new position relative to items in memory\", {0.75, 0.75, 1})\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for _, obj in ipairs(getAllObjects()) do\r\n        guid = obj.guid\r\n        if memoryListBackup[guid] ~= nil then\r\n            count = count + 1\r\n            memoryListBackup[guid].pos = obj.getPosition()\r\n            memoryListBackup[guid].rot = obj.getRotation()\r\n            memoryListBackup[guid].lock = obj.getLock()\r\n        end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    memoryList = memoryListBackup\r\n    updateSave()\r\nend\r\n\r\n--Resets bag to starting status\r\nfunction buttonClick_reset()\r\n    fresh = true\r\n    memoryList = {}\r\n    self.clearButtons()\r\n    createSetupButton()\r\n    removeAllHighlights()\r\n    broadcastToAll(\"Tool Reset\", {1,1,1})\r\n    updateSave()\r\nend\r\n\r\n\r\n--After Setup\r\n\r\n\r\n--Creates recall and place buttons\r\nfunction createMemoryActionButtons()\r\n    self.createButton({\r\n        label=\"Place\", click_function=\"buttonClick_place\", function_owner=self,\r\n        position={0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n    self.createButton({\r\n        label=\"Recall\", click_function=\"buttonClick_recall\", function_owner=self,\r\n        position={-0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n    self.createButton({\r\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\r\n        position={0,0.1,-2.1}, rotation={0,0,0}, height=220, width=500,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n---    self.createButton({\r\n---      label=\"Move\", click_function=\"buttonClick_transpose\", function_owner=self,\r\n---      position={-2.8,0.3,0}, rotation={0,0,0}, height=350, width=800,\r\n---      font_size=250, color={0,0,0}, font_color={0.75,0.75,1}\r\n---    })\r\nend\r\n\r\n--Sends objects from bag/table to their saved position/rotation\r\nfunction buttonClick_place()\r\n    local bagObjList = self.getObjects()\r\n    for guid, entry in pairs(memoryList) do\r\n        local obj = getObjectFromGUID(guid)\r\n        --If obj is out on the table, move it to the saved pos/rot\r\n        if obj ~= nil then\r\n            obj.setPositionSmooth(entry.pos)\r\n            obj.setRotationSmooth(entry.rot)\r\n            obj.setLock(entry.lock)\r\n        else\r\n            --If obj is inside of the bag\r\n            for _, bagObj in ipairs(bagObjList) do\r\n                if bagObj.guid == guid then\r\n                    local item = self.takeObject({\r\n                        guid=guid, position=entry.pos, rotation=entry.rot, smooth=false\r\n                    })\r\n                    item.setLock(entry.lock)\r\n                    break\r\n                end\r\n            end\r\n        end\r\n    end\r\n    broadcastToAll(\"Objects Placed\", {1,1,1})\r\nend\r\n\r\n--Recalls objects to bag from table\r\nfunction buttonClick_recall()\r\n    for guid, entry in pairs(memoryList) do\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then self.putObject(obj) end\r\n    end\r\n    broadcastToAll(\"Objects Recalled\", {1,1,1})\r\nend\r\n\r\n\r\n--Utility functions\r\n\r\n\r\n--Find delta (difference) between 2 x/y/z coordinates\r\nfunction findOffsetDistance(p1, p2, obj)\r\n    local yOffset = 0\r\n    if obj ~= nil then\r\n        local bounds = obj.getBounds()\r\n        yOffset = (bounds.size.y - bounds.offset.y)\r\n    end\r\n    local deltaPos = {}\r\n    deltaPos.x = (p2.x-p1.x)\r\n    deltaPos.y = (p2.y-p1.y) + yOffset\r\n    deltaPos.z = (p2.z-p1.z)\r\n    return deltaPos\r\nend\r\n\r\n--Used to rotate a set of coordinates by an angle\r\nfunction rotateLocalCoordinates(desiredPos, obj)\r\n\tlocal objPos, objRot = obj.getPosition(), obj.getRotation()\r\n    local angle = math.rad(objRot.y)\r\n\tlocal x = desiredPos.x * math.cos(angle) - desiredPos.z * math.sin(angle)\r\n\tlocal z = desiredPos.x * math.sin(angle) + desiredPos.z * math.cos(angle)\r\n\t--return {x=objPos.x+x, y=objPos.y+desiredPos.y, z=objPos.z+z}\r\n    return {x=x, y=desiredPos.y, z=z}\r\nend\r\n\r\nfunction rotateMyCoordinates(desiredPos, obj)\r\n\tlocal angle = math.rad(obj.getRotation().y)\r\n  local x = desiredPos.x * math.sin(angle)\r\n\tlocal z = desiredPos.z * math.cos(angle)\r\n    return {x=x, y=desiredPos.y, z=z}\r\nend\r\n\r\n--Coroutine delay, in seconds\r\nfunction wait(time)\r\n    local start = os.time()\r\n    repeat coroutine.yield(0) until os.time() > start + time\r\nend\r\n\r\n--Duplicates a table (needed to prevent it making reference to the same objects)\r\nfunction duplicateTable(oldTable)\r\n    local newTable = {}\r\n    for k, v in pairs(oldTable) do\r\n        newTable[k] = v\r\n    end\r\n    return newTable\r\nend\r\n\r\n--Moves scripted highlight from all objects\r\nfunction removeAllHighlights()\r\n    for _, obj in ipairs(getAllObjects()) do\r\n        obj.highlightOff()\r\n    end\r\nend\r\n\r\n--Round number (num) to the Nth decimal (dec)\r\nfunction round(num, dec)\r\n  local mult = 10^(dec or 0)\r\n  return math.floor(num * mult + 0.5) / mult\r\nend",
+  "LuaScriptState": "{\"ml\":{\"019063\":{\"lock\":false,\"pos\":{\"x\":43.6867,\"y\":1.4951,\"z\":52.0994},\"rot\":{\"x\":0,\"y\":270,\"z\":180}},\"06261c\":{\"lock\":false,\"pos\":{\"x\":44.45,\"y\":1.4951,\"z\":77},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"2c86a8\":{\"lock\":false,\"pos\":{\"x\":47,\"y\":1.4951,\"z\":83},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"2c8a27\":{\"lock\":false,\"pos\":{\"x\":44.45,\"y\":1.4951,\"z\":71},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"3d17bd\":{\"lock\":false,\"pos\":{\"x\":47,\"y\":1.4951,\"z\":65},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"3f7de7\":{\"lock\":false,\"pos\":{\"x\":47,\"y\":1.4951,\"z\":77},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"4f083d\":{\"lock\":false,\"pos\":{\"x\":43.6821,\"y\":1.4951,\"z\":46.0614},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"650295\":{\"lock\":false,\"pos\":{\"x\":41.25,\"y\":1.5217,\"z\":65},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"720f81\":{\"lock\":false,\"pos\":{\"x\":44.45,\"y\":1.4951,\"z\":83},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"a4b332\":{\"lock\":false,\"pos\":{\"x\":41.25,\"y\":1.5121,\"z\":59},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"ad345a\":{\"lock\":false,\"pos\":{\"x\":41.25,\"y\":1.4951,\"z\":77},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"b024bf\":{\"lock\":false,\"pos\":{\"x\":47,\"y\":1.4951,\"z\":71},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"b8d095\":{\"lock\":false,\"pos\":{\"x\":41.25,\"y\":1.5121,\"z\":71},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"ba7ecb\":{\"lock\":false,\"pos\":{\"x\":47,\"y\":1.4951,\"z\":59},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"d8ab48\":{\"lock\":false,\"pos\":{\"x\":44.45,\"y\":1.4951,\"z\":65},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"e44a04\":{\"lock\":false,\"pos\":{\"x\":44.45,\"y\":1.4951,\"z\":59},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"f98868\":{\"lock\":false,\"pos\":{\"x\":41.25,\"y\":1.5121,\"z\":83},\"rot\":{\"x\":0,\"y\":270,\"z\":0}}}}",
+  "XmlUI": "",
+  "ContainedObjects": [
+    {
+      "GUID": "019063",
+      "Name": "CardCustom",
+      "Transform": {
+        "posX": 43.6867,
+        "posY": 1.49510384,
+        "posZ": 52.0994,
+        "rotX": -1.010293E-08,
+        "rotY": 270.0,
+        "rotZ": 180.0,
+        "scaleX": 2.73749614,
+        "scaleY": 1.0,
+        "scaleZ": 2.73749614
+      },
+      "Nickname": "Legends Retold - Rulebook",
+      "Description": "Legends Retold Expansion - Investigators\r\nEach investigator from the Legends Retold expansion is double-sided. At the start of the game, each investigator begins on their regular form (designated by faction labels such as \"Shu,\" \"Wei,\" \"Wu,\" etc., located at the top left corner of the card).\r\n\r\nDuring gameplay, investigators may shift into their Legend form, which alters both their base skill values and abilities. This transformation is referred to as \"becoming a Legend\", and it causes the investigator card to be flipped to its Legend side. Conversely, \"reverting back to\" occurs when an investigator returns to the form they started the game with, flipping the investigator card back to its regular form.\r\n\r\nDeckbuilding instructions for these investigators are provided on a separate Deckbuilding card, included in the expansion box.",
+      "GMNotes": "",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 919800,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "9198": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280379139/E5F8285E3C28C0D62A66C990397187D68D52B73B/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2469750756894696314/5DAB9092C47D1E62B3C076920AAE4D767B73F9E8/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 1
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "4f083d",
+      "Name": "CardCustom",
+      "Transform": {
+        "posX": 43.6821,
+        "posY": 1.49510384,
+        "posZ": 46.0614,
+        "rotX": -3.89977224E-08,
+        "rotY": 270.0,
+        "rotZ": 1.25196591E-08,
+        "scaleX": 2.73749614,
+        "scaleY": 1.0,
+        "scaleZ": 2.73749614
+      },
+      "Nickname": "WEI Kingdom DBI",
+      "Description": "Legends Retold Expansion - Investigators\r\nEach investigator from the Legends Retold expansion is double-sided. At the start of the game, each investigator begins on their regular form (designated by faction labels such as \"Shu,\" \"Wei,\" \"Wu,\" etc., located at the top left corner of the card).\r\n\r\nDuring gameplay, investigators may shift into their Legend form, which alters both their base skill values and abilities. This transformation is referred to as \"becoming a Legend\", and it causes the investigator card to be flipped to its Legend side. Conversely, \"reverting back to\" occurs when an investigator returns to the form they started the game with, flipping the investigator card back to its regular form.\r\n\r\nDeckbuilding instructions for these investigators are provided on a separate Deckbuilding card, included in the expansion box.",
+      "GMNotes": "",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 919800,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "9198": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280379139/E5F8285E3C28C0D62A66C990397187D68D52B73B/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2469750756894696314/5DAB9092C47D1E62B3C076920AAE4D767B73F9E8/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 1
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "2c86a8",
+      "Name": "Card",
+      "Transform": {
+        "posX": 47.0,
+        "posY": 1.49510384,
+        "posZ": 83.0,
+        "rotX": -6.89951349E-08,
+        "rotY": 270.0,
+        "rotZ": 6.729674E-08,
+        "scaleX": 0.6,
+        "scaleY": 1.0,
+        "scaleZ": 0.6
+      },
+      "Nickname": "Zhang Liao",
+      "Description": "",
+      "GMNotes": "{\n  \"id\": \"WEI01-m\",\n  \"type\": \"Minicard\"\n}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Minicard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 919900,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "9199": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435445/F4DF3B13DCC2BC931AE4978BDC56A117BE36D73F/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435484/91A34E89ED0918B6E5191AEB38B46B72849A8B7C/",
+          "NumWidth": 5,
+          "NumHeight": 2,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "720f81",
+      "Name": "Card",
+      "Transform": {
+        "posX": 44.45,
+        "posY": 1.49510384,
+        "posZ": 83.0,
+        "rotX": 1.2477048E-07,
+        "rotY": 180.0,
+        "rotZ": -4.80331046E-08,
+        "scaleX": 1.15,
+        "scaleY": 1.0,
+        "scaleZ": 1.15
+      },
+      "Nickname": "Zhang Liao",
+      "Description": "General of the Vanguard",
+      "GMNotes": "{\r\n  \"id\": \"WEI01\",\r\n  \"type\": \"Investigator\",\r\n  \"class\": \"Guardian\",\r\n  \"traits\": \"Archer.\",\r\n  \"willpowerIcons\": 4,\r\n  \"intellectIcons\": 3,\r\n  \"combatIcons\": 3,\r\n  \"agilityIcons\": 2,\r\n  \"cycle\": \"Legends Retold - WEI\",\n  \"signatures\": [\r\n    {\r\n      \"WEI06\": 1,\r\n      \"WEI07\": 1\r\n    }\r\n  ]\r\n}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Investigator",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 920000,
+      "SidewaysCard": true,
+      "CustomDeck": {
+        "9200": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435527/1A5BD8BEF6F75A0086003FAF36F21A75416CBAD9/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435588/4EEEEB0503DF25D011651517706C389BE9A6EB72/",
+          "NumWidth": 4,
+          "NumHeight": 2,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "f98868",
+      "Name": "Deck",
+      "Transform": {
+        "posX": 41.25,
+        "posY": 1.51205766,
+        "posZ": 83.0,
+        "rotX": -1.52437579E-07,
+        "rotY": 270.0,
+        "rotZ": 2.67218283E-08,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "",
+      "Description": "",
+      "GMNotes": "",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": false,
+      "SidewaysCard": false,
+      "DeckIDs": [
+        920301,
+        920300
+      ],
+      "CustomDeck": {
+        "9203": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435659/C08219C8370CF0016D3269C0903DE5CF17E34A4A/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 6,
+          "NumHeight": 2,
+          "BackIsHidden": false,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": "",
+      "ContainedObjects": [
+        {
+          "GUID": "517481",
+          "Name": "Card",
+          "Transform": {
+            "posX": 21.56244,
+            "posY": 1.9443891,
+            "posZ": 73.0185547,
+            "rotX": -3.13554054E-08,
+            "rotY": 269.996948,
+            "rotZ": 7.55305436E-08,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Surrounded by Millions",
+          "Description": "",
+          "GMNotes": "{\r\n  \"id\": \"WEI07\",\r\n  \"type\": \"Treachery\",\r\n  \"class\": \"Neutral\",\r\n  \"traits\": \"Madness.\",\r\n  \"weakness\": true,\r\n  \"cycle\": \"Legends Retold - WEI\"\r\n}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 920301,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "9203": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435659/C08219C8370CF0016D3269C0903DE5CF17E34A4A/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+              "NumWidth": 6,
+              "NumHeight": 2,
+              "BackIsHidden": false,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "a86dcc",
+          "Name": "Card",
+          "Transform": {
+            "posX": 25.7743855,
+            "posY": 1.9443891,
+            "posZ": 75.43147,
+            "rotX": 2.84582455E-08,
+            "rotY": 269.99585,
+            "rotZ": -9.58215836E-08,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Shatter the Siege",
+          "Description": "",
+          "GMNotes": "{\r\n  \"id\": \"WEI06\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 3,\r\n  \"traits\": \"Spirit. Tactic.\",\r\n  \"wildIcons\": 1,\n  \"cycle\": \"Legends Retold - WEI\"\r\n}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 920300,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "9203": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435659/C08219C8370CF0016D3269C0903DE5CF17E34A4A/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+              "NumWidth": 6,
+              "NumHeight": 2,
+              "BackIsHidden": false,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        }
+      ]
+    },
+    {
+      "GUID": "3f7de7",
+      "Name": "Card",
+      "Transform": {
+        "posX": 47.0,
+        "posY": 1.49510384,
+        "posZ": 77.0,
+        "rotX": -1.4221898E-07,
+        "rotY": 270.0,
+        "rotZ": 2.11371059E-07,
+        "scaleX": 0.6,
+        "scaleY": 1.0,
+        "scaleZ": 0.6
+      },
+      "Nickname": "Guo Jia",
+      "Description": "",
+      "GMNotes": "{\n  \"id\": \"WEI02-m\",\n  \"type\": \"Minicard\"\n}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Minicard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 919901,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "9199": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435445/F4DF3B13DCC2BC931AE4978BDC56A117BE36D73F/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435484/91A34E89ED0918B6E5191AEB38B46B72849A8B7C/",
+          "NumWidth": 5,
+          "NumHeight": 2,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "06261c",
+      "Name": "Card",
+      "Transform": {
+        "posX": 44.45,
+        "posY": 1.49510384,
+        "posZ": 77.0,
+        "rotX": 1.2477048E-07,
+        "rotY": 180.0,
+        "rotZ": -4.80331046E-08,
+        "scaleX": 1.15,
+        "scaleY": 1.0,
+        "scaleZ": 1.15
+      },
+      "Nickname": "Guo Jia",
+      "Description": "The Young Demised",
+      "GMNotes": "{\r\n  \"id\": \"WEI02\",\r\n  \"type\": \"Investigator\",\r\n  \"class\": \"Seeker\",\r\n  \"traits\": \"Counselor.\",\r\n  \"willpowerIcons\": 4,\r\n  \"intellectIcons\": 5,\r\n  \"combatIcons\": 1,\r\n  \"agilityIcons\": 2,\r\n  \"cycle\": \"Legends Retold - WEI\",\n  \"signatures\": [\r\n    {\r\r\n      \"WEI08\": 1\r\n    }\r\n  ]\r\n}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Investigator",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 920001,
+      "SidewaysCard": true,
+      "CustomDeck": {
+        "9200": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435527/1A5BD8BEF6F75A0086003FAF36F21A75416CBAD9/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435588/4EEEEB0503DF25D011651517706C389BE9A6EB72/",
+          "NumWidth": 4,
+          "NumHeight": 2,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "ad345a",
+      "Name": "Card",
+      "Transform": {
+        "posX": 41.25,
+        "posY": 1.49510384,
+        "posZ": 77.0,
+        "rotX": 4.25808935E-08,
+        "rotY": 270.0,
+        "rotZ": -6.373006E-08,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Strategic Urgency",
+      "Description": "",
+      "GMNotes": "{\r\n  \"id\": \"WEI08\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Neutral\",\r\n  \"traits\": \"Spirit.\",\r\n  \"startsInPlay\": true,\n  \"extraToken\": \"Reaction\",\r\n  \"cycle\": \"Legends Retold - WEI\"\r\n}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 920302,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "9203": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435659/C08219C8370CF0016D3269C0903DE5CF17E34A4A/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 6,
+          "NumHeight": 2,
+          "BackIsHidden": false,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "b024bf",
+      "Name": "Card",
+      "Transform": {
+        "posX": 47.0,
+        "posY": 1.49510372,
+        "posZ": 71.0,
+        "rotX": -3.82380776E-08,
+        "rotY": 270.0,
+        "rotZ": 2.07426154E-07,
+        "scaleX": 0.6,
+        "scaleY": 1.0,
+        "scaleZ": 0.6
+      },
+      "Nickname": "Deng Ai",
+      "Description": "",
+      "GMNotes": "{\n  \"id\": \"WEI03-m\",\n  \"type\": \"Minicard\"\n}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Minicard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 919902,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "9199": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435445/F4DF3B13DCC2BC931AE4978BDC56A117BE36D73F/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435484/91A34E89ED0918B6E5191AEB38B46B72849A8B7C/",
+          "NumWidth": 5,
+          "NumHeight": 2,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "2c8a27",
+      "Name": "Card",
+      "Transform": {
+        "posX": 44.45,
+        "posY": 1.49510384,
+        "posZ": 71.0,
+        "rotX": 1.2477048E-07,
+        "rotY": 180.0,
+        "rotZ": -4.80331046E-08,
+        "scaleX": 1.15,
+        "scaleY": 1.0,
+        "scaleZ": 1.15
+      },
+      "Nickname": "Deng Ai",
+      "Description": "The Upright and Unafraid",
+      "GMNotes": "{\r\n  \"id\": \"WEI03\",\r\n  \"type\": \"Investigator\",\r\n  \"class\": \"Rogue\",\r\n  \"traits\": \"Rodeleros.\",\r\n  \"willpowerIcons\": 3,\r\n  \"intellectIcons\": 3,\r\n  \"combatIcons\": 2,\r\n  \"agilityIcons\": 4,\r\n  \"cycle\": \"Legends Retold - WEI\",\n  \"signatures\": [\r\n    {\r\n      \"WEI09\": 1,\r\n      \"WEI10\": 1\r\n    }\r\n  ]\r\n}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Investigator",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 920002,
+      "SidewaysCard": true,
+      "CustomDeck": {
+        "9200": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435527/1A5BD8BEF6F75A0086003FAF36F21A75416CBAD9/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435588/4EEEEB0503DF25D011651517706C389BE9A6EB72/",
+          "NumWidth": 4,
+          "NumHeight": 2,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "b8d095",
+      "Name": "Deck",
+      "Transform": {
+        "posX": 41.25,
+        "posY": 1.51205766,
+        "posZ": 71.0,
+        "rotX": -1.52437579E-07,
+        "rotY": 270.0,
+        "rotZ": 2.67218283E-08,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "",
+      "Description": "",
+      "GMNotes": "",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": false,
+      "SidewaysCard": false,
+      "DeckIDs": [
+        920304,
+        920203
+      ],
+      "CustomDeck": {
+        "9203": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435659/C08219C8370CF0016D3269C0903DE5CF17E34A4A/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 6,
+          "NumHeight": 2,
+          "BackIsHidden": false,
+          "UniqueBack": false,
+          "Type": 0
+        },
+        "9202": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435659/C08219C8370CF0016D3269C0903DE5CF17E34A4A/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435736/BED20D82E05B5729C2166010B73BCB1737C333CD/",
+          "NumWidth": 6,
+          "NumHeight": 2,
+          "BackIsHidden": false,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": "",
+      "ContainedObjects": [
+        {
+          "GUID": "f827ec",
+          "Name": "Card",
+          "Transform": {
+            "posX": 17.37094,
+            "posY": 1.95014012,
+            "posZ": 45.53939,
+            "rotX": 0.00278159557,
+            "rotY": 269.997528,
+            "rotZ": -0.002603588,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Catch A Weasel Asleep",
+          "Description": "",
+          "GMNotes": "{\r\n  \"id\": \"WEI10\",\r\n  \"type\": \"Treachery\",\r\n  \"class\": \"Neutral\",\r\n  \"traits\": \"Task.\",\r\n  \"weakness\": true,\n  \"hidden\": true,\r\n  \"cycle\": \"Legends Retold - WEI\"\r\n}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 920304,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "9203": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435659/C08219C8370CF0016D3269C0903DE5CF17E34A4A/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+              "NumWidth": 6,
+              "NumHeight": 2,
+              "BackIsHidden": false,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "904127",
+          "Name": "Card",
+          "Transform": {
+            "posX": 28.4874744,
+            "posY": 1.95035136,
+            "posZ": 70.97875,
+            "rotX": 0.004171232,
+            "rotY": 269.98175,
+            "rotZ": 0.0009817523,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Agricultural Garrison",
+          "Description": "Uncultivated",
+          "GMNotes": "{\r\n  \"id\": \"WEI09\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Neutral\",\r\n  \"traits\": \"Supply.\",\r\n  \"startsInPlay\": true,\n  \"uses\": [\r\n    {\r\n      \"count\": 0,\r\n      \"type\": \"Supply\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"Legends Retold - WEI\"\r\n}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "Asset",
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 920203,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "9202": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435659/C08219C8370CF0016D3269C0903DE5CF17E34A4A/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435736/BED20D82E05B5729C2166010B73BCB1737C333CD/",
+              "NumWidth": 6,
+              "NumHeight": 2,
+              "BackIsHidden": false,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        }
+      ]
+    },
+    {
+      "GUID": "3d17bd",
+      "Name": "Card",
+      "Transform": {
+        "posX": 47.0,
+        "posY": 1.49510384,
+        "posZ": 65.0,
+        "rotX": -6.89951349E-08,
+        "rotY": 270.0,
+        "rotZ": 6.729674E-08,
+        "scaleX": 0.6,
+        "scaleY": 1.0,
+        "scaleZ": 0.6
+      },
+      "Nickname": "Sima Yi",
+      "Description": "",
+      "GMNotes": "{\n  \"id\": \"WEI04-m\",\n  \"type\": \"Minicard\"\n}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Minicard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 919903,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "9199": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435445/F4DF3B13DCC2BC931AE4978BDC56A117BE36D73F/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435484/91A34E89ED0918B6E5191AEB38B46B72849A8B7C/",
+          "NumWidth": 5,
+          "NumHeight": 2,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "d8ab48",
+      "Name": "Card",
+      "Transform": {
+        "posX": 44.45,
+        "posY": 1.49510384,
+        "posZ": 65.0,
+        "rotX": -4.20449773E-08,
+        "rotY": 180.0,
+        "rotZ": -7.89699044E-08,
+        "scaleX": 1.15,
+        "scaleY": 1.0,
+        "scaleZ": 1.15
+      },
+      "Nickname": "",
+      "Description": "",
+      "GMNotes": "{\r\n  \"id\": \"WEI04\",\r\n  \"type\": \"Investigator\",\r\n  \"class\": \"Mystic\",\r\n  \"traits\": \"Counselor.\",\r\n  \"willpowerIcons\": 5,\r\n  \"intellectIcons\": 4,\r\n  \"combatIcons\": 2,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"Legends Retold - WEI\",\n  \"signatures\": [\r\n    {\n      \"WEI11\": 1,\r\n      \"WEI12\": 1,\r\n      \"WEI13\": 1,\n      \"WEI14\": 1\n    }\r\n  ]\r\n}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Investigator",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 920003,
+      "SidewaysCard": true,
+      "CustomDeck": {
+        "9200": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435527/1A5BD8BEF6F75A0086003FAF36F21A75416CBAD9/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435588/4EEEEB0503DF25D011651517706C389BE9A6EB72/",
+          "NumWidth": 4,
+          "NumHeight": 2,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "650295",
+      "Name": "Deck",
+      "Transform": {
+        "posX": 41.25,
+        "posY": 1.52168572,
+        "posZ": 65.0,
+        "rotX": 2.5551909E-08,
+        "rotY": 270.0,
+        "rotZ": 1.48464366E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "",
+      "Description": "",
+      "GMNotes": "",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": false,
+      "SidewaysCard": false,
+      "DeckIDs": [
+        920308,
+        920307,
+        920306,
+        920305
+      ],
+      "CustomDeck": {
+        "9203": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435659/C08219C8370CF0016D3269C0903DE5CF17E34A4A/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 6,
+          "NumHeight": 2,
+          "BackIsHidden": false,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": "",
+      "ContainedObjects": [
+        {
+          "GUID": "10ec2c",
+          "Name": "Card",
+          "Transform": {
+            "posX": 23.3867321,
+            "posY": 1.94457257,
+            "posZ": 60.13786,
+            "rotX": 0.000336987549,
+            "rotY": 269.97226,
+            "rotZ": -0.000338416,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Wild Schemes",
+          "Description": "",
+          "GMNotes": "{\r\n  \"id\": \"WEI14\",\r\n  \"type\": \"Treachery\",\r\n  \"class\": \"Neutral\",\r\n  \"traits\": \"Talent.\",\r\n  \"weakness\": true,\r\n  \"cycle\": \"Legends Retold - WEI\"\r\n}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 920308,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "9203": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435659/C08219C8370CF0016D3269C0903DE5CF17E34A4A/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+              "NumWidth": 6,
+              "NumHeight": 2,
+              "BackIsHidden": false,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "db5c03",
+          "Name": "Card",
+          "Transform": {
+            "posX": 25.878582,
+            "posY": 1.9445765,
+            "posZ": 65.69142,
+            "rotX": 3.19279359E-08,
+            "rotY": 270.006531,
+            "rotZ": -2.17615735E-07,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Assault Wu",
+          "Description": "",
+          "GMNotes": "{\r\n  \"id\": \"WEI13\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 0,\r\n  \"traits\": \"Domination.\",\r\n  \"agilityIcons\": 2,\n  \"cycle\": \"Legends Retold - WEI\"\r\n}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 920307,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "9203": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435659/C08219C8370CF0016D3269C0903DE5CF17E34A4A/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+              "NumWidth": 6,
+              "NumHeight": 2,
+              "BackIsHidden": false,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "66819a",
+          "Name": "Card",
+          "Transform": {
+            "posX": 19.6121445,
+            "posY": 1.9445765,
+            "posZ": 67.02662,
+            "rotX": -6.98038E-08,
+            "rotY": 270.015259,
+            "rotZ": -8.01223E-08,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Seize Wei",
+          "Description": "",
+          "GMNotes": "{\r\n  \"id\": \"WEI12\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 1,\r\n  \"traits\": \"Domination.\",\r\n  \"combatIcons\": 2,\n  \"cycle\": \"Legends Retold - WEI\"\r\n}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 920306,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "9203": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435659/C08219C8370CF0016D3269C0903DE5CF17E34A4A/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+              "NumWidth": 6,
+              "NumHeight": 2,
+              "BackIsHidden": false,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "ecdd0b",
+          "Name": "Card",
+          "Transform": {
+            "posX": 13.6254425,
+            "posY": 1.9445765,
+            "posZ": 70.2109756,
+            "rotX": -3.57237866E-08,
+            "rotY": 270.012939,
+            "rotZ": -5.54165354E-08,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "",
+          "Description": "",
+          "GMNotes": "{\r\n  \"id\": \"WEI11\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 2,\r\n  \"traits\": \"Domination.\",\r\n  \"intellectIcons\": 2,\n  \"cycle\": \"Legends Retold - WEI\"\r\n}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 920305,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "9203": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435659/C08219C8370CF0016D3269C0903DE5CF17E34A4A/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+              "NumWidth": 6,
+              "NumHeight": 2,
+              "BackIsHidden": false,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        }
+      ]
+    },
+    {
+      "GUID": "ba7ecb",
+      "Name": "Card",
+      "Transform": {
+        "posX": 47.0,
+        "posY": 1.49510384,
+        "posZ": 59.0,
+        "rotX": -6.89951349E-08,
+        "rotY": 270.0,
+        "rotZ": 6.729674E-08,
+        "scaleX": 0.6,
+        "scaleY": 1.0,
+        "scaleZ": 0.6
+      },
+      "Nickname": "Xun Yu",
+      "Description": "",
+      "GMNotes": "{\n  \"id\": \"WEI05-m\",\n  \"type\": \"Minicard\"\n}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Minicard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 919904,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "9199": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435445/F4DF3B13DCC2BC931AE4978BDC56A117BE36D73F/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435484/91A34E89ED0918B6E5191AEB38B46B72849A8B7C/",
+          "NumWidth": 5,
+          "NumHeight": 2,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "e44a04",
+      "Name": "Card",
+      "Transform": {
+        "posX": 44.45,
+        "posY": 1.49510384,
+        "posZ": 59.0,
+        "rotX": -1.09599512E-07,
+        "rotY": 180.0,
+        "rotZ": 6.903586E-08,
+        "scaleX": 1.15,
+        "scaleY": 1.0,
+        "scaleZ": 1.15
+      },
+      "Nickname": "",
+      "Description": "",
+      "GMNotes": "{\r\n  \"id\": \"WEI05\",\r\n  \"type\": \"Investigator\",\r\n  \"class\": \"Survivor\",\r\n  \"traits\": \"Logistic.\",\r\n  \"willpowerIcons\": 4,\r\n  \"intellectIcons\": 4,\r\n  \"combatIcons\": 1,\r\n  \"agilityIcons\": 3,\r\n  \"cycle\": \"Legends Retold - WEI\",\n  \"signatures\": [\r\n    {\r\r\n      \"WEI15\": 1,\n      \"WEI16\": 1\r\n    }\r\n  ]\r\n}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Investigator",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 920007,
+      "SidewaysCard": true,
+      "CustomDeck": {
+        "9200": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435527/1A5BD8BEF6F75A0086003FAF36F21A75416CBAD9/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435588/4EEEEB0503DF25D011651517706C389BE9A6EB72/",
+          "NumWidth": 4,
+          "NumHeight": 2,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "a4b332",
+      "Name": "Deck",
+      "Transform": {
+        "posX": 41.25,
+        "posY": 1.51205766,
+        "posZ": 59.0,
+        "rotX": -6.71882745E-08,
+        "rotY": 270.0,
+        "rotZ": -6.873661E-09,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "",
+      "Description": "",
+      "GMNotes": "",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": false,
+      "SidewaysCard": false,
+      "DeckIDs": [
+        920310,
+        920309
+      ],
+      "CustomDeck": {
+        "9203": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435659/C08219C8370CF0016D3269C0903DE5CF17E34A4A/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 6,
+          "NumHeight": 2,
+          "BackIsHidden": false,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": "",
+      "ContainedObjects": [
+        {
+          "GUID": "29409f",
+          "Name": "Card",
+          "Transform": {
+            "posX": 28.5666733,
+            "posY": 1.95041931,
+            "posZ": 69.14065,
+            "rotX": -0.000197738962,
+            "rotY": 270.0115,
+            "rotZ": -0.00305799488,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Accept the Drug",
+          "Description": "",
+          "GMNotes": "{\r\n  \"id\": \"WEI16\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 0,\r\n  \"traits\": \"Gift. Supply.\",\r\n  \"weakness\": true,\r\n  \"cycle\": \"Legends Retold - WEI\"\r\n}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 920310,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "9203": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435659/C08219C8370CF0016D3269C0903DE5CF17E34A4A/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+              "NumWidth": 6,
+              "NumHeight": 2,
+              "BackIsHidden": false,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "ff3133",
+          "Name": "Card",
+          "Transform": {
+            "posX": 20.4968967,
+            "posY": 1.95898092,
+            "posZ": 61.05852,
+            "rotX": 0.5391757,
+            "rotY": 270.0031,
+            "rotZ": -8.914325E-05,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "",
+          "Description": "",
+          "GMNotes": "{\r\n  \"id\": \"WEI15\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Neutral\",\r\n  \"traits\": \"Tactic.\",\r\n  \"startsInPlay\": true,\n  \"cycle\": \"Legends Retold - WEI\"\r\n}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "Asset",
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 920309,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "9203": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2908503280435659/C08219C8370CF0016D3269C0903DE5CF17E34A4A/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+              "NumWidth": 6,
+              "NumHeight": 2,
+              "BackIsHidden": false,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        }
+      ]
+    }
+  ],
+  "AttachedDecals": [
+    {
+      "Transform": {
+        "posX": -0.0021877822,
+        "posY": -0.08963572,
+        "posZ": -0.00288731651,
+        "rotX": 270.0,
+        "rotY": 359.869568,
+        "rotZ": 0.0,
+        "scaleX": 2.00000215,
+        "scaleY": 2.00000238,
+        "scaleZ": 2.00000262
+      },
+      "CustomDecal": {
+        "Name": "dunwich_back",
+        "ImageURL": "https://steamusercontent-a.akamaihd.net/ugc/959719855119695911/931B9829687A20F4DEADB36DA57B7E6D76792231/",
+        "Size": 7.4
+      }
+    }
+  ]
+}
