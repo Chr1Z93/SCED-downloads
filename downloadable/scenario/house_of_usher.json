@@ -1,13 +1,13 @@
 {
-  "GUID": "b46db2",
+  "GUID": "66647e",
   "Name": "Custom_Model_Bag",
   "Transform": {
-    "posX": 14.6785908,
+    "posX": 37.36786,
     "posY": 1.4814992,
-    "posZ": 1.47269845,
-    "rotX": 4.823983E-07,
-    "rotY": 270.0149,
-    "rotZ": -5.17250562E-08,
+    "posZ": 3.851423,
+    "rotX": -1.81996413E-07,
+    "rotY": 270.0268,
+    "rotZ": 5.93352638E-07,
     "scaleX": 2.21,
     "scaleY": 0.46,
     "scaleZ": 2.42
@@ -65,390 +65,24 @@
     "Order": 0
   },
   "LuaScript": "-- Utility memory bag by Directsun\r\n-- Version 2.5.2\r\n-- Fork of Memory Bag 2.0 by MrStump\r\n\r\nfunction updateSave()\r\n    local data_to_save = {[\"ml\"]=memoryList}\r\n    saved_data = JSON.encode(data_to_save)\r\n    self.script_state = saved_data\r\nend\r\n\r\nfunction combineMemoryFromBagsWithin()\r\n  local bagObjList = self.getObjects()\r\n  for _, bagObj in ipairs(bagObjList) do\r\n    local data = bagObj.lua_script_state\r\n      if data ~= nil then\r\n        local j = JSON.decode(data)\r\n        if j ~= nil and j.ml ~= nil then\r\n          for guid, entry in pairs(j.ml) do\r\n            memoryList[guid] = entry\r\n          end\r\n        end\r\n      end\r\n    end\r\nend\r\n\r\nfunction updateMemoryWithMoves()\r\n    memoryList = memoryListBackup\r\n    --get the first transposed object's coordinates\r\n    local obj = getObjectFromGUID(moveGuid)\r\n\r\n    -- p1 is where needs to go, p2 is where it was\r\n    local refObjPos = memoryList[moveGuid].pos\r\n    local deltaPos = findOffsetDistance(obj.getPosition(), refObjPos, nil)\r\n    local movedRotation = obj.getRotation()\r\n    for guid, entry in pairs(memoryList) do\r\n        memoryList[guid].pos.x = entry.pos.x - deltaPos.x\r\n        memoryList[guid].pos.y = entry.pos.y - deltaPos.y\r\n        memoryList[guid].pos.z = entry.pos.z - deltaPos.z\r\n        -- memoryList[guid].rot.x = movedRotation.x\r\n        -- memoryList[guid].rot.y = movedRotation.y\r\n        -- memoryList[guid].rot.z = movedRotation.z\r\n    end\r\n\r\n    --theList[obj.getGUID()] = {\r\n    --    pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\r\n    --    rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\r\n    --    lock=obj.getLock()\r\n    --}\r\n    moveList = {}\r\nend\r\n\r\nfunction onload(saved_data)\r\n    fresh = true\r\n    if saved_data ~= \"\" then\r\n        local loaded_data = JSON.decode(saved_data)\r\n        --Set up information off of loaded_data\r\n        memoryList = loaded_data.ml\r\n    else\r\n        --Set up information for if there is no saved saved data\r\n        memoryList = {}\r\n    end\r\n\r\n    moveList = {}\r\n    moveGuid = nil\r\n\r\n    if next(memoryList) == nil then\r\n        createSetupButton()\r\n    else\r\n        fresh = false\r\n        createMemoryActionButtons()\r\n    end\r\nend\r\n\r\n\r\n--Beginning Setup\r\n\r\n\r\n--Make setup button\r\nfunction createSetupButton()\r\n    self.createButton({\r\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\r\n        position={0,0.1,-2.1}, rotation={0,0,0}, height=220, width=500,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\nend\r\n\r\n--Triggered by Transpose button\r\nfunction buttonClick_transpose()\r\n    moveGuid = nil\r\n    broadcastToAll(\"Select one object and move it- all objects will move relative to the new location\", {0.75, 0.75, 1})\r\n    memoryListBackup = duplicateTable(memoryList)\r\n    memoryList = {}\r\n    moveList = {}\r\n    self.clearButtons()\r\n    createButtonsOnAllObjects(true)\r\n    createSetupActionButtons(true)\r\nend\r\n\r\n--Triggered by setup button,\r\nfunction buttonClick_setup()\r\n    memoryListBackup = duplicateTable(memoryList)\r\n    memoryList = {}\r\n    self.clearButtons()\r\n    createButtonsOnAllObjects(false)\r\n    createSetupActionButtons(false)\r\nend\r\n\r\nfunction getAllObjectsInMemory()\r\n  local objTable = {}\r\n  local curObj = {}\r\n\r\n  for guid in pairs(memoryListBackup) do\r\n    curObj = getObjectFromGUID(guid)\r\n    table.insert(objTable, curObj)\r\n  end\r\n\r\n  return objTable\r\n  -- return getAllObjects()\r\nend\r\n\r\n--Creates selection buttons on objects\r\nfunction createButtonsOnAllObjects(move)\r\n    local howManyButtons = 0\r\n\r\n    local objsToHaveButtons = {}\r\n    if move == true then\r\n      objsToHaveButtons = getAllObjectsInMemory()\r\n    else\r\n      objsToHaveButtons = getAllObjects()\r\n    end\r\n\r\n    for _, obj in ipairs(objsToHaveButtons) do\r\n        if obj ~= self then\r\n            local dummyIndex = howManyButtons\r\n            --On a normal bag, the button positions aren't the same size as the bag.\r\n            globalScaleFactor = 1 * 1/self.getScale().x\r\n            --Super sweet math to set button positions\r\n            local selfPos = self.getPosition()\r\n            local objPos = obj.getPosition()\r\n            local deltaPos = findOffsetDistance(selfPos, objPos, obj)\r\n            local objPos = rotateLocalCoordinates(deltaPos, self)\r\n            objPos.x = -objPos.x * globalScaleFactor\r\n            objPos.y = objPos.y * globalScaleFactor + 2\r\n            objPos.z = objPos.z * globalScaleFactor * 0.9\r\n            --Offset rotation of bag\r\n            local rot = self.getRotation()\r\n            rot.y = -rot.y + 180\r\n            --Create function\r\n            local funcName = \"selectButton_\" .. howManyButtons\r\n            local func = function() buttonClick_selection(dummyIndex, obj, move) end\r\n            local color = {0.75,0.25,0.25,0.6}\r\n            local colorMove = {0,0,1,0.6}\r\n            if move == true then\r\n              color = colorMove\r\n            end\r\n            self.setVar(funcName, func)\r\n            self.createButton({\r\n                click_function=funcName, function_owner=self,\r\n                position=objPos, rotation=rot, height=500, width=500,\r\n                color=color,\r\n            })\r\n            howManyButtons = howManyButtons + 1\r\n        end\r\n    end\r\nend\r\n\r\n--Creates submit and cancel buttons\r\nfunction createSetupActionButtons(move)\r\n    self.createButton({\r\n        label=\"Cancel\", click_function=\"buttonClick_cancel\", function_owner=self,\r\n      position={-0.6,0.1,-2.1}, rotation={0,0,0}, height=220, width=550,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n\r\n    self.createButton({\r\n        label=\"Submit\", click_function=\"buttonClick_submit\", function_owner=self,\r\n        position={-0.6,0.3,-2.5}, rotation={0,0,0}, height=220, width=550,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n\r\n    if move == false then\r\n      self.createButton({\r\n          label=\"Add\", click_function=\"buttonClick_add\", function_owner=self,\r\n          position={0.6,0.3,-2.1}, rotation={0,0,0}, height=220, width=550,\r\n          font_size=130, color={0,0,0}, font_color={0.25,1,0.25}\r\n      })\r\n\r\n        if fresh == false then\r\n            self.createButton({\r\n                label=\"Set New\", click_function=\"buttonClick_setNew\", function_owner=self,\r\n                position={0.6,0.3,-2.9}, rotation={0,0,0}, height=220, width=550,\r\n                font_size=130, color={0,0,0}, font_color={0.75,0.75,1}\r\n            })\r\n            self.createButton({\r\n                label=\"Remove\", click_function=\"buttonClick_remove\", function_owner=self,\r\n                position={0.6,0.3,-2.5}, rotation={0,0,0}, height=220, width=550,\r\n                font_size=130, color={0,0,0}, font_color={1,0.25,0.25}\r\n            })\r\n        end\r\n    end\r\n\r\n    self.createButton({\r\n        label=\"Reset\", click_function=\"buttonClick_reset\", function_owner=self,\r\n        position={-0.6,0.3,-2.9}, rotation={0,0,0}, height=220, width=550,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\nend\r\n\r\n\r\n--During Setup\r\n\r\n\r\n--Checks or unchecks buttons\r\nfunction buttonClick_selection(index, obj, move)\r\n    local colorMove = {0,0,1,0.6}\r\n    local color = {0,1,0,0.6}\r\n\r\n    previousGuid = selectedGuid\r\n    selectedGuid = obj.getGUID()\r\n\r\n    theList = memoryList\r\n    if move == true then\r\n       theList = moveList\r\n       if previousGuid ~= nil and previousGuid ~= selectedGuid then\r\n         local prevObj = getObjectFromGUID(previousGuid)\r\n         prevObj.highlightOff()\r\n         self.editButton({index=previousIndex, color=colorMove})\r\n         theList[previousGuid] = nil\r\n       end\r\n       previousIndex = index\r\n    end\r\n\r\n    if theList[selectedGuid] == nil then\r\n        self.editButton({index=index, color=color})\r\n        --Adding pos/rot to memory table\r\n        local pos, rot = obj.getPosition(), obj.getRotation()\r\n        --I need to add it like this or it won't save due to indexing issue\r\n        theList[obj.getGUID()] = {\r\n            pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\r\n            rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\r\n            lock=obj.getLock()\r\n        }\r\n        obj.highlightOn({0,1,0})\r\n    else\r\n      color = {0.75,0.25,0.25,0.6}\r\n      if move == true then\r\n        color = colorMove\r\n      end\r\n        self.editButton({index=index, color=color})\r\n        theList[obj.getGUID()] = nil\r\n        obj.highlightOff()\r\n    end\r\nend\r\n\r\n--Cancels selection process\r\nfunction buttonClick_cancel()\r\n    memoryList = memoryListBackup\r\n    moveList = {}\r\n    self.clearButtons()\r\n    if next(memoryList) == nil then\r\n        createSetupButton()\r\n    else\r\n        createMemoryActionButtons()\r\n    end\r\n    removeAllHighlights()\r\n    broadcastToAll(\"Selection Canceled\", {1,1,1})\r\n    moveGuid = nil\r\nend\r\n\r\n--Saves selections\r\nfunction buttonClick_submit()\r\n    fresh = false\r\n    if next(moveList) ~= nil then\r\n        for guid in pairs(moveList) do\r\n            moveGuid = guid\r\n        end\r\n        if memoryListBackup[moveGuid] == nil then\r\n            broadcastToAll(\"Item selected for moving is not already in memory\", {1, 0.25, 0.25})\r\n        else\r\n            broadcastToAll(\"Moving all items in memory relative to new objects position!\", {0.75, 0.75, 1})\r\n            self.clearButtons()\r\n            createMemoryActionButtons()\r\n            local count = 0\r\n            for guid in pairs(moveList) do\r\n                moveGuid = guid\r\n                count = count + 1\r\n                local obj = getObjectFromGUID(guid)\r\n                if obj ~= nil then obj.highlightOff() end\r\n            end\r\n            updateMemoryWithMoves()\r\n            updateSave()\r\n            buttonClick_place()\r\n        end\r\n    elseif next(memoryList) == nil and moveGuid == nil then\r\n      memoryList = memoryListBackup\r\n      broadcastToAll(\"No selections made.\", {0.75, 0.25, 0.25})\r\n    end\r\n    combineMemoryFromBagsWithin()\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for guid in pairs(memoryList) do\r\n        count = count + 1\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then obj.highlightOff() end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    updateSave()\r\n    moveGuid = nil\r\nend\r\n\r\nfunction combineTables(first_table, second_table)\r\n  for k,v in pairs(second_table) do first_table[k] = v end\r\nend\r\n\r\nfunction buttonClick_add()\r\n    fresh = false\r\n    combineTables(memoryList, memoryListBackup)\r\n    broadcastToAll(\"Adding internal bags and selections to existing memory\", {0.25, 0.75, 0.25})\r\n    combineMemoryFromBagsWithin()\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for guid in pairs(memoryList) do\r\n        count = count + 1\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then obj.highlightOff() end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    updateSave()\r\nend\r\n\r\nfunction buttonClick_remove()\r\n        broadcastToAll(\"Removing Selected Entries From Memory\", {1.0, 0.25, 0.25})\r\n        self.clearButtons()\r\n        createMemoryActionButtons()\r\n        local count = 0\r\n        for guid in pairs(memoryList) do\r\n            count = count + 1\r\n            memoryListBackup[guid] = nil\r\n            local obj = getObjectFromGUID(guid)\r\n            if obj ~= nil then obj.highlightOff() end\r\n        end\r\n        broadcastToAll(count..\" Objects Removed\", {1,1,1})\r\n        memoryList = memoryListBackup\r\n        updateSave()\r\nend\r\n\r\nfunction buttonClick_setNew()\r\n    broadcastToAll(\"Setting new position relative to items in memory\", {0.75, 0.75, 1})\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for _, obj in ipairs(getAllObjects()) do\r\n        guid = obj.guid\r\n        if memoryListBackup[guid] ~= nil then\r\n            count = count + 1\r\n            memoryListBackup[guid].pos = obj.getPosition()\r\n            memoryListBackup[guid].rot = obj.getRotation()\r\n            memoryListBackup[guid].lock = obj.getLock()\r\n        end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    memoryList = memoryListBackup\r\n    updateSave()\r\nend\r\n\r\n--Resets bag to starting status\r\nfunction buttonClick_reset()\r\n    fresh = true\r\n    memoryList = {}\r\n    self.clearButtons()\r\n    createSetupButton()\r\n    removeAllHighlights()\r\n    broadcastToAll(\"Tool Reset\", {1,1,1})\r\n    updateSave()\r\nend\r\n\r\n\r\n--After Setup\r\n\r\n\r\n--Creates recall and place buttons\r\nfunction createMemoryActionButtons()\r\n    self.createButton({\r\n        label=\"Place\", click_function=\"buttonClick_place\", function_owner=self,\r\n        position={0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n    self.createButton({\r\n        label=\"Recall\", click_function=\"buttonClick_recall\", function_owner=self,\r\n        position={-0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n    self.createButton({\r\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\r\n        position={0,0.1,-2.1}, rotation={0,0,0}, height=220, width=500,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n---    self.createButton({\r\n---      label=\"Move\", click_function=\"buttonClick_transpose\", function_owner=self,\r\n---      position={-2.8,0.3,0}, rotation={0,0,0}, height=350, width=800,\r\n---      font_size=250, color={0,0,0}, font_color={0.75,0.75,1}\r\n---    })\r\nend\r\n\r\n--Sends objects from bag/table to their saved position/rotation\r\nfunction buttonClick_place()\r\n    local bagObjList = self.getObjects()\r\n    for guid, entry in pairs(memoryList) do\r\n        local obj = getObjectFromGUID(guid)\r\n        --If obj is out on the table, move it to the saved pos/rot\r\n        if obj ~= nil then\r\n            obj.setPositionSmooth(entry.pos)\r\n            obj.setRotationSmooth(entry.rot)\r\n            obj.setLock(entry.lock)\r\n        else\r\n            --If obj is inside of the bag\r\n            for _, bagObj in ipairs(bagObjList) do\r\n                if bagObj.guid == guid then\r\n                    local item = self.takeObject({\r\n                        guid=guid, position=entry.pos, rotation=entry.rot, smooth=false\r\n                    })\r\n                    item.setLock(entry.lock)\r\n                    break\r\n                end\r\n            end\r\n        end\r\n    end\r\n    broadcastToAll(\"Objects Placed\", {1,1,1})\r\nend\r\n\r\n--Recalls objects to bag from table\r\nfunction buttonClick_recall()\r\n    for guid, entry in pairs(memoryList) do\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then self.putObject(obj) end\r\n    end\r\n    broadcastToAll(\"Objects Recalled\", {1,1,1})\r\nend\r\n\r\n\r\n--Utility functions\r\n\r\n\r\n--Find delta (difference) between 2 x/y/z coordinates\r\nfunction findOffsetDistance(p1, p2, obj)\r\n    local yOffset = 0\r\n    if obj ~= nil then\r\n        local bounds = obj.getBounds()\r\n        yOffset = (bounds.size.y - bounds.offset.y)\r\n    end\r\n    local deltaPos = {}\r\n    deltaPos.x = (p2.x-p1.x)\r\n    deltaPos.y = (p2.y-p1.y) + yOffset\r\n    deltaPos.z = (p2.z-p1.z)\r\n    return deltaPos\r\nend\r\n\r\n--Used to rotate a set of coordinates by an angle\r\nfunction rotateLocalCoordinates(desiredPos, obj)\r\n\tlocal objPos, objRot = obj.getPosition(), obj.getRotation()\r\n    local angle = math.rad(objRot.y)\r\n\tlocal x = desiredPos.x * math.cos(angle) - desiredPos.z * math.sin(angle)\r\n\tlocal z = desiredPos.x * math.sin(angle) + desiredPos.z * math.cos(angle)\r\n\t--return {x=objPos.x+x, y=objPos.y+desiredPos.y, z=objPos.z+z}\r\n    return {x=x, y=desiredPos.y, z=z}\r\nend\r\n\r\nfunction rotateMyCoordinates(desiredPos, obj)\r\n\tlocal angle = math.rad(obj.getRotation().y)\r\n  local x = desiredPos.x * math.sin(angle)\r\n\tlocal z = desiredPos.z * math.cos(angle)\r\n    return {x=x, y=desiredPos.y, z=z}\r\nend\r\n\r\n--Coroutine delay, in seconds\r\nfunction wait(time)\r\n    local start = os.time()\r\n    repeat coroutine.yield(0) until os.time() > start + time\r\nend\r\n\r\n--Duplicates a table (needed to prevent it making reference to the same objects)\r\nfunction duplicateTable(oldTable)\r\n    local newTable = {}\r\n    for k, v in pairs(oldTable) do\r\n        newTable[k] = v\r\n    end\r\n    return newTable\r\nend\r\n\r\n--Moves scripted highlight from all objects\r\nfunction removeAllHighlights()\r\n    for _, obj in ipairs(getAllObjects()) do\r\n        obj.highlightOff()\r\n    end\r\nend\r\n\r\n--Round number (num) to the Nth decimal (dec)\r\nfunction round(num, dec)\r\n  local mult = 10^(dec or 0)\r\n  return math.floor(num * mult + 0.5) / mult\r\nend\r\n",
-  "LuaScriptState": "{\"ml\":{\"191941\":{\"lock\":false,\"pos\":{\"x\":-8.8991,\"y\":1.6039,\"z\":-12.2997},\"rot\":{\"x\":359.922,\"y\":269.9513,\"z\":0.0169}},\"1e5cf2\":{\"lock\":false,\"pos\":{\"x\":-8.9685,\"y\":1.6055,\"z\":-7.0847},\"rot\":{\"x\":359.9211,\"y\":269.9971,\"z\":0.0173}},\"1ec67c\":{\"lock\":false,\"pos\":{\"x\":-2.6889,\"y\":1.6191,\"z\":-5.0485},\"rot\":{\"x\":0.0168,\"y\":179.9999,\"z\":0.0803}},\"22ae93\":{\"lock\":false,\"pos\":{\"x\":-30.2241,\"y\":1.6225,\"z\":-3.83},\"rot\":{\"x\":0.0166,\"y\":180.1514,\"z\":0.08}},\"34fda8\":{\"lock\":false,\"pos\":{\"x\":-33.6136,\"y\":1.6294,\"z\":3.5762},\"rot\":{\"x\":0.0684,\"y\":134.9841,\"z\":0.0446}},\"49f26f\":{\"lock\":false,\"pos\":{\"x\":-36.7604,\"y\":1.6463,\"z\":-0.1319},\"rot\":{\"x\":359.9201,\"y\":270.0081,\"z\":0.0168}},\"4b8bb9\":{\"lock\":false,\"pos\":{\"x\":0.1816,\"y\":1.6265,\"z\":-15.6845},\"rot\":{\"x\":359.9197,\"y\":270.0023,\"z\":0.0168}},\"4d6ba5\":{\"lock\":false,\"pos\":{\"x\":-30.2243,\"y\":1.6349,\"z\":-7.7001},\"rot\":{\"x\":359.9201,\"y\":270.011,\"z\":0.0168}},\"4f0dc5\":{\"lock\":false,\"pos\":{\"x\":-30.2243,\"y\":1.6372,\"z\":-0.0301},\"rot\":{\"x\":359.9201,\"y\":269.9995,\"z\":0.0168}},\"64faca\":{\"lock\":false,\"pos\":{\"x\":-34.2126,\"y\":1.628,\"z\":-3.9652},\"rot\":{\"x\":359.9455,\"y\":329.9937,\"z\":359.9392}},\"7234af\":{\"lock\":false,\"pos\":{\"x\":-26.7523,\"y\":1.6187,\"z\":-0.0751},\"rot\":{\"x\":359.9201,\"y\":270.0107,\"z\":0.0169}},\"7a167a\":{\"lock\":false,\"pos\":{\"x\":1.7099,\"y\":1.5583,\"z\":14.2855},\"rot\":{\"x\":359.9554,\"y\":224.7322,\"z\":0.0689}},\"7da52c\":{\"lock\":false,\"pos\":{\"x\":-3.956,\"y\":1.5975,\"z\":-10.4412},\"rot\":{\"x\":359.9197,\"y\":269.9999,\"z\":0.0168}},\"82cc79\":{\"lock\":false,\"pos\":{\"x\":-27.2534,\"y\":1.6172,\"z\":-7.651},\"rot\":{\"x\":359.9201,\"y\":270.0127,\"z\":0.0169}},\"8a3e0b\":{\"lock\":false,\"pos\":{\"x\":-8.9186,\"y\":1.6062,\"z\":-4.448},\"rot\":{\"x\":359.9219,\"y\":270.0014,\"z\":180.0168}},\"8a4aea\":{\"lock\":false,\"pos\":{\"x\":-3.9278,\"y\":1.7733,\"z\":5.7572},\"rot\":{\"x\":359.9197,\"y\":270.0108,\"z\":180.0168}},\"8fc1ca\":{\"lock\":false,\"pos\":{\"x\":-27.3633,\"y\":1.6207,\"z\":3.5729},\"rot\":{\"x\":359.9554,\"y\":225.0201,\"z\":0.0684}},\"90b00d\":{\"lock\":false,\"pos\":{\"x\":-1.6368,\"y\":1.4983,\"z\":-39.3037},\"rot\":{\"x\":0,\"y\":270.0101,\"z\":359.6725}},\"a8a05c\":{\"lock\":false,\"pos\":{\"x\":-23.6765,\"y\":1.6156,\"z\":3.86},\"rot\":{\"x\":0.0167,\"y\":180.0935,\"z\":0.08}},\"ab5023\":{\"lock\":false,\"pos\":{\"x\":-2.7249,\"y\":1.6159,\"z\":0.3733},\"rot\":{\"x\":0.0168,\"y\":180,\"z\":0.0803}},\"acf560\":{\"lock\":false,\"pos\":{\"x\":-33.4997,\"y\":1.6304,\"z\":7.534},\"rot\":{\"x\":359.9201,\"y\":270.01,\"z\":0.0169}},\"aef3fc\":{\"lock\":false,\"pos\":{\"x\":-23.6766,\"y\":1.6258,\"z\":-7.7},\"rot\":{\"x\":359.9201,\"y\":269.9665,\"z\":0.0169}},\"b485b2\":{\"lock\":false,\"pos\":{\"x\":-8.8413,\"y\":1.603,\"z\":-14.9318},\"rot\":{\"x\":359.9213,\"y\":269.9984,\"z\":0.0179}},\"b81b3a\":{\"lock\":false,\"pos\":{\"x\":-30.2241,\"y\":1.6247,\"z\":3.86},\"rot\":{\"x\":0.0168,\"y\":180.0174,\"z\":0.0799}},\"bbb70a\":{\"lock\":false,\"pos\":{\"x\":-3.9117,\"y\":1.5826,\"z\":-14.806},\"rot\":{\"x\":359.9197,\"y\":270.0314,\"z\":0.0168}},\"bd62c6\":{\"lock\":false,\"pos\":{\"x\":-23.6767,\"y\":1.6303,\"z\":7.57},\"rot\":{\"x\":359.9201,\"y\":269.9995,\"z\":0.0168}},\"c4b15a\":{\"lock\":false,\"pos\":{\"x\":-21.0971,\"y\":1.641,\"z\":1.7052},\"rot\":{\"x\":359.3205,\"y\":270.0123,\"z\":0.0167}},\"cac078\":{\"lock\":false,\"pos\":{\"x\":-30.2243,\"y\":1.6394,\"z\":7.57},\"rot\":{\"x\":359.9201,\"y\":270.0006,\"z\":0.0168}},\"d1e043\":{\"lock\":false,\"pos\":{\"x\":-36.7732,\"y\":1.6339,\"z\":3.86},\"rot\":{\"x\":0.0168,\"y\":180.0144,\"z\":0.0799}},\"e03eed\":{\"lock\":false,\"pos\":{\"x\":-36.7732,\"y\":1.6486,\"z\":7.57},\"rot\":{\"x\":359.9201,\"y\":270.0102,\"z\":0.0168}},\"ec039f\":{\"lock\":false,\"pos\":{\"x\":-8.9555,\"y\":1.6047,\"z\":-9.7254},\"rot\":{\"x\":359.9219,\"y\":270.0037,\"z\":0.0168}},\"eda22b\":{\"lock\":false,\"pos\":{\"x\":-1.4656,\"y\":1.5756,\"z\":-26.9312},\"rot\":{\"x\":359.9201,\"y\":270.0143,\"z\":0.0169}},\"f2cf1f\":{\"lock\":false,\"pos\":{\"x\":-23.6765,\"y\":1.6281,\"z\":-0.03},\"rot\":{\"x\":359.9201,\"y\":269.9977,\"z\":0.0172}},\"fdde48\":{\"lock\":false,\"pos\":{\"x\":-27.0721,\"y\":1.6182,\"z\":-3.4372},\"rot\":{\"x\":359.9316,\"y\":315.0023,\"z\":359.9554}}}}",
+  "LuaScriptState": "{\"ml\":{\"191941\":{\"lock\":false,\"pos\":{\"x\":-8.8993,\"y\":1.5704,\"z\":-12.2997},\"rot\":{\"x\":1.3771,\"y\":269.9549,\"z\":-0.0011}},\"1ec67c\":{\"lock\":false,\"pos\":{\"x\":-2.689,\"y\":1.6184,\"z\":-5.0485},\"rot\":{\"x\":0,\"y\":179.9999,\"z\":0}},\"49f26f\":{\"lock\":false,\"pos\":{\"x\":-36.7604,\"y\":1.5336,\"z\":-0.1319},\"rot\":{\"x\":0.0007,\"y\":270.0085,\"z\":-0.0034}},\"4c7dac\":{\"lock\":false,\"pos\":{\"x\":-3.8489,\"y\":1.583,\"z\":-14.9254},\"rot\":{\"x\":0,\"y\":269.9942,\"z\":0}},\"4d6ba5\":{\"lock\":false,\"pos\":{\"x\":-30.2244,\"y\":1.5333,\"z\":-7.7001},\"rot\":{\"x\":0.0038,\"y\":270.0111,\"z\":359.9771}},\"4f0dc5\":{\"lock\":false,\"pos\":{\"x\":-30.2243,\"y\":1.5336,\"z\":-0.0301},\"rot\":{\"x\":0,\"y\":269.9996,\"z\":0}},\"7a167a\":{\"lock\":false,\"pos\":{\"x\":1.7099,\"y\":1.558,\"z\":14.2855},\"rot\":{\"x\":0,\"y\":224.7323,\"z\":0}},\"7da52c\":{\"lock\":false,\"pos\":{\"x\":-3.85,\"y\":1.5966,\"z\":-10.39},\"rot\":{\"x\":0,\"y\":269.9999,\"z\":0}},\"8a3e0b\":{\"lock\":false,\"pos\":{\"x\":-8.9188,\"y\":1.5701,\"z\":-4.448},\"rot\":{\"x\":1.3669,\"y\":269.9977,\"z\":180}},\"8a4aea\":{\"lock\":false,\"pos\":{\"x\":-3.9281,\"y\":1.7676,\"z\":5.7573},\"rot\":{\"x\":0,\"y\":270.0107,\"z\":180}},\"9d71ad\":{\"lock\":false,\"pos\":{\"x\":-8.9874,\"y\":1.5692,\"z\":-7.036},\"rot\":{\"x\":1.3323,\"y\":270.0021,\"z\":0}},\"ab5023\":{\"lock\":false,\"pos\":{\"x\":-2.7249,\"y\":1.6136,\"z\":0.3733},\"rot\":{\"x\":0,\"y\":179.9999,\"z\":0}},\"aef3fc\":{\"lock\":false,\"pos\":{\"x\":-23.6766,\"y\":1.5332,\"z\":-7.7},\"rot\":{\"x\":0.0043,\"y\":269.9666,\"z\":359.9737}},\"b485b2\":{\"lock\":false,\"pos\":{\"x\":-8.8445,\"y\":1.5717,\"z\":-14.9318},\"rot\":{\"x\":1.3471,\"y\":270.0017,\"z\":359.9703}},\"bd62c6\":{\"lock\":false,\"pos\":{\"x\":-23.6767,\"y\":1.5332,\"z\":7.57},\"rot\":{\"x\":0.0044,\"y\":269.9995,\"z\":359.9735}},\"c4b15a\":{\"lock\":false,\"pos\":{\"x\":-21.0972,\"y\":1.5496,\"z\":1.7052},\"rot\":{\"x\":359.4004,\"y\":270.0124,\"z\":-0.0001}},\"cac078\":{\"lock\":false,\"pos\":{\"x\":-30.2243,\"y\":1.5336,\"z\":7.57},\"rot\":{\"x\":0.0007,\"y\":270.0009,\"z\":-0.0034}},\"e03eed\":{\"lock\":false,\"pos\":{\"x\":-36.7733,\"y\":1.5336,\"z\":7.57},\"rot\":{\"x\":0.0003,\"y\":270.0103,\"z\":-0.0004}},\"ec039f\":{\"lock\":false,\"pos\":{\"x\":-8.9556,\"y\":1.5696,\"z\":-9.7254},\"rot\":{\"x\":1.3481,\"y\":270.0072,\"z\":0.0002}},\"f2cf1f\":{\"lock\":false,\"pos\":{\"x\":-23.6766,\"y\":1.5336,\"z\":-0.03},\"rot\":{\"x\":0,\"y\":269.9968,\"z\":0.0004}}}}",
   "XmlUI": "",
   "ContainedObjects": [
     {
-      "GUID": "b485b2",
-      "Name": "Card",
+      "GUID": "7a167a",
+      "Name": "Custom_Model_Bag",
       "Transform": {
-        "posX": 21.5036564,
-        "posY": 2.50510383,
-        "posZ": -44.1708069,
-        "rotX": -7.004257E-08,
-        "rotY": 269.998352,
-        "rotZ": -4.14501642E-07,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
+        "posX": 1.70993233,
+        "posY": 1.55803609,
+        "posZ": 14.2854958,
+        "rotX": 1.18184034E-05,
+        "rotY": 224.732346,
+        "rotZ": -1.524319E-05,
+        "scaleX": 2.0,
+        "scaleY": 2.0,
+        "scaleZ": 2.0
       },
-      "Nickname": "Guide 5",
-      "Description": "",
-      "GMNotes": "{\"TtsZoopGuid\":\"76d2ad45-c9da-4913-9517-c11bb3ea95cd\"}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "Tags": [
-        "ScenarioCard"
-      ],
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": false,
-      "Hands": true,
-      "CardID": 612709,
-      "SidewaysCard": false,
-      "CustomDeck": {
-        "6127": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970184574/246CC491AE3349BCCE57FA27532AAE474D124A17/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970186741/0CE5BB177A6024F930476E70929616545173FD48/",
-          "NumWidth": 5,
-          "NumHeight": 3,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
-    },
-    {
-      "GUID": "191941",
-      "Name": "Card",
-      "Transform": {
-        "posX": 28.894249,
-        "posY": 3.21324968,
-        "posZ": -53.40197,
-        "rotX": -9.76344552E-08,
-        "rotY": 269.979584,
-        "rotZ": 1.41594882E-07,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Guide 4",
-      "Description": "",
-      "GMNotes": "{\"TtsZoopGuid\":\"ded56be3-3a76-4d28-8ddf-ca3e17424f66\"}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "Tags": [
-        "ScenarioCard"
-      ],
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": false,
-      "Hands": true,
-      "CardID": 611910,
-      "SidewaysCard": false,
-      "CustomDeck": {
-        "6119": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970184574/246CC491AE3349BCCE57FA27532AAE474D124A17/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970186741/0CE5BB177A6024F930476E70929616545173FD48/",
-          "NumWidth": 5,
-          "NumHeight": 3,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
-    },
-    {
-      "GUID": "ec039f",
-      "Name": "Card",
-      "Transform": {
-        "posX": 29.4055748,
-        "posY": 3.2132566,
-        "posZ": -52.7536278,
-        "rotX": -1.5930172E-07,
-        "rotY": 270.0045,
-        "rotZ": 1.6498343E-05,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Guide 3",
-      "Description": "",
-      "GMNotes": "{\"TtsZoopGuid\":\"64659c04-0fd6-4e21-8c25-3be3e356e63f\"}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "Tags": [
-        "ScenarioCard"
-      ],
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": false,
-      "Hands": true,
-      "CardID": 613111,
-      "SidewaysCard": false,
-      "CustomDeck": {
-        "6131": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858403238/D64453CB110581B96A8B3686B85790A382C7253B/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858405271/D07D8E962A46C01679DCDD15C458ABF522ABA405/",
-          "NumWidth": 5,
-          "NumHeight": 3,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
-    },
-    {
-      "GUID": "1e5cf2",
-      "Name": "Card",
-      "Transform": {
-        "posX": 28.6224842,
-        "posY": 3.21319485,
-        "posZ": -52.61543,
-        "rotX": 2.17316E-07,
-        "rotY": 269.9953,
-        "rotZ": -3.28375421E-07,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Guide 2",
-      "Description": "",
-      "GMNotes": "{\"TtsZoopGuid\":\"fd571033-850f-440c-948a-624cd02fa296\"}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "Tags": [
-        "ScenarioCard"
-      ],
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": false,
-      "Hands": true,
-      "CardID": 612012,
-      "SidewaysCard": false,
-      "CustomDeck": {
-        "6120": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970184574/246CC491AE3349BCCE57FA27532AAE474D124A17/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970186741/0CE5BB177A6024F930476E70929616545173FD48/",
-          "NumWidth": 5,
-          "NumHeight": 3,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
-    },
-    {
-      "GUID": "8a3e0b",
-      "Name": "Card",
-      "Transform": {
-        "posX": 28.9240761,
-        "posY": 3.21325564,
-        "posZ": -53.4623566,
-        "rotX": -2.73189418E-08,
-        "rotY": 270.001465,
-        "rotZ": 180.0,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Guide 1",
-      "Description": "",
-      "GMNotes": "{\"TtsZoopGuid\":\"a18789b2-9518-4478-bfce-58c12db8f564\"}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "Tags": [
-        "ScenarioCard"
-      ],
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": false,
-      "Hands": true,
-      "CardID": 612513,
-      "SidewaysCard": false,
-      "CustomDeck": {
-        "6125": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970184574/246CC491AE3349BCCE57FA27532AAE474D124A17/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970186741/0CE5BB177A6024F930476E70929616545173FD48/",
-          "NumWidth": 5,
-          "NumHeight": 3,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
-    },
-    {
-      "GUID": "7da52c",
-      "Name": "Card",
-      "Transform": {
-        "posX": 21.9950771,
-        "posY": 2.50520325,
-        "posZ": -47.89439,
-        "rotX": 4.25789E-08,
-        "rotY": 269.999939,
-        "rotZ": -3.40886E-07,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Scenario",
-      "Description": "The Fall of the House of Usher",
-      "GMNotes": "{\"TtsZoopGuid\":\"7c25bd10-5b25-47b5-8caf-ca7e4731c56b\"}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "Tags": [
-        "ScenarioCard"
-      ],
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": false,
-      "Hands": true,
-      "CardID": 612414,
-      "SidewaysCard": false,
-      "CustomDeck": {
-        "6124": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858403238/D64453CB110581B96A8B3686B85790A382C7253B/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858405271/D07D8E962A46C01679DCDD15C458ABF522ABA405/",
-          "NumWidth": 5,
-          "NumHeight": 3,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
-    },
-    {
-      "GUID": "1ec67c",
-      "Name": "Deck",
-      "Transform": {
-        "posX": -2.6889267,
-        "posY": 1.61911714,
-        "posZ": -5.048495,
-        "rotX": 0.016835507,
-        "rotY": 179.999878,
-        "rotZ": 0.0802567452,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Act Deck",
+      "Nickname": "Set-aside",
       "Description": "",
       "GMNotes": "",
       "AltLookAngle": {
@@ -457,9 +91,9 @@
         "z": 0.0
       },
       "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
+        "r": 0.02148666,
+        "g": 0.00100758043,
+        "b": 0.02148666
       },
       "LayoutGroupSortIndex": 0,
       "Value": 0,
@@ -475,44 +109,241 @@
       "GridProjection": false,
       "HideWhenFaceDown": false,
       "Hands": false,
-      "SidewaysCard": true,
-      "DeckIDs": [
-        266700,
-        266701,
-        266702
-      ],
-      "CustomDeck": {
-        "2667": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858385334/89E47D2E69BE2F60223246A0C708C24C80E999E6/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858385871/E854FF5C0C1D2CB5FE53765019600F5B9FA17717/",
-          "NumWidth": 3,
-          "NumHeight": 2,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        }
+      "MaterialIndex": -1,
+      "MeshIndex": -1,
+      "CustomMesh": {
+        "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334964971/3078F312706FC974833ECD2A359B87FD4F283509/",
+        "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960553/C518D80E31E27DB23EEAC8CF9253E59798865790/",
+        "NormalURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960069/E70E4A58A1B7827F1E5E2AF9FF44DF0BD5DA33F7/",
+        "ColliderURL": "",
+        "Convex": true,
+        "MaterialIndex": 1,
+        "TypeIndex": 6,
+        "CastShadows": true
+      },
+      "Bag": {
+        "Order": 0
       },
       "LuaScript": "",
       "LuaScriptState": "",
       "XmlUI": "",
+      "PhysicsMaterial": {
+        "StaticFriction": 0.6,
+        "DynamicFriction": 0.6,
+        "Bounciness": 0.0,
+        "FrictionCombine": 0,
+        "BounceCombine": 0
+      },
+      "Rigidbody": {
+        "Mass": 1.375,
+        "Drag": 5.0,
+        "AngularDrag": 5.0,
+        "UseGravity": true
+      },
       "ContainedObjects": [
         {
-          "GUID": "588762",
+          "GUID": "7ebb5b",
           "Name": "Card",
           "Transform": {
-            "posX": -18.6484737,
-            "posY": 1.41893721,
-            "posZ": -44.6650276,
-            "rotX": 0.07660136,
-            "rotY": 180.059219,
-            "rotZ": 181.053665,
+            "posX": 38.9680367,
+            "posY": 3.20506549,
+            "posZ": -50.251564,
+            "rotX": -3.946152E-08,
+            "rotY": 269.973633,
+            "rotZ": -1.83298621E-08,
             "scaleX": 1.0,
             "scaleY": 1.0,
             "scaleZ": 1.0
           },
-          "Nickname": "Act 3 - Ancestral Corruption",
+          "Nickname": "The Mad Trist (Dragon's Cunning)",
           "Description": "",
-          "GMNotes": "{\"TtsZoopGuid\":\"baedc613-fe90-4a78-b6df-7c160d231a8d\",\"type\":\"Act\",\"class\":\"Mythos\"}",
+          "GMNotes": "{\"TtsZoopGuid\":\"bc5d362a-9c53-4bc8-9002-29a9645f2503\",\"type\":\"Asset\",\"uses\":[{\"count\":4,\"token\":\"resource\",\"type\":\"Secret\"}],\"class\":\"Neutral\",\"traits\":\"Item. Tome. Cursed\",\"agilityIcons\":1,\"intellectIcons\":1,\"wildIcons\":1,\"cost\":2}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "PlayerCard",
+            "Asset"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 267302,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "2673": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858395302/58D4D41AE08786AD3FB990CF8D8902A74B59E5A2/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1461933574036605747/66F5F6903F78214DDB7420F5022C9CDEC4D85464/",
+              "NumWidth": 2,
+              "NumHeight": 2,
+              "BackIsHidden": false,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "cb1ae5",
+          "Name": "Card",
+          "Transform": {
+            "posX": 41.003952,
+            "posY": 2.50510383,
+            "posZ": -42.435482,
+            "rotX": -4.12042951E-08,
+            "rotY": 270.0128,
+            "rotZ": -2.02587387E-07,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "The Mad Trist (Shelter From the Storm)",
+          "Description": "",
+          "GMNotes": "{\"TtsZoopGuid\":\"8957de49-4b5c-4c8f-b4f4-1c4909f6aa82\",\"type\":\"Asset\",\"uses\":[{\"count\":4,\"token\":\"resource\",\"type\":\"Secret\"}],\"class\":\"Neutral\",\"traits\":\"Item. Tome. Blessed\",\"combatIcons\":1,\"willpowerIcons\":1,\"wildIcons\":1,\"cost\":2}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "PlayerCard",
+            "Asset"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 267301,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "2673": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858395302/58D4D41AE08786AD3FB990CF8D8902A74B59E5A2/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1461933574036605747/66F5F6903F78214DDB7420F5022C9CDEC4D85464/",
+              "NumWidth": 2,
+              "NumHeight": 2,
+              "BackIsHidden": false,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "ff3998",
+          "Name": "Card",
+          "Transform": {
+            "posX": 1.6964221,
+            "posY": 3.67016315,
+            "posZ": 14.2788363,
+            "rotX": 359.94812,
+            "rotY": 224.998062,
+            "rotZ": 0.05827967,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Faded Silhouette",
+          "Description": "",
+          "GMNotes": "{\"TtsZoopGuid\":\"0116cbc5-ba91-4601-949a-e4a687687023\",\"type\":\"Asset\",\"permanent\":true,\"class\":\"Neutral\",\"traits\":\"Item. Relic\"}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "PlayerCard",
+            "Asset"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 266200,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "2662": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970169444/6539120F8BB25D617FF076FA55497E6F46C040C9/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1461933574036605747/66F5F6903F78214DDB7420F5022C9CDEC4D85464/",
+              "NumWidth": 2,
+              "NumHeight": 2,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "e96c9a",
+          "Name": "Card",
+          "Transform": {
+            "posX": 3.92157078,
+            "posY": 2.78149557,
+            "posZ": -21.8806248,
+            "rotX": 359.90802,
+            "rotY": 269.987671,
+            "rotZ": 355.401367,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "The Thing From the Tarn",
+          "Description": "",
+          "GMNotes": "{\"TtsZoopGuid\":\"8be7767e-6e10-4195-aa48-c54a76981b7f\",\"type\":\"Enemy\",\"victory\":1,\"class\":\"Mythos\",\"traits\":\"Monster. Ancient One. Elite\"}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -538,16 +369,78 @@
           "Sticky": true,
           "Tooltip": true,
           "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 267402,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "2674": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858398141/1AA2D79C9AA8D6E1A3A78DBF45BBFF38DDE05916/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1461933361191993988/FE126C3E21593398897E3C691A0AEA8D9B73A614/",
+              "NumWidth": 10,
+              "NumHeight": 4,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "98ab65",
+          "Name": "Card",
+          "Transform": {
+            "posX": 1.69642055,
+            "posY": 3.670253,
+            "posZ": 14.2788353,
+            "rotX": 359.9641,
+            "rotY": 224.997986,
+            "rotZ": 180.054932,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "The Tarn",
+          "Description": "",
+          "GMNotes": "{\"TtsZoopGuid\":\"e3b8ad2f-1de9-4098-9945-db1b2c88cf85\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"House of Usher. Cursed\",\"locationFront\":{\"icons\":\"T\",\"connections\":\"Hourglass|Heart\",\"uses\":[{\"token\":\"clue\",\"type\":\"Clue\",\"countPerInvestigator\":1}],\"victory\":1},\"locationBack\":{\"icons\":\"T\",\"connections\":\"Hourglass|Heart\"}}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "ScenarioCard",
+            "Location"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
           "HideWhenFaceDown": false,
           "Hands": true,
-          "CardID": 266700,
-          "SidewaysCard": true,
+          "CardID": 266200,
+          "SidewaysCard": false,
           "CustomDeck": {
-            "2667": {
-              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858385334/89E47D2E69BE2F60223246A0C708C24C80E999E6/",
-              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858385871/E854FF5C0C1D2CB5FE53765019600F5B9FA17717/",
-              "NumWidth": 3,
-              "NumHeight": 2,
+            "2662": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970184574/246CC491AE3349BCCE57FA27532AAE474D124A17/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970186741/0CE5BB177A6024F930476E70929616545173FD48/",
+              "NumWidth": 5,
+              "NumHeight": 3,
               "BackIsHidden": true,
               "UniqueBack": true,
               "Type": 0
@@ -558,22 +451,22 @@
           "XmlUI": ""
         },
         {
-          "GUID": "da8eec",
+          "GUID": "376325",
           "Name": "Card",
           "Transform": {
-            "posX": -18.1550789,
-            "posY": 1.36655867,
-            "posZ": -44.74436,
-            "rotX": 0.08817647,
-            "rotY": 180.013321,
-            "rotZ": 180.1983,
+            "posX": 10.7538481,
+            "posY": 2.33437133,
+            "posZ": -65.68242,
+            "rotX": 0.0208084118,
+            "rotY": 270.0,
+            "rotZ": 0.0167710651,
             "scaleX": 1.0,
             "scaleY": 1.0,
             "scaleZ": 1.0
           },
-          "Nickname": "Act 2 - Fleeting Glimpses",
+          "Nickname": "Madeline Usher",
           "Description": "",
-          "GMNotes": "{\"TtsZoopGuid\":\"93a58786-129a-4889-9487-a0ba86b00cd5\",\"type\":\"Act\",\"class\":\"Mythos\"}",
+          "GMNotes": "{\"TtsZoopGuid\":\"44af38d6-8682-4b90-aadc-fbd2d68d7c33\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Geist. Cursed\"}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -585,7 +478,8 @@
             "b": 0.713235259
           },
           "Tags": [
-            "ScenarioCard"
+            "PlayerCard",
+            "Asset"
           ],
           "LayoutGroupSortIndex": 0,
           "Value": 0,
@@ -599,79 +493,18 @@
           "Sticky": true,
           "Tooltip": true,
           "GridProjection": false,
-          "HideWhenFaceDown": false,
+          "HideWhenFaceDown": true,
           "Hands": true,
-          "CardID": 266701,
-          "SidewaysCard": true,
+          "CardID": 267400,
+          "SidewaysCard": false,
           "CustomDeck": {
-            "2667": {
-              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858385334/89E47D2E69BE2F60223246A0C708C24C80E999E6/",
-              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858385871/E854FF5C0C1D2CB5FE53765019600F5B9FA17717/",
-              "NumWidth": 3,
-              "NumHeight": 2,
+            "2674": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858398141/1AA2D79C9AA8D6E1A3A78DBF45BBFF38DDE05916/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1461933361191993988/FE126C3E21593398897E3C691A0AEA8D9B73A614/",
+              "NumWidth": 10,
+              "NumHeight": 4,
               "BackIsHidden": true,
-              "UniqueBack": true,
-              "Type": 0
-            }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
-        },
-        {
-          "GUID": "bdcb5d",
-          "Name": "Card",
-          "Transform": {
-            "posX": -2.68853474,
-            "posY": 1.66220689,
-            "posZ": -5.04853725,
-            "rotX": 0.01653325,
-            "rotY": 179.99971,
-            "rotZ": 0.07867886,
-            "scaleX": 1.0,
-            "scaleY": 1.0,
-            "scaleZ": 1.0
-          },
-          "Nickname": "Act 1 - The Disturbed Proprietor",
-          "Description": "",
-          "GMNotes": "{\"TtsZoopGuid\":\"c27585c1-7b03-4a9b-a994-979635e4400c\",\"type\":\"Act\",\"class\":\"Mythos\"}",
-          "AltLookAngle": {
-            "x": 0.0,
-            "y": 0.0,
-            "z": 0.0
-          },
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "Tags": [
-            "ScenarioCard"
-          ],
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": false,
-          "Hands": true,
-          "CardID": 266702,
-          "SidewaysCard": true,
-          "CustomDeck": {
-            "2667": {
-              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858385334/89E47D2E69BE2F60223246A0C708C24C80E999E6/",
-              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858385871/E854FF5C0C1D2CB5FE53765019600F5B9FA17717/",
-              "NumWidth": 3,
-              "NumHeight": 2,
-              "BackIsHidden": true,
-              "UniqueBack": true,
+              "UniqueBack": false,
               "Type": 0
             }
           },
@@ -682,201 +515,15 @@
       ]
     },
     {
-      "GUID": "49f26f",
-      "Name": "Card",
-      "Transform": {
-        "posX": -36.7604,
-        "posY": 1.64606822,
-        "posZ": -0.131899089,
-        "rotX": 359.922241,
-        "rotY": 270.008118,
-        "rotZ": 0.002687345,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Usher Family Crypt",
-      "Description": "",
-      "GMNotes": "{\"TtsZoopGuid\":\"619e75f7-f605-4b38-930a-1a38bdb05bb4\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"House of Usher. Decadent\",\"locationFront\":{\"icons\":\"Heart\",\"connections\":\"Cross|Hourglass|T\",\"uses\":[{\"token\":\"clue\",\"type\":\"Clue\",\"countPerInvestigator\":1}],\"victory\":1},\"locationBack\":{\"icons\":\"Heart\",\"connections\":\"Cross|Hourglass|T\",\"uses\":[{\"token\":\"clue\",\"type\":\"Clue\",\"count\":0}],\"victory\":1}}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "Tags": [
-        "ScenarioCard",
-        "Location"
-      ],
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": false,
-      "Hands": true,
-      "CardID": 612101,
-      "SidewaysCard": false,
-      "CustomDeck": {
-        "6121": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970184574/246CC491AE3349BCCE57FA27532AAE474D124A17/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970186741/0CE5BB177A6024F930476E70929616545173FD48/",
-          "NumWidth": 5,
-          "NumHeight": 3,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
-    },
-    {
-      "GUID": "4d6ba5",
-      "Name": "Card",
-      "Transform": {
-        "posX": -30.2242966,
-        "posY": 1.634671,
-        "posZ": -7.700103,
-        "rotX": 359.923035,
-        "rotY": 270.011047,
-        "rotZ": -0.00154206657,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Manor Chapel",
-      "Description": "",
-      "GMNotes": "{\"TtsZoopGuid\":\"0d3956de-53f4-4b1e-b14f-ec7936def0de\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"House of Usher. Decadent\",\"locationFront\":{\"icons\":\"Cross\",\"connections\":\"Diamond|Slash|Heart\",\"uses\":[{\"token\":\"clue\",\"type\":\"Clue\",\"countPerInvestigator\":2}]},\"locationBack\":{\"icons\":\"Cross\",\"connections\":\"Diamond|Slash|Heart\",\"uses\":[{\"token\":\"clue\",\"type\":\"Clue\",\"count\":0}]}}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "Tags": [
-        "ScenarioCard",
-        "Location"
-      ],
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": false,
-      "Hands": true,
-      "CardID": 612203,
-      "SidewaysCard": false,
-      "CustomDeck": {
-        "6122": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970184574/246CC491AE3349BCCE57FA27532AAE474D124A17/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970186741/0CE5BB177A6024F930476E70929616545173FD48/",
-          "NumWidth": 5,
-          "NumHeight": 3,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
-    },
-    {
-      "GUID": "4f0dc5",
-      "Name": "Card",
-      "Transform": {
-        "posX": -30.2243,
-        "posY": 1.637197,
-        "posZ": -0.0301003475,
-        "rotX": 359.9201,
-        "rotY": 269.9995,
-        "rotZ": 0.016840307,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Grand Hall",
-      "Description": "",
-      "GMNotes": "{\"TtsZoopGuid\":\"6f8e2eec-38de-42ad-9b39-18e07371b9a9\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"House of Usher. Decadent\",\"locationFront\":{\"icons\":\"Diamond\",\"connections\":\"Star|DoubleSlash|Slash|Circle|Cross|Hourglass\",\"uses\":[{\"token\":\"clue\",\"type\":\"Clue\",\"count\":0}]},\"locationBack\":{\"icons\":\"Diamond\",\"connections\":\"Star|DoubleSlash|Slash|Circle|Cross|Hourglass\",\"uses\":[{\"token\":\"clue\",\"type\":\"Clue\",\"count\":0}]}}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "Tags": [
-        "ScenarioCard",
-        "Location"
-      ],
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": false,
-      "Hands": true,
-      "CardID": 612305,
-      "SidewaysCard": false,
-      "CustomDeck": {
-        "6123": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970184574/246CC491AE3349BCCE57FA27532AAE474D124A17/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970186741/0CE5BB177A6024F930476E70929616545173FD48/",
-          "NumWidth": 5,
-          "NumHeight": 3,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
-    },
-    {
       "GUID": "8a4aea",
       "Name": "Deck",
       "Transform": {
-        "posX": -3.92786574,
-        "posY": 1.77326322,
-        "posZ": 5.757218,
-        "rotX": 359.919739,
-        "rotY": 270.0108,
-        "rotZ": 180.016815,
+        "posX": -3.92805362,
+        "posY": 1.767608,
+        "posZ": 5.757259,
+        "rotX": 1.86197923E-07,
+        "rotY": 270.010651,
+        "rotZ": 180.0,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -3058,12 +2705,12 @@
       "GUID": "ab5023",
       "Name": "Deck",
       "Transform": {
-        "posX": -2.72492671,
-        "posY": 1.61594665,
-        "posZ": 0.373305827,
-        "rotX": 0.01683541,
-        "rotY": 180.0,
-        "rotZ": 0.08025654,
+        "posX": -2.724941,
+        "posY": 1.61355889,
+        "posZ": 0.373308867,
+        "rotX": 4.6866802E-08,
+        "rotY": 179.999939,
+        "rotZ": -6.92441438E-10,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -3106,7 +2753,7 @@
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858385871/E854FF5C0C1D2CB5FE53765019600F5B9FA17717/",
           "NumWidth": 3,
           "NumHeight": 2,
-          "BackIsHidden": true,
+          "BackIsHidden": false,
           "UniqueBack": true,
           "Type": 0
         }
@@ -3167,7 +2814,7 @@
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858385871/E854FF5C0C1D2CB5FE53765019600F5B9FA17717/",
               "NumWidth": 3,
               "NumHeight": 2,
-              "BackIsHidden": true,
+              "BackIsHidden": false,
               "UniqueBack": true,
               "Type": 0
             }
@@ -3228,7 +2875,7 @@
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858385871/E854FF5C0C1D2CB5FE53765019600F5B9FA17717/",
               "NumWidth": 3,
               "NumHeight": 2,
-              "BackIsHidden": true,
+              "BackIsHidden": false,
               "UniqueBack": true,
               "Type": 0
             }
@@ -3240,22 +2887,269 @@
       ]
     },
     {
-      "GUID": "aef3fc",
-      "Name": "Card",
+      "GUID": "1ec67c",
+      "Name": "Deck",
       "Transform": {
-        "posX": -23.6765957,
-        "posY": 1.62553012,
-        "posZ": -7.70000172,
-        "rotX": 359.923126,
-        "rotY": 269.966553,
-        "rotZ": -0.00216812664,
+        "posX": -2.68895173,
+        "posY": 1.61837292,
+        "posZ": -5.04849529,
+        "rotX": 5.04603719E-08,
+        "rotY": 179.999924,
+        "rotZ": 1.95145216E-08,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
       },
-      "Nickname": "Portrait Gallery",
+      "Nickname": "Act Deck",
       "Description": "",
-      "GMNotes": "{\"TtsZoopGuid\":\"d24e2db1-abd7-495e-ae88-9e83c5a5438a\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"House of Usher. Decadent\",\"locationFront\":{\"icons\":\"Slash\",\"connections\":\"Diamond|Cross\",\"uses\":[{\"token\":\"clue\",\"type\":\"Clue\",\"countPerInvestigator\":2}]},\"locationBack\":{\"icons\":\"Slash\",\"connections\":\"Diamond|Cross\",\"uses\":[{\"token\":\"clue\",\"type\":\"Clue\",\"count\":0}]}}",
+      "GMNotes": "",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": false,
+      "SidewaysCard": true,
+      "DeckIDs": [
+        266700,
+        266701,
+        266702
+      ],
+      "CustomDeck": {
+        "2667": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858385334/89E47D2E69BE2F60223246A0C708C24C80E999E6/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858385871/E854FF5C0C1D2CB5FE53765019600F5B9FA17717/",
+          "NumWidth": 3,
+          "NumHeight": 2,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": "",
+      "ContainedObjects": [
+        {
+          "GUID": "588762",
+          "Name": "Card",
+          "Transform": {
+            "posX": -18.6484737,
+            "posY": 1.41893721,
+            "posZ": -44.6650276,
+            "rotX": 0.07660136,
+            "rotY": 180.059219,
+            "rotZ": 181.053665,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Act 3 - Ancestral Corruption",
+          "Description": "",
+          "GMNotes": "{\"TtsZoopGuid\":\"baedc613-fe90-4a78-b6df-7c160d231a8d\",\"type\":\"Act\",\"class\":\"Mythos\"}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": false,
+          "Hands": true,
+          "CardID": 266700,
+          "SidewaysCard": true,
+          "CustomDeck": {
+            "2667": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858385334/89E47D2E69BE2F60223246A0C708C24C80E999E6/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858385871/E854FF5C0C1D2CB5FE53765019600F5B9FA17717/",
+              "NumWidth": 3,
+              "NumHeight": 2,
+              "BackIsHidden": false,
+              "UniqueBack": true,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "da8eec",
+          "Name": "Card",
+          "Transform": {
+            "posX": -18.1550789,
+            "posY": 1.36655867,
+            "posZ": -44.74436,
+            "rotX": 0.08817647,
+            "rotY": 180.013321,
+            "rotZ": 180.1983,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Act 2 - Fleeting Glimpses",
+          "Description": "",
+          "GMNotes": "{\"TtsZoopGuid\":\"93a58786-129a-4889-9487-a0ba86b00cd5\",\"type\":\"Act\",\"class\":\"Mythos\"}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": false,
+          "Hands": true,
+          "CardID": 266701,
+          "SidewaysCard": true,
+          "CustomDeck": {
+            "2667": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858385334/89E47D2E69BE2F60223246A0C708C24C80E999E6/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858385871/E854FF5C0C1D2CB5FE53765019600F5B9FA17717/",
+              "NumWidth": 3,
+              "NumHeight": 2,
+              "BackIsHidden": false,
+              "UniqueBack": true,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "bdcb5d",
+          "Name": "Card",
+          "Transform": {
+            "posX": -2.68853474,
+            "posY": 1.66220689,
+            "posZ": -5.04853725,
+            "rotX": 0.01653325,
+            "rotY": 179.99971,
+            "rotZ": 0.07867886,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Act 1 - The Disturbed Proprietor",
+          "Description": "",
+          "GMNotes": "{\"TtsZoopGuid\":\"c27585c1-7b03-4a9b-a994-979635e4400c\",\"type\":\"Act\",\"class\":\"Mythos\"}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": false,
+          "Hands": true,
+          "CardID": 266702,
+          "SidewaysCard": true,
+          "CustomDeck": {
+            "2667": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858385334/89E47D2E69BE2F60223246A0C708C24C80E999E6/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858385871/E854FF5C0C1D2CB5FE53765019600F5B9FA17717/",
+              "NumWidth": 3,
+              "NumHeight": 2,
+              "BackIsHidden": false,
+              "UniqueBack": true,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        }
+      ]
+    },
+    {
+      "GUID": "7da52c",
+      "Name": "Card",
+      "Transform": {
+        "posX": -3.8500073,
+        "posY": 1.59660506,
+        "posZ": -10.3900137,
+        "rotX": 2.02361417E-08,
+        "rotY": 269.999878,
+        "rotZ": -6.501323E-08,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Scenario",
+      "Description": "The Fall of the House of Usher",
+      "GMNotes": "{\"TtsZoopGuid\":\"7c25bd10-5b25-47b5-8caf-ca7e4731c56b\"}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -3267,8 +3161,7 @@
         "b": 0.713235259
       },
       "Tags": [
-        "ScenarioCard",
-        "Location"
+        "ScenarioCard"
       ],
       "LayoutGroupSortIndex": 0,
       "Value": 0,
@@ -3284,15 +3177,15 @@
       "GridProjection": false,
       "HideWhenFaceDown": false,
       "Hands": true,
-      "CardID": 612606,
+      "CardID": 612414,
       "SidewaysCard": false,
       "CustomDeck": {
-        "6126": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970184574/246CC491AE3349BCCE57FA27532AAE474D124A17/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970186741/0CE5BB177A6024F930476E70929616545173FD48/",
+        "6124": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858403238/D64453CB110581B96A8B3686B85790A382C7253B/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858405271/D07D8E962A46C01679DCDD15C458ABF522ABA405/",
           "NumWidth": 5,
           "NumHeight": 3,
-          "BackIsHidden": true,
+          "BackIsHidden": false,
           "UniqueBack": true,
           "Type": 0
         }
@@ -3302,21 +3195,21 @@
       "XmlUI": ""
     },
     {
-      "GUID": "bbb70a",
+      "GUID": "4c7dac",
       "Name": "Custom_Tile",
       "Transform": {
-        "posX": -3.9117,
-        "posY": 1.5825901,
-        "posZ": -14.8060036,
-        "rotX": 359.919739,
-        "rotY": 270.031372,
-        "rotZ": 0.0167938527,
+        "posX": -3.84889555,
+        "posY": 1.58300042,
+        "posZ": -14.9254141,
+        "rotX": 2.5271639E-08,
+        "rotY": 269.9942,
+        "rotZ": -7.001385E-08,
         "scaleX": 2.2,
         "scaleY": 1.0,
         "scaleZ": 2.2
       },
-      "Nickname": "The Fall of the House of Usher",
-      "Description": "click to set chaos token difficulty",
+      "Nickname": "The Fall of the House of Usher Difficulty Selector",
+      "Description": "Define difficulties in this object's script.",
       "GMNotes": "",
       "AltLookAngle": {
         "x": 0.0,
@@ -3344,7 +3237,7 @@
       "Hands": false,
       "CustomImage": {
         "ImageURL": "https://steamusercontent-a.akamaihd.net/ugc/965354846165100486/3DC8FCEF364B30758B09EF96AF9458F2B8E64D56/",
-        "ImageSecondaryURL": "https://steamusercontent-a.akamaihd.net/ugc/949588657194710961/D864BCCCC1C811EC7F0AED69D1C30C678D3D9FC9/",
+        "ImageSecondaryURL": "https://i.imgur.com/EcbhVuh.jpg/",
         "ImageScalar": 1.0,
         "WidthScale": 0.0,
         "CustomTile": {
@@ -3354,7 +3247,309 @@
           "Stretch": true
         }
       },
-      "LuaScript": "name = 'Sleepy Hollow'\r\n\r\nfunction onLoad()\r\n    Global.call('createSetupButtons', {object=self, key=name})\r\nend\r\n\r\nfunction normalClick()\r\n    Global.call('fillContainer', {object=self, key=name, mode='normal'})\r\nend\r\n\r\nfunction hardClick()\r\n    Global.call('fillContainer', {object=self, key=name, mode='hard'})\r\nend\r\r\n",
+      "LuaScript": "-- edit the \"tokenData\" table to change the preset difficulties\r\n-- list of valid ids: 'p1', '0', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8',\r\n--   'skull', 'cultist', 'tablet', 'elder', 'red', 'blue', 'bless', 'curse', 'frost'\r\n\r\nlocal tokenData = {\r\n  Standard = { 'p1', '0', 'm1', 'm1', 'm2', 'm3', 'm3', 'm4', 'skull', 'skull', 'cultist', 'tablet', 'elder', 'red', 'blue' },\r\n  Hard = { '0', 'm1', 'm2', 'm3', 'm4', 'm4', 'm5', 'm6', 'skull', 'skull', 'cultist', 'tablet', 'elder', 'red', 'blue' }\r\n}\r\n\r\n-- create buttons on startup\r\nfunction onLoad()\r\n  local z_offset = -0.15\r\n  for difficulty, _ in pairs(tokenData) do\r\n    local clickFunction = difficulty:lower() .. \"Click\"\r\n    self.setVar(clickFunction, function() clickFun(difficulty) end)\r\n\r\n    self.createButton({\r\n      label = difficulty,\r\n      function_owner = self,\r\n      click_function = clickFunction,\r\n      position = { 0, 0.1, z_offset },\r\n      rotation = { 0, 0, 0 },\r\n      scale = { 0.47, 1, 0.47 },\r\n      height = 200,\r\n      width = 1150,\r\n      font_size = 100,\r\n      color = { 0.87, 0.8, 0.70 },\r\n      font_color = { 0, 0, 0 }\r\n    })\r\n    z_offset = z_offset + 0.20\r\n  end\r\nend\r\n\r\nfunction clickFun(difficulty)\r\n  Global.call(\"setChaosBagState\", tokenData[difficulty])\r\nend",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "8a3e0b",
+      "Name": "Card",
+      "Transform": {
+        "posX": -8.918755,
+        "posY": 1.57012832,
+        "posZ": -4.448036,
+        "rotX": 1.36691844,
+        "rotY": 269.9977,
+        "rotZ": 179.999954,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Guide 1",
+      "Description": "",
+      "GMNotes": "{\"TtsZoopGuid\":\"a18789b2-9518-4478-bfce-58c12db8f564\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "ScenarioCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 612513,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "6125": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970184574/246CC491AE3349BCCE57FA27532AAE474D124A17/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970186741/0CE5BB177A6024F930476E70929616545173FD48/",
+          "NumWidth": 5,
+          "NumHeight": 3,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "9d71ad",
+      "Name": "Card",
+      "Transform": {
+        "posX": -8.987388,
+        "posY": 1.56920326,
+        "posZ": -7.036008,
+        "rotX": 1.33228064,
+        "rotY": 270.002136,
+        "rotZ": 4.969239E-05,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Guide 2",
+      "Description": "",
+      "GMNotes": "{\"TtsZoopGuid\":\"fd571033-850f-440c-948a-624cd02fa296\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 295412,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "2954": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/50197021823865110/B477DC364BB11406BDCA087EA5FF02643F1F06B1/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858405271/D07D8E962A46C01679DCDD15C458ABF522ABA405/",
+          "NumWidth": 5,
+          "NumHeight": 3,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "ec039f",
+      "Name": "Card",
+      "Transform": {
+        "posX": -8.955642,
+        "posY": 1.56962538,
+        "posZ": -9.725377,
+        "rotX": 1.3480804,
+        "rotY": 270.007233,
+        "rotZ": 0.0001740579,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Guide 3",
+      "Description": "",
+      "GMNotes": "{\"TtsZoopGuid\":\"64659c04-0fd6-4e21-8c25-3be3e356e63f\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "ScenarioCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 613111,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "6131": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858403238/D64453CB110581B96A8B3686B85790A382C7253B/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858405271/D07D8E962A46C01679DCDD15C458ABF522ABA405/",
+          "NumWidth": 5,
+          "NumHeight": 3,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "191941",
+      "Name": "Card",
+      "Transform": {
+        "posX": -8.899265,
+        "posY": 1.57039869,
+        "posZ": -12.2996855,
+        "rotX": 1.37710392,
+        "rotY": 269.9549,
+        "rotZ": -0.0011252783,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Guide 4",
+      "Description": "",
+      "GMNotes": "{\"TtsZoopGuid\":\"ded56be3-3a76-4d28-8ddf-ca3e17424f66\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "ScenarioCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 611910,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "6119": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970184574/246CC491AE3349BCCE57FA27532AAE474D124A17/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970186741/0CE5BB177A6024F930476E70929616545173FD48/",
+          "NumWidth": 5,
+          "NumHeight": 3,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "b485b2",
+      "Name": "Card",
+      "Transform": {
+        "posX": -8.844469,
+        "posY": 1.57168663,
+        "posZ": -14.93176,
+        "rotX": 1.34711146,
+        "rotY": 270.0017,
+        "rotZ": 359.970337,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Guide 5",
+      "Description": "",
+      "GMNotes": "{\"TtsZoopGuid\":\"76d2ad45-c9da-4913-9517-c11bb3ea95cd\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "ScenarioCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 612709,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "6127": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970184574/246CC491AE3349BCCE57FA27532AAE474D124A17/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970186741/0CE5BB177A6024F930476E70929616545173FD48/",
+          "NumWidth": 5,
+          "NumHeight": 3,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
       "LuaScriptState": "",
       "XmlUI": ""
     },
@@ -3362,12 +3557,12 @@
       "GUID": "bd62c6",
       "Name": "Card",
       "Transform": {
-        "posX": -23.6766987,
-        "posY": 1.63002181,
-        "posZ": 7.569998,
-        "rotX": 359.9231,
-        "rotY": 269.999542,
-        "rotZ": -0.001965869,
+        "posX": -23.67671,
+        "posY": 1.53321612,
+        "posZ": 7.570011,
+        "rotX": 0.004355878,
+        "rotY": 269.9995,
+        "rotZ": 359.973541,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -3386,8 +3581,8 @@
         "b": 0.713235259
       },
       "Tags": [
-        "ScenarioCard",
-        "Location"
+        "Location",
+        "ScenarioCard"
       ],
       "LayoutGroupSortIndex": 0,
       "Value": 0,
@@ -3424,12 +3619,12 @@
       "GUID": "c4b15a",
       "Name": "Card",
       "Transform": {
-        "posX": -21.0971,
-        "posY": 1.64099991,
-        "posZ": 1.70520031,
-        "rotX": 359.320526,
-        "rotY": 270.012329,
-        "rotZ": 0.0166904479,
+        "posX": -21.09717,
+        "posY": 1.54962492,
+        "posZ": 1.70521832,
+        "rotX": 359.400421,
+        "rotY": 270.01236,
+        "rotZ": -0.000134236558,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -3448,8 +3643,8 @@
         "b": 0.713235259
       },
       "Tags": [
-        "PlayerCard",
-        "Asset"
+        "Asset",
+        "PlayerCard"
       ],
       "LayoutGroupSortIndex": 0,
       "Value": 0,
@@ -3483,139 +3678,15 @@
       "XmlUI": ""
     },
     {
-      "GUID": "cac078",
-      "Name": "Card",
-      "Transform": {
-        "posX": -30.2242985,
-        "posY": 1.63926756,
-        "posZ": 7.569999,
-        "rotX": 359.921753,
-        "rotY": 270.000641,
-        "rotZ": 0.005992779,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Banquet Hall",
-      "Description": "",
-      "GMNotes": "{\"TtsZoopGuid\":\"f23540a4-02ac-4f2b-af0e-e49f7995b989\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"House of Usher. Decadent\",\"locationFront\":{\"icons\":\"Circle\",\"connections\":\"Diamond|Hourglass\",\"uses\":[{\"token\":\"clue\",\"type\":\"Clue\",\"countPerInvestigator\":1}]},\"locationBack\":{\"icons\":\"Circle\",\"connections\":\"Diamond|Hourglass\",\"uses\":[{\"token\":\"clue\",\"type\":\"Clue\",\"count\":0}]}}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "Tags": [
-        "ScenarioCard",
-        "Location"
-      ],
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": false,
-      "Hands": true,
-      "CardID": 612904,
-      "SidewaysCard": false,
-      "CustomDeck": {
-        "6129": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970184574/246CC491AE3349BCCE57FA27532AAE474D124A17/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970186741/0CE5BB177A6024F930476E70929616545173FD48/",
-          "NumWidth": 5,
-          "NumHeight": 3,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
-    },
-    {
-      "GUID": "e03eed",
-      "Name": "Card",
-      "Transform": {
-        "posX": -36.7731972,
-        "posY": 1.64840007,
-        "posZ": 7.569998,
-        "rotX": 359.921753,
-        "rotY": 270.010284,
-        "rotZ": 0.00600989442,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Wine Cellar",
-      "Description": "",
-      "GMNotes": "{\"TtsZoopGuid\":\"24e6e275-9531-4267-9b98-1a03fb5d682c\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"House of Usher. Decadent\",\"locationFront\":{\"icons\":\"Hourglass\",\"connections\":\"Diamond|Circle|Heart|T\",\"uses\":[{\"token\":\"clue\",\"type\":\"Clue\",\"countPerInvestigator\":1}]},\"locationBack\":{\"icons\":\"Hourglass\",\"connections\":\"Diamond|Circle|Heart|T\",\"uses\":[{\"token\":\"clue\",\"type\":\"Clue\",\"count\":0}]}}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "Tags": [
-        "ScenarioCard",
-        "Location"
-      ],
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": false,
-      "Hands": true,
-      "CardID": 613002,
-      "SidewaysCard": false,
-      "CustomDeck": {
-        "6130": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970184574/246CC491AE3349BCCE57FA27532AAE474D124A17/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970186741/0CE5BB177A6024F930476E70929616545173FD48/",
-          "NumWidth": 5,
-          "NumHeight": 3,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
-    },
-    {
       "GUID": "f2cf1f",
       "Name": "Card",
       "Transform": {
-        "posX": -23.6765,
-        "posY": 1.6280731,
-        "posZ": -0.0300004147,
-        "rotX": 359.920074,
-        "rotY": 269.99765,
-        "rotZ": 0.01724562,
+        "posX": -23.6765537,
+        "posY": 1.53361142,
+        "posZ": -0.0300046857,
+        "rotX": -4.116622E-05,
+        "rotY": 269.996826,
+        "rotZ": 0.000403167942,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -3634,8 +3705,8 @@
         "b": 0.713235259
       },
       "Tags": [
-        "ScenarioCard",
-        "Location"
+        "Location",
+        "ScenarioCard"
       ],
       "LayoutGroupSortIndex": 0,
       "Value": 0,
@@ -3669,32 +3740,36 @@
       "XmlUI": ""
     },
     {
-      "GUID": "7a167a",
-      "Name": "Custom_Model_Bag",
+      "GUID": "aef3fc",
+      "Name": "Card",
       "Transform": {
-        "posX": 31.6102238,
-        "posY": 1.92889547,
-        "posZ": 0.277388036,
-        "rotX": -7.77901761E-08,
-        "rotY": 225.026871,
-        "rotZ": 1.05625048E-07,
-        "scaleX": 2.0,
-        "scaleY": 2.0,
-        "scaleZ": 2.0
+        "posX": -23.6766129,
+        "posY": 1.53321719,
+        "posZ": -7.700002,
+        "rotX": 0.004300297,
+        "rotY": 269.966553,
+        "rotZ": 359.973663,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
       },
-      "Nickname": "Set-aside",
+      "Nickname": "Portrait Gallery",
       "Description": "",
-      "GMNotes": "",
+      "GMNotes": "{\"TtsZoopGuid\":\"d24e2db1-abd7-495e-ae88-9e83c5a5438a\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"House of Usher. Decadent\",\"locationFront\":{\"icons\":\"Slash\",\"connections\":\"Diamond|Cross\",\"uses\":[{\"token\":\"clue\",\"type\":\"Clue\",\"countPerInvestigator\":2}]},\"locationBack\":{\"icons\":\"Slash\",\"connections\":\"Diamond|Cross\",\"uses\":[{\"token\":\"clue\",\"type\":\"Clue\",\"count\":0}]}}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
         "z": 0.0
       },
       "ColorDiffuse": {
-        "r": 0.02148666,
-        "g": 0.00100758043,
-        "b": 0.02148666
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
       },
+      "Tags": [
+        "Location",
+        "ScenarioCard"
+      ],
       "LayoutGroupSortIndex": 0,
       "Value": 0,
       "Locked": false,
@@ -3708,411 +3783,333 @@
       "Tooltip": true,
       "GridProjection": false,
       "HideWhenFaceDown": false,
-      "Hands": false,
-      "MaterialIndex": -1,
-      "MeshIndex": -1,
-      "CustomMesh": {
-        "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334964971/3078F312706FC974833ECD2A359B87FD4F283509/",
-        "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960553/C518D80E31E27DB23EEAC8CF9253E59798865790/",
-        "NormalURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960069/E70E4A58A1B7827F1E5E2AF9FF44DF0BD5DA33F7/",
-        "ColliderURL": "",
-        "Convex": true,
-        "MaterialIndex": 1,
-        "TypeIndex": 6,
-        "CastShadows": true
-      },
-      "Bag": {
-        "Order": 0
+      "Hands": true,
+      "CardID": 612606,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "6126": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970184574/246CC491AE3349BCCE57FA27532AAE474D124A17/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970186741/0CE5BB177A6024F930476E70929616545173FD48/",
+          "NumWidth": 5,
+          "NumHeight": 3,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
       },
       "LuaScript": "",
       "LuaScriptState": "",
-      "XmlUI": "",
-      "PhysicsMaterial": {
-        "StaticFriction": 0.6,
-        "DynamicFriction": 0.6,
-        "Bounciness": 0.0,
-        "FrictionCombine": 0,
-        "BounceCombine": 0
+      "XmlUI": ""
+    },
+    {
+      "GUID": "cac078",
+      "Name": "Card",
+      "Transform": {
+        "posX": -30.2243137,
+        "posY": 1.53355908,
+        "posZ": 7.57001734,
+        "rotX": 0.0006933038,
+        "rotY": 270.000854,
+        "rotZ": -0.003373308,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
       },
-      "Rigidbody": {
-        "Mass": 1.375,
-        "Drag": 5.0,
-        "AngularDrag": 5.0,
-        "UseGravity": true
+      "Nickname": "Banquet Hall",
+      "Description": "",
+      "GMNotes": "{\"TtsZoopGuid\":\"f23540a4-02ac-4f2b-af0e-e49f7995b989\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"House of Usher. Decadent\",\"locationFront\":{\"icons\":\"Circle\",\"connections\":\"Diamond|Hourglass\",\"uses\":[{\"token\":\"clue\",\"type\":\"Clue\",\"countPerInvestigator\":1}]},\"locationBack\":{\"icons\":\"Circle\",\"connections\":\"Diamond|Hourglass\",\"uses\":[{\"token\":\"clue\",\"type\":\"Clue\",\"count\":0}]}}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
       },
-      "ContainedObjects": [
-        {
-          "GUID": "7ebb5b",
-          "Name": "Card",
-          "Transform": {
-            "posX": 38.9680367,
-            "posY": 3.20506549,
-            "posZ": -50.251564,
-            "rotX": -3.946152E-08,
-            "rotY": 269.973633,
-            "rotZ": -1.83298621E-08,
-            "scaleX": 1.0,
-            "scaleY": 1.0,
-            "scaleZ": 1.0
-          },
-          "Nickname": "The Mad Trist (Dragon's Cunning)",
-          "Description": "",
-          "GMNotes": "{\"TtsZoopGuid\":\"bc5d362a-9c53-4bc8-9002-29a9645f2503\",\"type\":\"Asset\",\"uses\":[{\"count\":4,\"token\":\"resource\",\"type\":\"Secret\"}],\"class\":\"Neutral\",\"traits\":\"Item. Tome. Cursed\",\"agilityIcons\":1,\"intellectIcons\":1,\"wildIcons\":1,\"cost\":2}",
-          "AltLookAngle": {
-            "x": 0.0,
-            "y": 0.0,
-            "z": 0.0
-          },
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "Tags": [
-            "PlayerCard",
-            "Asset"
-          ],
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
-          "CardID": 267302,
-          "SidewaysCard": false,
-          "CustomDeck": {
-            "2673": {
-              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858395302/58D4D41AE08786AD3FB990CF8D8902A74B59E5A2/",
-              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-              "NumWidth": 2,
-              "NumHeight": 2,
-              "BackIsHidden": true,
-              "UniqueBack": false,
-              "Type": 0
-            }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
-        },
-        {
-          "GUID": "cb1ae5",
-          "Name": "Card",
-          "Transform": {
-            "posX": 41.003952,
-            "posY": 2.50510383,
-            "posZ": -42.435482,
-            "rotX": -4.12042951E-08,
-            "rotY": 270.0128,
-            "rotZ": -2.02587387E-07,
-            "scaleX": 1.0,
-            "scaleY": 1.0,
-            "scaleZ": 1.0
-          },
-          "Nickname": "The Mad Trist (Shelter From the Storm)",
-          "Description": "",
-          "GMNotes": "{\"TtsZoopGuid\":\"8957de49-4b5c-4c8f-b4f4-1c4909f6aa82\",\"type\":\"Asset\",\"uses\":[{\"count\":4,\"token\":\"resource\",\"type\":\"Secret\"}],\"class\":\"Neutral\",\"traits\":\"Item. Tome. Blessed\",\"combatIcons\":1,\"willpowerIcons\":1,\"wildIcons\":1,\"cost\":2}",
-          "AltLookAngle": {
-            "x": 0.0,
-            "y": 0.0,
-            "z": 0.0
-          },
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "Tags": [
-            "PlayerCard",
-            "Asset"
-          ],
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
-          "CardID": 267301,
-          "SidewaysCard": false,
-          "CustomDeck": {
-            "2673": {
-              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858395302/58D4D41AE08786AD3FB990CF8D8902A74B59E5A2/",
-              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-              "NumWidth": 2,
-              "NumHeight": 2,
-              "BackIsHidden": true,
-              "UniqueBack": false,
-              "Type": 0
-            }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
-        },
-        {
-          "GUID": "ff3998",
-          "Name": "Card",
-          "Transform": {
-            "posX": 1.6964221,
-            "posY": 3.67016315,
-            "posZ": 14.2788363,
-            "rotX": 359.94812,
-            "rotY": 224.998062,
-            "rotZ": 0.05827967,
-            "scaleX": 1.0,
-            "scaleY": 1.0,
-            "scaleZ": 1.0
-          },
-          "Nickname": "Faded Silhouette",
-          "Description": "",
-          "GMNotes": "{\"TtsZoopGuid\":\"0116cbc5-ba91-4601-949a-e4a687687023\",\"type\":\"Asset\",\"permanent\":true,\"class\":\"Neutral\",\"traits\":\"Item. Relic\"}",
-          "AltLookAngle": {
-            "x": 0.0,
-            "y": 0.0,
-            "z": 0.0
-          },
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "Tags": [
-            "PlayerCard",
-            "Asset"
-          ],
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
-          "CardID": 266200,
-          "SidewaysCard": false,
-          "CustomDeck": {
-            "2662": {
-              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970169444/6539120F8BB25D617FF076FA55497E6F46C040C9/",
-              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-              "NumWidth": 2,
-              "NumHeight": 2,
-              "BackIsHidden": true,
-              "UniqueBack": false,
-              "Type": 0
-            }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
-        },
-        {
-          "GUID": "e96c9a",
-          "Name": "Card",
-          "Transform": {
-            "posX": 3.92157078,
-            "posY": 2.78149557,
-            "posZ": -21.8806248,
-            "rotX": 359.90802,
-            "rotY": 269.987671,
-            "rotZ": 355.401367,
-            "scaleX": 1.0,
-            "scaleY": 1.0,
-            "scaleZ": 1.0
-          },
-          "Nickname": "The Thing From the Tarn",
-          "Description": "",
-          "GMNotes": "{\"TtsZoopGuid\":\"8be7767e-6e10-4195-aa48-c54a76981b7f\",\"type\":\"Enemy\",\"victory\":1,\"class\":\"Mythos\",\"traits\":\"Monster. Ancient One. Elite\"}",
-          "AltLookAngle": {
-            "x": 0.0,
-            "y": 0.0,
-            "z": 0.0
-          },
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "Tags": [
-            "ScenarioCard"
-          ],
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
-          "CardID": 267402,
-          "SidewaysCard": false,
-          "CustomDeck": {
-            "2674": {
-              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858398141/1AA2D79C9AA8D6E1A3A78DBF45BBFF38DDE05916/",
-              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1461933361191993988/FE126C3E21593398897E3C691A0AEA8D9B73A614/",
-              "NumWidth": 10,
-              "NumHeight": 4,
-              "BackIsHidden": true,
-              "UniqueBack": false,
-              "Type": 0
-            }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
-        },
-        {
-          "GUID": "98ab65",
-          "Name": "Card",
-          "Transform": {
-            "posX": 1.69642055,
-            "posY": 3.670253,
-            "posZ": 14.2788353,
-            "rotX": 359.9641,
-            "rotY": 224.997986,
-            "rotZ": 180.054932,
-            "scaleX": 1.0,
-            "scaleY": 1.0,
-            "scaleZ": 1.0
-          },
-          "Nickname": "The Tarn",
-          "Description": "",
-          "GMNotes": "{\"TtsZoopGuid\":\"e3b8ad2f-1de9-4098-9945-db1b2c88cf85\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"House of Usher. Cursed\",\"locationFront\":{\"icons\":\"T\",\"connections\":\"Hourglass|Heart\",\"uses\":[{\"token\":\"clue\",\"type\":\"Clue\",\"countPerInvestigator\":1}],\"victory\":1},\"locationBack\":{\"icons\":\"T\",\"connections\":\"Hourglass|Heart\"}}",
-          "AltLookAngle": {
-            "x": 0.0,
-            "y": 0.0,
-            "z": 0.0
-          },
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "Tags": [
-            "ScenarioCard",
-            "Location"
-          ],
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": false,
-          "Hands": true,
-          "CardID": 266200,
-          "SidewaysCard": false,
-          "CustomDeck": {
-            "2662": {
-              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970184574/246CC491AE3349BCCE57FA27532AAE474D124A17/",
-              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970186741/0CE5BB177A6024F930476E70929616545173FD48/",
-              "NumWidth": 5,
-              "NumHeight": 3,
-              "BackIsHidden": true,
-              "UniqueBack": true,
-              "Type": 0
-            }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
-        },
-        {
-          "GUID": "376325",
-          "Name": "Card",
-          "Transform": {
-            "posX": 10.7538481,
-            "posY": 2.33437133,
-            "posZ": -65.68242,
-            "rotX": 0.0208084118,
-            "rotY": 270.0,
-            "rotZ": 0.0167710651,
-            "scaleX": 1.0,
-            "scaleY": 1.0,
-            "scaleZ": 1.0
-          },
-          "Nickname": "Madeline Usher",
-          "Description": "",
-          "GMNotes": "{\"TtsZoopGuid\":\"44af38d6-8682-4b90-aadc-fbd2d68d7c33\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Geist. Cursed\"}",
-          "AltLookAngle": {
-            "x": 0.0,
-            "y": 0.0,
-            "z": 0.0
-          },
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "Tags": [
-            "PlayerCard",
-            "Asset"
-          ],
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
-          "CardID": 267400,
-          "SidewaysCard": false,
-          "CustomDeck": {
-            "2674": {
-              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1688271207858398141/1AA2D79C9AA8D6E1A3A78DBF45BBFF38DDE05916/",
-              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1461933361191993988/FE126C3E21593398897E3C691A0AEA8D9B73A614/",
-              "NumWidth": 10,
-              "NumHeight": 4,
-              "BackIsHidden": true,
-              "UniqueBack": false,
-              "Type": 0
-            }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Location",
+        "ScenarioCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 612904,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "6129": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970184574/246CC491AE3349BCCE57FA27532AAE474D124A17/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970186741/0CE5BB177A6024F930476E70929616545173FD48/",
+          "NumWidth": 5,
+          "NumHeight": 3,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
         }
-      ]
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "4f0dc5",
+      "Name": "Card",
+      "Transform": {
+        "posX": -30.22432,
+        "posY": 1.53360486,
+        "posZ": -0.0300957412,
+        "rotX": -1.35524871E-08,
+        "rotY": 269.9996,
+        "rotZ": -1.18153984E-08,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Grand Hall",
+      "Description": "",
+      "GMNotes": "{\"TtsZoopGuid\":\"6f8e2eec-38de-42ad-9b39-18e07371b9a9\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"House of Usher. Decadent\",\"locationFront\":{\"icons\":\"Diamond\",\"connections\":\"Star|DoubleSlash|Slash|Circle|Cross|Hourglass\",\"uses\":[{\"token\":\"clue\",\"type\":\"Clue\",\"count\":0}]},\"locationBack\":{\"icons\":\"Diamond\",\"connections\":\"Star|DoubleSlash|Slash|Circle|Cross|Hourglass\",\"uses\":[{\"token\":\"clue\",\"type\":\"Clue\",\"count\":0}]}}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Location",
+        "ScenarioCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 612305,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "6123": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970184574/246CC491AE3349BCCE57FA27532AAE474D124A17/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970186741/0CE5BB177A6024F930476E70929616545173FD48/",
+          "NumWidth": 5,
+          "NumHeight": 3,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "4d6ba5",
+      "Name": "Card",
+      "Transform": {
+        "posX": -30.2243614,
+        "posY": 1.53327084,
+        "posZ": -7.7001,
+        "rotX": 0.00384593359,
+        "rotY": 270.0111,
+        "rotZ": 359.9771,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Manor Chapel",
+      "Description": "",
+      "GMNotes": "{\"TtsZoopGuid\":\"0d3956de-53f4-4b1e-b14f-ec7936def0de\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"House of Usher. Decadent\",\"locationFront\":{\"icons\":\"Cross\",\"connections\":\"Diamond|Slash|Heart\",\"uses\":[{\"token\":\"clue\",\"type\":\"Clue\",\"countPerInvestigator\":2}]},\"locationBack\":{\"icons\":\"Cross\",\"connections\":\"Diamond|Slash|Heart\",\"uses\":[{\"token\":\"clue\",\"type\":\"Clue\",\"count\":0}]}}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Location",
+        "ScenarioCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 612203,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "6122": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970184574/246CC491AE3349BCCE57FA27532AAE474D124A17/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970186741/0CE5BB177A6024F930476E70929616545173FD48/",
+          "NumWidth": 5,
+          "NumHeight": 3,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "e03eed",
+      "Name": "Card",
+      "Transform": {
+        "posX": -36.773262,
+        "posY": 1.53360415,
+        "posZ": 7.57002354,
+        "rotX": 0.000288164243,
+        "rotY": 270.0103,
+        "rotZ": -0.000445607264,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Wine Cellar",
+      "Description": "",
+      "GMNotes": "{\"TtsZoopGuid\":\"24e6e275-9531-4267-9b98-1a03fb5d682c\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"House of Usher. Decadent\",\"locationFront\":{\"icons\":\"Hourglass\",\"connections\":\"Diamond|Circle|Heart|T\",\"uses\":[{\"token\":\"clue\",\"type\":\"Clue\",\"countPerInvestigator\":1}]},\"locationBack\":{\"icons\":\"Hourglass\",\"connections\":\"Diamond|Circle|Heart|T\",\"uses\":[{\"token\":\"clue\",\"type\":\"Clue\",\"count\":0}]}}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Location",
+        "ScenarioCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 613002,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "6130": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970184574/246CC491AE3349BCCE57FA27532AAE474D124A17/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970186741/0CE5BB177A6024F930476E70929616545173FD48/",
+          "NumWidth": 5,
+          "NumHeight": 3,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "49f26f",
+      "Name": "Card",
+      "Transform": {
+        "posX": -36.7604256,
+        "posY": 1.533559,
+        "posZ": -0.131891146,
+        "rotX": 0.000695338938,
+        "rotY": 270.008545,
+        "rotZ": -0.00338397129,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Usher Family Crypt",
+      "Description": "",
+      "GMNotes": "{\"TtsZoopGuid\":\"619e75f7-f605-4b38-930a-1a38bdb05bb4\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"House of Usher. Decadent\",\"locationFront\":{\"icons\":\"Heart\",\"connections\":\"Cross|Hourglass|T\",\"uses\":[{\"token\":\"clue\",\"type\":\"Clue\",\"countPerInvestigator\":1}],\"victory\":1},\"locationBack\":{\"icons\":\"Heart\",\"connections\":\"Cross|Hourglass|T\",\"uses\":[{\"token\":\"clue\",\"type\":\"Clue\",\"count\":0}],\"victory\":1}}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Location",
+        "ScenarioCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 612101,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "6121": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970184574/246CC491AE3349BCCE57FA27532AAE474D124A17/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1771580824970186741/0CE5BB177A6024F930476E70929616545173FD48/",
+          "NumWidth": 5,
+          "NumHeight": 3,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
     }
   ],
   "AttachedDecals": [

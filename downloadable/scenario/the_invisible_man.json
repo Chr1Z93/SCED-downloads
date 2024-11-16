@@ -2,12 +2,12 @@
   "GUID": "17d01a",
   "Name": "Custom_Model_Bag",
   "Transform": {
-    "posX": 22.261179,
-    "posY": 1.4814992,
-    "posZ": 0.620457649,
-    "rotX": 9.922762E-08,
-    "rotY": 270.0,
-    "rotZ": 3.46764125E-07,
+    "posX": 26.0014935,
+    "posY": 1.481499,
+    "posZ": 20.7264328,
+    "rotX": 1.02575669E-07,
+    "rotY": 270.024719,
+    "rotZ": -1.37773256E-07,
     "scaleX": 2.21,
     "scaleY": 0.46,
     "scaleZ": 2.42
@@ -65,19 +65,19 @@
     "Order": 0
   },
   "LuaScript": "-- Utility memory bag by Directsun\r\n-- Version 2.5.2\r\n-- Fork of Memory Bag 2.0 by MrStump\r\n\r\nfunction updateSave()\r\n    local data_to_save = {[\"ml\"]=memoryList}\r\n    saved_data = JSON.encode(data_to_save)\r\n    self.script_state = saved_data\r\nend\r\n\r\nfunction combineMemoryFromBagsWithin()\r\n  local bagObjList = self.getObjects()\r\n  for _, bagObj in ipairs(bagObjList) do\r\n    local data = bagObj.lua_script_state\r\n      if data ~= nil then\r\n        local j = JSON.decode(data)\r\n        if j ~= nil and j.ml ~= nil then\r\n          for guid, entry in pairs(j.ml) do\r\n            memoryList[guid] = entry\r\n          end\r\n        end\r\n      end\r\n    end\r\nend\r\n\r\nfunction updateMemoryWithMoves()\r\n    memoryList = memoryListBackup\r\n    --get the first transposed object's coordinates\r\n    local obj = getObjectFromGUID(moveGuid)\r\n\r\n    -- p1 is where needs to go, p2 is where it was\r\n    local refObjPos = memoryList[moveGuid].pos\r\n    local deltaPos = findOffsetDistance(obj.getPosition(), refObjPos, nil)\r\n    local movedRotation = obj.getRotation()\r\n    for guid, entry in pairs(memoryList) do\r\n        memoryList[guid].pos.x = entry.pos.x - deltaPos.x\r\n        memoryList[guid].pos.y = entry.pos.y - deltaPos.y\r\n        memoryList[guid].pos.z = entry.pos.z - deltaPos.z\r\n        -- memoryList[guid].rot.x = movedRotation.x\r\n        -- memoryList[guid].rot.y = movedRotation.y\r\n        -- memoryList[guid].rot.z = movedRotation.z\r\n    end\r\n\r\n    --theList[obj.getGUID()] = {\r\n    --    pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\r\n    --    rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\r\n    --    lock=obj.getLock()\r\n    --}\r\n    moveList = {}\r\nend\r\n\r\nfunction onload(saved_data)\r\n    fresh = true\r\n    if saved_data ~= \"\" then\r\n        local loaded_data = JSON.decode(saved_data)\r\n        --Set up information off of loaded_data\r\n        memoryList = loaded_data.ml\r\n    else\r\n        --Set up information for if there is no saved saved data\r\n        memoryList = {}\r\n    end\r\n\r\n    moveList = {}\r\n    moveGuid = nil\r\n\r\n    if next(memoryList) == nil then\r\n        createSetupButton()\r\n    else\r\n        fresh = false\r\n        createMemoryActionButtons()\r\n    end\r\nend\r\n\r\n\r\n--Beginning Setup\r\n\r\n\r\n--Make setup button\r\nfunction createSetupButton()\r\n    self.createButton({\r\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\r\n        position={0,0.1,-2.1}, rotation={0,0,0}, height=220, width=500,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\nend\r\n\r\n--Triggered by Transpose button\r\nfunction buttonClick_transpose()\r\n    moveGuid = nil\r\n    broadcastToAll(\"Select one object and move it- all objects will move relative to the new location\", {0.75, 0.75, 1})\r\n    memoryListBackup = duplicateTable(memoryList)\r\n    memoryList = {}\r\n    moveList = {}\r\n    self.clearButtons()\r\n    createButtonsOnAllObjects(true)\r\n    createSetupActionButtons(true)\r\nend\r\n\r\n--Triggered by setup button,\r\nfunction buttonClick_setup()\r\n    memoryListBackup = duplicateTable(memoryList)\r\n    memoryList = {}\r\n    self.clearButtons()\r\n    createButtonsOnAllObjects(false)\r\n    createSetupActionButtons(false)\r\nend\r\n\r\nfunction getAllObjectsInMemory()\r\n  local objTable = {}\r\n  local curObj = {}\r\n\r\n  for guid in pairs(memoryListBackup) do\r\n    curObj = getObjectFromGUID(guid)\r\n    table.insert(objTable, curObj)\r\n  end\r\n\r\n  return objTable\r\n  -- return getAllObjects()\r\nend\r\n\r\n--Creates selection buttons on objects\r\nfunction createButtonsOnAllObjects(move)\r\n    local howManyButtons = 0\r\n\r\n    local objsToHaveButtons = {}\r\n    if move == true then\r\n      objsToHaveButtons = getAllObjectsInMemory()\r\n    else\r\n      objsToHaveButtons = getAllObjects()\r\n    end\r\n\r\n    for _, obj in ipairs(objsToHaveButtons) do\r\n        if obj ~= self then\r\n            local dummyIndex = howManyButtons\r\n            --On a normal bag, the button positions aren't the same size as the bag.\r\n            globalScaleFactor = 1 * 1/self.getScale().x\r\n            --Super sweet math to set button positions\r\n            local selfPos = self.getPosition()\r\n            local objPos = obj.getPosition()\r\n            local deltaPos = findOffsetDistance(selfPos, objPos, obj)\r\n            local objPos = rotateLocalCoordinates(deltaPos, self)\r\n            objPos.x = -objPos.x * globalScaleFactor\r\n            objPos.y = objPos.y * globalScaleFactor + 2\r\n            objPos.z = objPos.z * globalScaleFactor * 0.9\r\n            --Offset rotation of bag\r\n            local rot = self.getRotation()\r\n            rot.y = -rot.y + 180\r\n            --Create function\r\n            local funcName = \"selectButton_\" .. howManyButtons\r\n            local func = function() buttonClick_selection(dummyIndex, obj, move) end\r\n            local color = {0.75,0.25,0.25,0.6}\r\n            local colorMove = {0,0,1,0.6}\r\n            if move == true then\r\n              color = colorMove\r\n            end\r\n            self.setVar(funcName, func)\r\n            self.createButton({\r\n                click_function=funcName, function_owner=self,\r\n                position=objPos, rotation=rot, height=500, width=500,\r\n                color=color,\r\n            })\r\n            howManyButtons = howManyButtons + 1\r\n        end\r\n    end\r\nend\r\n\r\n--Creates submit and cancel buttons\r\nfunction createSetupActionButtons(move)\r\n    self.createButton({\r\n        label=\"Cancel\", click_function=\"buttonClick_cancel\", function_owner=self,\r\n      position={-0.6,0.1,-2.1}, rotation={0,0,0}, height=220, width=550,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n\r\n    self.createButton({\r\n        label=\"Submit\", click_function=\"buttonClick_submit\", function_owner=self,\r\n        position={-0.6,0.3,-2.5}, rotation={0,0,0}, height=220, width=550,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n\r\n    if move == false then\r\n      self.createButton({\r\n          label=\"Add\", click_function=\"buttonClick_add\", function_owner=self,\r\n          position={0.6,0.3,-2.1}, rotation={0,0,0}, height=220, width=550,\r\n          font_size=130, color={0,0,0}, font_color={0.25,1,0.25}\r\n      })\r\n\r\n        if fresh == false then\r\n            self.createButton({\r\n                label=\"Set New\", click_function=\"buttonClick_setNew\", function_owner=self,\r\n                position={0.6,0.3,-2.9}, rotation={0,0,0}, height=220, width=550,\r\n                font_size=130, color={0,0,0}, font_color={0.75,0.75,1}\r\n            })\r\n            self.createButton({\r\n                label=\"Remove\", click_function=\"buttonClick_remove\", function_owner=self,\r\n                position={0.6,0.3,-2.5}, rotation={0,0,0}, height=220, width=550,\r\n                font_size=130, color={0,0,0}, font_color={1,0.25,0.25}\r\n            })\r\n        end\r\n    end\r\n\r\n    self.createButton({\r\n        label=\"Reset\", click_function=\"buttonClick_reset\", function_owner=self,\r\n        position={-0.6,0.3,-2.9}, rotation={0,0,0}, height=220, width=550,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\nend\r\n\r\n\r\n--During Setup\r\n\r\n\r\n--Checks or unchecks buttons\r\nfunction buttonClick_selection(index, obj, move)\r\n    local colorMove = {0,0,1,0.6}\r\n    local color = {0,1,0,0.6}\r\n\r\n    previousGuid = selectedGuid\r\n    selectedGuid = obj.getGUID()\r\n\r\n    theList = memoryList\r\n    if move == true then\r\n       theList = moveList\r\n       if previousGuid ~= nil and previousGuid ~= selectedGuid then\r\n         local prevObj = getObjectFromGUID(previousGuid)\r\n         prevObj.highlightOff()\r\n         self.editButton({index=previousIndex, color=colorMove})\r\n         theList[previousGuid] = nil\r\n       end\r\n       previousIndex = index\r\n    end\r\n\r\n    if theList[selectedGuid] == nil then\r\n        self.editButton({index=index, color=color})\r\n        --Adding pos/rot to memory table\r\n        local pos, rot = obj.getPosition(), obj.getRotation()\r\n        --I need to add it like this or it won't save due to indexing issue\r\n        theList[obj.getGUID()] = {\r\n            pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\r\n            rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\r\n            lock=obj.getLock()\r\n        }\r\n        obj.highlightOn({0,1,0})\r\n    else\r\n      color = {0.75,0.25,0.25,0.6}\r\n      if move == true then\r\n        color = colorMove\r\n      end\r\n        self.editButton({index=index, color=color})\r\n        theList[obj.getGUID()] = nil\r\n        obj.highlightOff()\r\n    end\r\nend\r\n\r\n--Cancels selection process\r\nfunction buttonClick_cancel()\r\n    memoryList = memoryListBackup\r\n    moveList = {}\r\n    self.clearButtons()\r\n    if next(memoryList) == nil then\r\n        createSetupButton()\r\n    else\r\n        createMemoryActionButtons()\r\n    end\r\n    removeAllHighlights()\r\n    broadcastToAll(\"Selection Canceled\", {1,1,1})\r\n    moveGuid = nil\r\nend\r\n\r\n--Saves selections\r\nfunction buttonClick_submit()\r\n    fresh = false\r\n    if next(moveList) ~= nil then\r\n        for guid in pairs(moveList) do\r\n            moveGuid = guid\r\n        end\r\n        if memoryListBackup[moveGuid] == nil then\r\n            broadcastToAll(\"Item selected for moving is not already in memory\", {1, 0.25, 0.25})\r\n        else\r\n            broadcastToAll(\"Moving all items in memory relative to new objects position!\", {0.75, 0.75, 1})\r\n            self.clearButtons()\r\n            createMemoryActionButtons()\r\n            local count = 0\r\n            for guid in pairs(moveList) do\r\n                moveGuid = guid\r\n                count = count + 1\r\n                local obj = getObjectFromGUID(guid)\r\n                if obj ~= nil then obj.highlightOff() end\r\n            end\r\n            updateMemoryWithMoves()\r\n            updateSave()\r\n            buttonClick_place()\r\n        end\r\n    elseif next(memoryList) == nil and moveGuid == nil then\r\n      memoryList = memoryListBackup\r\n      broadcastToAll(\"No selections made.\", {0.75, 0.25, 0.25})\r\n    end\r\n    combineMemoryFromBagsWithin()\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for guid in pairs(memoryList) do\r\n        count = count + 1\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then obj.highlightOff() end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    updateSave()\r\n    moveGuid = nil\r\nend\r\n\r\nfunction combineTables(first_table, second_table)\r\n  for k,v in pairs(second_table) do first_table[k] = v end\r\nend\r\n\r\nfunction buttonClick_add()\r\n    fresh = false\r\n    combineTables(memoryList, memoryListBackup)\r\n    broadcastToAll(\"Adding internal bags and selections to existing memory\", {0.25, 0.75, 0.25})\r\n    combineMemoryFromBagsWithin()\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for guid in pairs(memoryList) do\r\n        count = count + 1\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then obj.highlightOff() end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    updateSave()\r\nend\r\n\r\nfunction buttonClick_remove()\r\n        broadcastToAll(\"Removing Selected Entries From Memory\", {1.0, 0.25, 0.25})\r\n        self.clearButtons()\r\n        createMemoryActionButtons()\r\n        local count = 0\r\n        for guid in pairs(memoryList) do\r\n            count = count + 1\r\n            memoryListBackup[guid] = nil\r\n            local obj = getObjectFromGUID(guid)\r\n            if obj ~= nil then obj.highlightOff() end\r\n        end\r\n        broadcastToAll(count..\" Objects Removed\", {1,1,1})\r\n        memoryList = memoryListBackup\r\n        updateSave()\r\nend\r\n\r\nfunction buttonClick_setNew()\r\n    broadcastToAll(\"Setting new position relative to items in memory\", {0.75, 0.75, 1})\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for _, obj in ipairs(getAllObjects()) do\r\n        guid = obj.guid\r\n        if memoryListBackup[guid] ~= nil then\r\n            count = count + 1\r\n            memoryListBackup[guid].pos = obj.getPosition()\r\n            memoryListBackup[guid].rot = obj.getRotation()\r\n            memoryListBackup[guid].lock = obj.getLock()\r\n        end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    memoryList = memoryListBackup\r\n    updateSave()\r\nend\r\n\r\n--Resets bag to starting status\r\nfunction buttonClick_reset()\r\n    fresh = true\r\n    memoryList = {}\r\n    self.clearButtons()\r\n    createSetupButton()\r\n    removeAllHighlights()\r\n    broadcastToAll(\"Tool Reset\", {1,1,1})\r\n    updateSave()\r\nend\r\n\r\n\r\n--After Setup\r\n\r\n\r\n--Creates recall and place buttons\r\nfunction createMemoryActionButtons()\r\n    self.createButton({\r\n        label=\"Place\", click_function=\"buttonClick_place\", function_owner=self,\r\n        position={0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n    self.createButton({\r\n        label=\"Recall\", click_function=\"buttonClick_recall\", function_owner=self,\r\n        position={-0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n    self.createButton({\r\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\r\n        position={0,0.1,-2.1}, rotation={0,0,0}, height=220, width=500,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n---    self.createButton({\r\n---      label=\"Move\", click_function=\"buttonClick_transpose\", function_owner=self,\r\n---      position={-2.8,0.3,0}, rotation={0,0,0}, height=350, width=800,\r\n---      font_size=250, color={0,0,0}, font_color={0.75,0.75,1}\r\n---    })\r\nend\r\n\r\n--Sends objects from bag/table to their saved position/rotation\r\nfunction buttonClick_place()\r\n    local bagObjList = self.getObjects()\r\n    for guid, entry in pairs(memoryList) do\r\n        local obj = getObjectFromGUID(guid)\r\n        --If obj is out on the table, move it to the saved pos/rot\r\n        if obj ~= nil then\r\n            obj.setPositionSmooth(entry.pos)\r\n            obj.setRotationSmooth(entry.rot)\r\n            obj.setLock(entry.lock)\r\n        else\r\n            --If obj is inside of the bag\r\n            for _, bagObj in ipairs(bagObjList) do\r\n                if bagObj.guid == guid then\r\n                    local item = self.takeObject({\r\n                        guid=guid, position=entry.pos, rotation=entry.rot, smooth=false\r\n                    })\r\n                    item.setLock(entry.lock)\r\n                    break\r\n                end\r\n            end\r\n        end\r\n    end\r\n    broadcastToAll(\"Objects Placed\", {1,1,1})\r\nend\r\n\r\n--Recalls objects to bag from table\r\nfunction buttonClick_recall()\r\n    for guid, entry in pairs(memoryList) do\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then self.putObject(obj) end\r\n    end\r\n    broadcastToAll(\"Objects Recalled\", {1,1,1})\r\nend\r\n\r\n\r\n--Utility functions\r\n\r\n\r\n--Find delta (difference) between 2 x/y/z coordinates\r\nfunction findOffsetDistance(p1, p2, obj)\r\n    local yOffset = 0\r\n    if obj ~= nil then\r\n        local bounds = obj.getBounds()\r\n        yOffset = (bounds.size.y - bounds.offset.y)\r\n    end\r\n    local deltaPos = {}\r\n    deltaPos.x = (p2.x-p1.x)\r\n    deltaPos.y = (p2.y-p1.y) + yOffset\r\n    deltaPos.z = (p2.z-p1.z)\r\n    return deltaPos\r\nend\r\n\r\n--Used to rotate a set of coordinates by an angle\r\nfunction rotateLocalCoordinates(desiredPos, obj)\r\n\tlocal objPos, objRot = obj.getPosition(), obj.getRotation()\r\n    local angle = math.rad(objRot.y)\r\n\tlocal x = desiredPos.x * math.cos(angle) - desiredPos.z * math.sin(angle)\r\n\tlocal z = desiredPos.x * math.sin(angle) + desiredPos.z * math.cos(angle)\r\n\t--return {x=objPos.x+x, y=objPos.y+desiredPos.y, z=objPos.z+z}\r\n    return {x=x, y=desiredPos.y, z=z}\r\nend\r\n\r\nfunction rotateMyCoordinates(desiredPos, obj)\r\n\tlocal angle = math.rad(obj.getRotation().y)\r\n  local x = desiredPos.x * math.sin(angle)\r\n\tlocal z = desiredPos.z * math.cos(angle)\r\n    return {x=x, y=desiredPos.y, z=z}\r\nend\r\n\r\n--Coroutine delay, in seconds\r\nfunction wait(time)\r\n    local start = os.time()\r\n    repeat coroutine.yield(0) until os.time() > start + time\r\nend\r\n\r\n--Duplicates a table (needed to prevent it making reference to the same objects)\r\nfunction duplicateTable(oldTable)\r\n    local newTable = {}\r\n    for k, v in pairs(oldTable) do\r\n        newTable[k] = v\r\n    end\r\n    return newTable\r\nend\r\n\r\n--Moves scripted highlight from all objects\r\nfunction removeAllHighlights()\r\n    for _, obj in ipairs(getAllObjects()) do\r\n        obj.highlightOff()\r\n    end\r\nend\r\n\r\n--Round number (num) to the Nth decimal (dec)\r\nfunction round(num, dec)\r\n  local mult = 10^(dec or 0)\r\n  return math.floor(num * mult + 0.5) / mult\r\nend\r\n",
-  "LuaScriptState": "{\"ml\":{\"05a062\":{\"lock\":false,\"pos\":{\"x\":-3.85,\"y\":1.5966,\"z\":-10.388},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"0a9433\":{\"lock\":false,\"pos\":{\"x\":-9.3242,\"y\":1.5919,\"z\":13.0603},\"rot\":{\"x\":1.1856,\"y\":270.0321,\"z\":180.0018}},\"0b7f0f\":{\"lock\":false,\"pos\":{\"x\":-3.9285,\"y\":1.7339,\"z\":5.72},\"rot\":{\"x\":0,\"y\":270,\"z\":180}},\"0e06ab\":{\"lock\":false,\"pos\":{\"x\":-25.7709,\"y\":1.5336,\"z\":9.2291},\"rot\":{\"x\":0,\"y\":270,\"z\":180}},\"0f3279\":{\"lock\":false,\"pos\":{\"x\":-2.94,\"y\":1.6136,\"z\":-5.104},\"rot\":{\"x\":0,\"y\":180.0001,\"z\":0}},\"113bd9\":{\"lock\":false,\"pos\":{\"x\":-9.0139,\"y\":1.5689,\"z\":0.104},\"rot\":{\"x\":1.3194,\"y\":270.0005,\"z\":0}},\"167e15\":{\"lock\":false,\"pos\":{\"x\":-36.8384,\"y\":1.5336,\"z\":0.0458},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":180}},\"1af8ed\":{\"lock\":false,\"pos\":{\"x\":-25.8691,\"y\":1.5336,\"z\":-9.1959},\"rot\":{\"x\":0,\"y\":269.9985,\"z\":179.9999}},\"1dc45b\":{\"lock\":false,\"pos\":{\"x\":1.8613,\"y\":1.6136,\"z\":-5.1008},\"rot\":{\"x\":0,\"y\":180.0007,\"z\":0}},\"22c3af\":{\"lock\":false,\"pos\":{\"x\":-0.5132,\"y\":1.6136,\"z\":-5.12},\"rot\":{\"x\":0,\"y\":180.0001,\"z\":0}},\"3e7589\":{\"lock\":false,\"pos\":{\"x\":-19.6025,\"y\":1.5336,\"z\":4.1511},\"rot\":{\"x\":0,\"y\":270,\"z\":180}},\"4cf225\":{\"lock\":false,\"pos\":{\"x\":1.6973,\"y\":1.558,\"z\":14.2496},\"rot\":{\"x\":0,\"y\":224.7796,\"z\":0}},\"5052df\":{\"lock\":false,\"pos\":{\"x\":-9.001,\"y\":1.569,\"z\":2.3884},\"rot\":{\"x\":1.3256,\"y\":269.9995,\"z\":0}},\"6b0e9f\":{\"lock\":false,\"pos\":{\"x\":-33.4635,\"y\":1.5336,\"z\":-7.5806},\"rot\":{\"x\":0,\"y\":270.0002,\"z\":180}},\"70e8ff\":{\"lock\":false,\"pos\":{\"x\":-8.9598,\"y\":1.5696,\"z\":-4.586},\"rot\":{\"x\":1.346,\"y\":270.0025,\"z\":180.0001}},\"9014b5\":{\"lock\":false,\"pos\":{\"x\":-23.8264,\"y\":1.5473,\"z\":-11.3623},\"rot\":{\"x\":0,\"y\":269.9827,\"z\":0.7181}},\"afee77\":{\"lock\":false,\"pos\":{\"x\":-2.8105,\"y\":1.5966,\"z\":0.3924},\"rot\":{\"x\":0,\"y\":180.0018,\"z\":0}},\"b19542\":{\"lock\":false,\"pos\":{\"x\":-9.0139,\"y\":1.5689,\"z\":4.6791},\"rot\":{\"x\":1.3194,\"y\":270.0005,\"z\":0}},\"c5a546\":{\"lock\":false,\"pos\":{\"x\":-8.9554,\"y\":1.5696,\"z\":-2.2188},\"rot\":{\"x\":1.3482,\"y\":269.9935,\"z\":-0.0002}},\"d9e538\":{\"lock\":false,\"pos\":{\"x\":-3.6329,\"y\":1.583,\"z\":-14.9037},\"rot\":{\"x\":0,\"y\":269.9943,\"z\":0}},\"da6e47\":{\"lock\":false,\"pos\":{\"x\":-33.4394,\"y\":1.5336,\"z\":7.7445},\"rot\":{\"x\":0,\"y\":269.9998,\"z\":180}},\"ef5b67\":{\"lock\":false,\"pos\":{\"x\":-19.8549,\"y\":1.5336,\"z\":-3.8284},\"rot\":{\"x\":0,\"y\":270.0002,\"z\":180}},\"fc8fc7\":{\"lock\":false,\"pos\":{\"x\":-9.3643,\"y\":1.5554,\"z\":9.8688},\"rot\":{\"x\":0,\"y\":270.0062,\"z\":180}}}}",
+  "LuaScriptState": "{\"ml\":{\"05a062\":{\"lock\":false,\"pos\":{\"x\":-3.85,\"y\":1.5966,\"z\":-10.39},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"0a9433\":{\"lock\":false,\"pos\":{\"x\":-9.3242,\"y\":1.5919,\"z\":13.0603},\"rot\":{\"x\":1.1857,\"y\":270.0321,\"z\":180.0001}},\"0b7f0f\":{\"lock\":false,\"pos\":{\"x\":-3.9285,\"y\":1.7339,\"z\":5.72},\"rot\":{\"x\":0,\"y\":270,\"z\":180}},\"0e06ab\":{\"lock\":false,\"pos\":{\"x\":-25.7709,\"y\":1.5336,\"z\":9.2291},\"rot\":{\"x\":0,\"y\":269.9999,\"z\":180}},\"0f3279\":{\"lock\":false,\"pos\":{\"x\":-2.94,\"y\":1.6136,\"z\":-5.104},\"rot\":{\"x\":0,\"y\":180.0001,\"z\":0}},\"113bd9\":{\"lock\":false,\"pos\":{\"x\":-9.0139,\"y\":1.5689,\"z\":0.104},\"rot\":{\"x\":1.3194,\"y\":270.0004,\"z\":0}},\"1270da\":{\"lock\":false,\"pos\":{\"x\":-3.8267,\"y\":1.583,\"z\":-14.7334},\"rot\":{\"x\":0,\"y\":269.9942,\"z\":0}},\"167e15\":{\"lock\":false,\"pos\":{\"x\":-36.8384,\"y\":1.5336,\"z\":0.0458},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":180}},\"1af8ed\":{\"lock\":false,\"pos\":{\"x\":-25.8691,\"y\":1.5336,\"z\":-9.1959},\"rot\":{\"x\":0,\"y\":269.9985,\"z\":179.9999}},\"1dc45b\":{\"lock\":false,\"pos\":{\"x\":1.8613,\"y\":1.6136,\"z\":-5.1008},\"rot\":{\"x\":0,\"y\":180.0007,\"z\":0}},\"22c3af\":{\"lock\":false,\"pos\":{\"x\":-0.5132,\"y\":1.6136,\"z\":-5.12},\"rot\":{\"x\":0,\"y\":180.0001,\"z\":0}},\"3e7589\":{\"lock\":false,\"pos\":{\"x\":-19.6025,\"y\":1.5336,\"z\":4.1511},\"rot\":{\"x\":0,\"y\":270,\"z\":180}},\"4cf225\":{\"lock\":false,\"pos\":{\"x\":1.6973,\"y\":1.558,\"z\":14.2496},\"rot\":{\"x\":0,\"y\":224.7796,\"z\":0}},\"6b0e9f\":{\"lock\":false,\"pos\":{\"x\":-33.54,\"y\":1.5336,\"z\":-7.65},\"rot\":{\"x\":0,\"y\":270.0002,\"z\":180}},\"70e8ff\":{\"lock\":false,\"pos\":{\"x\":-8.9598,\"y\":1.5696,\"z\":-4.586},\"rot\":{\"x\":1.346,\"y\":270.0025,\"z\":180}},\"9014b5\":{\"lock\":false,\"pos\":{\"x\":-23.8264,\"y\":1.5473,\"z\":-11.3623},\"rot\":{\"x\":0,\"y\":269.9825,\"z\":0.7181}},\"afee77\":{\"lock\":false,\"pos\":{\"x\":-2.8105,\"y\":1.5966,\"z\":0.3924},\"rot\":{\"x\":0,\"y\":180.0018,\"z\":0}},\"b19542\":{\"lock\":false,\"pos\":{\"x\":-9.0139,\"y\":1.5689,\"z\":4.6791},\"rot\":{\"x\":1.3194,\"y\":270.0004,\"z\":0}},\"c5a546\":{\"lock\":false,\"pos\":{\"x\":-8.9554,\"y\":1.5696,\"z\":-2.2188},\"rot\":{\"x\":1.3482,\"y\":269.9934,\"z\":0}},\"cda4f6\":{\"lock\":false,\"pos\":{\"x\":-9.0028,\"y\":1.569,\"z\":2.3937},\"rot\":{\"x\":1.3244,\"y\":269.98,\"z\":-0.0001}},\"da6e47\":{\"lock\":false,\"pos\":{\"x\":-33.4394,\"y\":1.5336,\"z\":7.7445},\"rot\":{\"x\":0,\"y\":269.9997,\"z\":180}},\"ef5b67\":{\"lock\":false,\"pos\":{\"x\":-19.8549,\"y\":1.5336,\"z\":-3.8284},\"rot\":{\"x\":0,\"y\":270.0002,\"z\":180}},\"fc8fc7\":{\"lock\":false,\"pos\":{\"x\":-9.3643,\"y\":1.5554,\"z\":9.8688},\"rot\":{\"x\":0,\"y\":270.0063,\"z\":180}}}}",
   "XmlUI": "",
   "ContainedObjects": [
     {
       "GUID": "4cf225",
       "Name": "Custom_Model_Bag",
       "Transform": {
-        "posX": 1.69734538,
-        "posY": 1.55803573,
-        "posZ": 14.2495651,
-        "rotX": -3.1308407E-06,
-        "rotY": 224.779572,
-        "rotZ": 1.18521008E-07,
+        "posX": 1.697301,
+        "posY": 1.55803657,
+        "posZ": 14.2496042,
+        "rotX": -2.16466219E-07,
+        "rotY": 224.7796,
+        "rotZ": -1.21448215E-06,
         "scaleX": 2.0,
         "scaleY": 2.0,
         "scaleZ": 2.0
@@ -191,7 +191,7 @@
           "CustomDeck": {
             "2668": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2067772400170627189/1D146B0EBECEC7013979AFFDD31E0B1DFE925A13/",
-              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1461933574036605747/66F5F6903F78214DDB7420F5022C9CDEC4D85464/",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -253,7 +253,7 @@
           "CustomDeck": {
             "2690": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2067772400170626404/244BE7AA2985EFC8F7747EB5E911C9BC65714113/",
-              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/1461933574036605747/66F5F6903F78214DDB7420F5022C9CDEC4D85464/",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -455,9 +455,9 @@
       "Name": "Deck",
       "Transform": {
         "posX": -3.92850113,
-        "posY": 1.73391,
-        "posZ": 5.72000074,
-        "rotX": 8.029277E-08,
+        "posY": 1.73390973,
+        "posZ": 5.72000456,
+        "rotX": -1.79342123E-07,
         "rotY": 270.0,
         "rotZ": 180.0,
         "scaleX": 1.0,
@@ -2189,12 +2189,12 @@
       "GUID": "afee77",
       "Name": "Card",
       "Transform": {
-        "posX": -2.8105278,
+        "posX": -2.81050062,
         "posY": 1.59660506,
-        "posZ": 0.392400742,
-        "rotX": -3.11569237E-09,
-        "rotY": 180.001816,
-        "rotZ": 3.750993E-09,
+        "posZ": 0.392400652,
+        "rotX": 5.36824452E-08,
+        "rotY": 180.0018,
+        "rotZ": -8.00506E-09,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -2237,7 +2237,7 @@
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2067772400170616371/2A1FD48FED77A1F769C94DCDDDC4F1124441F5D2/",
           "NumWidth": 4,
           "NumHeight": 2,
-          "BackIsHidden": true,
+          "BackIsHidden": false,
           "UniqueBack": true,
           "Type": 0
         }
@@ -2250,12 +2250,12 @@
       "GUID": "1dc45b",
       "Name": "Deck",
       "Transform": {
-        "posX": 1.86128879,
+        "posX": 1.86130261,
         "posY": 1.61355889,
-        "posZ": -5.100753,
-        "rotX": 2.05437427E-08,
+        "posZ": -5.10080338,
+        "rotX": 4.78150675E-09,
         "rotY": 180.000687,
-        "rotZ": -5.102876E-08,
+        "rotZ": 1.213429E-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -2298,7 +2298,7 @@
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2067772400170616371/2A1FD48FED77A1F769C94DCDDDC4F1124441F5D2/",
           "NumWidth": 4,
           "NumHeight": 2,
-          "BackIsHidden": true,
+          "BackIsHidden": false,
           "UniqueBack": true,
           "Type": 0
         }
@@ -2359,7 +2359,7 @@
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2067772400170616371/2A1FD48FED77A1F769C94DCDDDC4F1124441F5D2/",
               "NumWidth": 4,
               "NumHeight": 2,
-              "BackIsHidden": true,
+              "BackIsHidden": false,
               "UniqueBack": true,
               "Type": 0
             }
@@ -2420,7 +2420,7 @@
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2067772400170616371/2A1FD48FED77A1F769C94DCDDDC4F1124441F5D2/",
               "NumWidth": 4,
               "NumHeight": 2,
-              "BackIsHidden": true,
+              "BackIsHidden": false,
               "UniqueBack": true,
               "Type": 0
             }
@@ -2435,12 +2435,12 @@
       "GUID": "22c3af",
       "Name": "Deck",
       "Transform": {
-        "posX": -0.5131636,
+        "posX": -0.513199151,
         "posY": 1.61355889,
-        "posZ": -5.119976,
-        "rotX": -1.87526137E-08,
-        "rotY": 180.0001,
-        "rotZ": -4.16049772E-08,
+        "posZ": -5.12000275,
+        "rotX": -1.934375E-08,
+        "rotY": 180.000122,
+        "rotZ": -5.38289342E-08,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -2483,7 +2483,7 @@
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2067772400170616371/2A1FD48FED77A1F769C94DCDDDC4F1124441F5D2/",
           "NumWidth": 4,
           "NumHeight": 2,
-          "BackIsHidden": true,
+          "BackIsHidden": false,
           "UniqueBack": true,
           "Type": 0
         }
@@ -2544,7 +2544,7 @@
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2067772400170616371/2A1FD48FED77A1F769C94DCDDDC4F1124441F5D2/",
               "NumWidth": 4,
               "NumHeight": 2,
-              "BackIsHidden": true,
+              "BackIsHidden": false,
               "UniqueBack": true,
               "Type": 0
             }
@@ -2605,7 +2605,7 @@
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2067772400170616371/2A1FD48FED77A1F769C94DCDDDC4F1124441F5D2/",
               "NumWidth": 4,
               "NumHeight": 2,
-              "BackIsHidden": true,
+              "BackIsHidden": false,
               "UniqueBack": true,
               "Type": 0
             }
@@ -2620,12 +2620,12 @@
       "GUID": "0f3279",
       "Name": "Deck",
       "Transform": {
-        "posX": -2.94000554,
+        "posX": -2.940001,
         "posY": 1.61355889,
-        "posZ": -5.104019,
-        "rotX": 1.029793E-09,
-        "rotY": 180.000092,
-        "rotZ": -2.89406312E-08,
+        "posZ": -5.10400438,
+        "rotX": 1.145673E-08,
+        "rotY": 180.000122,
+        "rotZ": -6.99851341E-08,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -2668,7 +2668,7 @@
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2067772400170616371/2A1FD48FED77A1F769C94DCDDDC4F1124441F5D2/",
           "NumWidth": 4,
           "NumHeight": 2,
-          "BackIsHidden": true,
+          "BackIsHidden": false,
           "UniqueBack": true,
           "Type": 0
         }
@@ -2729,7 +2729,7 @@
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2067772400170616371/2A1FD48FED77A1F769C94DCDDDC4F1124441F5D2/",
               "NumWidth": 4,
               "NumHeight": 2,
-              "BackIsHidden": true,
+              "BackIsHidden": false,
               "UniqueBack": true,
               "Type": 0
             }
@@ -2790,7 +2790,7 @@
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2067772400170616371/2A1FD48FED77A1F769C94DCDDDC4F1124441F5D2/",
               "NumWidth": 4,
               "NumHeight": 2,
-              "BackIsHidden": true,
+              "BackIsHidden": false,
               "UniqueBack": true,
               "Type": 0
             }
@@ -2805,12 +2805,12 @@
       "GUID": "05a062",
       "Name": "Card",
       "Transform": {
-        "posX": -3.850006,
+        "posX": -3.85000134,
         "posY": 1.59660506,
-        "posZ": -10.388031,
-        "rotX": 2.078775E-08,
+        "posZ": -10.390007,
+        "rotX": 6.88853063E-08,
         "rotY": 270.0,
-        "rotZ": 2.39937368E-08,
+        "rotZ": 9.871147E-08,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -2853,7 +2853,7 @@
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2067772400170618562/B5EF4A8A872351C08BAEFF218316F94D2FF774D9/",
           "NumWidth": 7,
           "NumHeight": 2,
-          "BackIsHidden": true,
+          "BackIsHidden": false,
           "UniqueBack": true,
           "Type": 0
         }
@@ -2863,20 +2863,20 @@
       "XmlUI": ""
     },
     {
-      "GUID": "d9e538",
+      "GUID": "1270da",
       "Name": "Custom_Tile",
       "Transform": {
-        "posX": -3.632883,
+        "posX": -3.826717,
         "posY": 1.58300042,
-        "posZ": -14.9036837,
-        "rotX": -1.03269642E-08,
-        "rotY": 269.994263,
-        "rotZ": -9.006725E-09,
+        "posZ": -14.7333975,
+        "rotX": -3.60389E-08,
+        "rotY": 269.9942,
+        "rotZ": 2.77430683E-08,
         "scaleX": 2.2,
         "scaleY": 1.0,
         "scaleZ": 2.2
       },
-      "Nickname": "Invisible Man Difficulty Selector",
+      "Nickname": "The Invisible Man Difficulty Selector",
       "Description": "Define difficulties in this object's script.",
       "GMNotes": "",
       "AltLookAngle": {
@@ -2905,7 +2905,7 @@
       "Hands": false,
       "CustomImage": {
         "ImageURL": "https://steamusercontent-a.akamaihd.net/ugc/965354846165100486/3DC8FCEF364B30758B09EF96AF9458F2B8E64D56/",
-        "ImageSecondaryURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+        "ImageSecondaryURL": "https://i.imgur.com/EcbhVuh.jpg/",
         "ImageScalar": 1.0,
         "WidthScale": 0.0,
         "CustomTile": {
@@ -2915,7 +2915,7 @@
           "Stretch": true
         }
       },
-      "LuaScript": "-- edit the \"tokenData\" table to change the preset difficulties\r\n-- list of valid ids: 'p1', '0', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8',\r\n--   'skull', 'cultist', 'tablet', 'elder', 'red', 'blue', 'bless', 'curse', 'frost'\r\n\r\nlocal tokenData = {\r\n  Standard = { 'p1', 'p1', '0', '0', '0', 'm1', 'm1', 'm1', 'm2', 'm2', 'm3', 'm3', 'm4', 'm4', 'm5', 'm6', 'skull', 'skull', 'skull', 'cultist', 'tablet', 'elder', 'red', 'blue' },\r\n  Hard = { 'p1', '0', '0', '0', 'm1', 'm1', 'm1', 'm2', 'm2', 'm3', 'm3', 'm4', 'm4', 'm5', 'm6', 'm8', 'skull', 'skull', 'skull', 'cultist', 'tablet', 'elder', 'red', 'blue' }\r\n}\r\n\r\n-- create buttons on startup\r\nfunction onLoad()\r\n  local z_offset = -0.15\r\n  for difficulty, _ in pairs(tokenData) do\r\n    local clickFunction = difficulty:lower() .. \"Click\"\r\n    self.setVar(clickFunction, function() clickFun(difficulty) end)\r\n\r\n    self.createButton({\r\n      label = difficulty,\r\n      function_owner = self,\r\n      click_function = clickFunction,\r\n      position = { 0, 0.1, z_offset },\r\n      rotation = { 0, 0, 0 },\r\n      scale = { 0.47, 1, 0.47 },\r\n      height = 200,\r\n      width = 1150,\r\n      font_size = 100,\r\n      color = { 0.87, 0.8, 0.70 },\r\n      font_color = { 0, 0, 0 }\r\n    })\r\n    z_offset = z_offset + 0.20\r\n  end\r\nend\r\n\r\nfunction clickFun(difficulty)\r\n  Global.call(\"setChaosBagState\", tokenData[difficulty])\r\nend\r\n",
+      "LuaScript": "-- edit the \"tokenData\" table to change the preset difficulties\r\n-- list of valid ids: 'p1', '0', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8',\r\n--   'skull', 'cultist', 'tablet', 'elder', 'red', 'blue', 'bless', 'curse', 'frost'\r\n\r\nlocal tokenData = {\r\n  Standard = { 'p1', '0', 'm1', 'm1', 'm2', 'm3', 'm3', 'm4', 'skull', 'skull', 'cultist', 'tablet', 'elder', 'red', 'blue' },\r\n  Hard = { '0', 'm1', 'm2', 'm3', 'm4', 'm4', 'm5', 'm6', 'skull', 'skull', 'cultist', 'tablet', 'elder', 'red', 'blue' }\r\n}\r\n\r\n-- create buttons on startup\r\nfunction onLoad()\r\n  local z_offset = -0.15\r\n  for difficulty, _ in pairs(tokenData) do\r\n    local clickFunction = difficulty:lower() .. \"Click\"\r\n    self.setVar(clickFunction, function() clickFun(difficulty) end)\r\n\r\n    self.createButton({\r\n      label = difficulty,\r\n      function_owner = self,\r\n      click_function = clickFunction,\r\n      position = { 0, 0.1, z_offset },\r\n      rotation = { 0, 0, 0 },\r\n      scale = { 0.47, 1, 0.47 },\r\n      height = 200,\r\n      width = 1150,\r\n      font_size = 100,\r\n      color = { 0.87, 0.8, 0.70 },\r\n      font_color = { 0, 0, 0 }\r\n    })\r\n    z_offset = z_offset + 0.20\r\n  end\r\nend\r\n\r\nfunction clickFun(difficulty)\r\n  Global.call(\"setChaosBagState\", tokenData[difficulty])\r\nend",
       "LuaScriptState": "",
       "XmlUI": ""
     },
@@ -2923,11 +2923,11 @@
       "GUID": "0a9433",
       "Name": "Deck",
       "Transform": {
-        "posX": -9.324229,
-        "posY": 1.59185946,
-        "posZ": 13.0603142,
-        "rotX": 1.18557215,
-        "rotY": 270.0321,
+        "posX": -9.324194,
+        "posY": 1.59185958,
+        "posZ": 13.0603161,
+        "rotX": 1.18558681,
+        "rotY": 270.032135,
         "rotZ": 180.001816,
         "scaleX": 1.0,
         "scaleY": 1.0,
@@ -3232,11 +3232,11 @@
       "GUID": "fc8fc7",
       "Name": "Deck",
       "Transform": {
-        "posX": -9.364298,
+        "posX": -9.364286,
         "posY": 1.55537271,
-        "posZ": 9.868846,
-        "rotX": -2.212593E-08,
-        "rotY": 270.006226,
+        "posZ": 9.868806,
+        "rotX": -7.63796848E-08,
+        "rotY": 270.0063,
         "rotZ": 180.0,
         "scaleX": 1.0,
         "scaleY": 1.0,
@@ -3479,12 +3479,12 @@
       "GUID": "b19542",
       "Name": "Card",
       "Transform": {
-        "posX": -9.013891,
-        "posY": 1.56885827,
-        "posZ": 4.67905569,
-        "rotX": 1.3193748,
-        "rotY": 270.000549,
-        "rotZ": 1.15290013E-05,
+        "posX": -9.013882,
+        "posY": 1.56885839,
+        "posZ": 4.67909765,
+        "rotX": 1.31937885,
+        "rotY": 270.000427,
+        "rotZ": 9.287251E-06,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -3527,7 +3527,7 @@
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2067772400170618562/B5EF4A8A872351C08BAEFF218316F94D2FF774D9/",
           "NumWidth": 7,
           "NumHeight": 2,
-          "BackIsHidden": true,
+          "BackIsHidden": false,
           "UniqueBack": true,
           "Type": 0
         }
@@ -3537,15 +3537,15 @@
       "XmlUI": ""
     },
     {
-      "GUID": "5052df",
+      "GUID": "cda4f6",
       "Name": "Card",
       "Transform": {
-        "posX": -9.001035,
-        "posY": 1.56902468,
-        "posZ": 2.388444,
-        "rotX": 1.32560658,
-        "rotY": 269.999542,
-        "rotZ": -1.361066E-05,
+        "posX": -9.00275,
+        "posY": 1.56900215,
+        "posZ": 2.39372039,
+        "rotX": 1.3247807,
+        "rotY": 269.97998,
+        "rotZ": -0.000469807826,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -3563,9 +3563,6 @@
         "g": 0.713235259,
         "b": 0.713235259
       },
-      "Tags": [
-        "ScenarioCard"
-      ],
       "LayoutGroupSortIndex": 0,
       "Value": 0,
       "Locked": false,
@@ -3580,15 +3577,15 @@
       "GridProjection": false,
       "HideWhenFaceDown": false,
       "Hands": true,
-      "CardID": 266501,
+      "CardID": 295701,
       "SidewaysCard": false,
       "CustomDeck": {
-        "2665": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2067772400170617662/924818E569D108A5302DDBA8F4A21F89EA679706/",
+        "2957": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/50197021823867668/7EA3DA2ACC10810CE025C9332A875A7442430DAD/",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2067772400170618562/B5EF4A8A872351C08BAEFF218316F94D2FF774D9/",
           "NumWidth": 7,
           "NumHeight": 2,
-          "BackIsHidden": true,
+          "BackIsHidden": false,
           "UniqueBack": true,
           "Type": 0
         }
@@ -3601,12 +3598,12 @@
       "GUID": "113bd9",
       "Name": "Card",
       "Transform": {
-        "posX": -9.013895,
-        "posY": 1.56885815,
-        "posZ": 0.103984118,
-        "rotX": 1.319373,
-        "rotY": 270.000519,
-        "rotZ": 9.447374E-06,
+        "posX": -9.013883,
+        "posY": 1.56885839,
+        "posZ": 0.103989519,
+        "rotX": 1.31937873,
+        "rotY": 270.000427,
+        "rotZ": 8.86025E-06,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -3649,7 +3646,7 @@
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2067772400170618562/B5EF4A8A872351C08BAEFF218316F94D2FF774D9/",
           "NumWidth": 7,
           "NumHeight": 2,
-          "BackIsHidden": true,
+          "BackIsHidden": false,
           "UniqueBack": true,
           "Type": 0
         }
@@ -3662,12 +3659,12 @@
       "GUID": "c5a546",
       "Name": "Card",
       "Transform": {
-        "posX": -8.95538,
-        "posY": 1.56962848,
-        "posZ": -2.218833,
-        "rotX": 1.34822178,
-        "rotY": 269.99353,
-        "rotZ": -0.000157831731,
+        "posX": -8.955396,
+        "posY": 1.56962836,
+        "posZ": -2.21880651,
+        "rotX": 1.34821129,
+        "rotY": 269.993469,
+        "rotZ": -0.00015927288,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -3710,7 +3707,7 @@
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2067772400170618562/B5EF4A8A872351C08BAEFF218316F94D2FF774D9/",
           "NumWidth": 7,
           "NumHeight": 2,
-          "BackIsHidden": true,
+          "BackIsHidden": false,
           "UniqueBack": true,
           "Type": 0
         }
@@ -3723,11 +3720,11 @@
       "GUID": "70e8ff",
       "Name": "Card",
       "Transform": {
-        "posX": -8.959839,
-        "posY": 1.56956875,
-        "posZ": -4.586037,
-        "rotX": 1.34597647,
-        "rotY": 270.0025,
+        "posX": -8.959794,
+        "posY": 1.56956935,
+        "posZ": -4.585999,
+        "rotX": 1.34600043,
+        "rotY": 270.002563,
         "rotZ": 180.000061,
         "scaleX": 1.0,
         "scaleY": 1.0,
@@ -3771,7 +3768,7 @@
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2067772400170618562/B5EF4A8A872351C08BAEFF218316F94D2FF774D9/",
           "NumWidth": 7,
           "NumHeight": 2,
-          "BackIsHidden": true,
+          "BackIsHidden": false,
           "UniqueBack": true,
           "Type": 0
         }
@@ -3784,11 +3781,11 @@
       "GUID": "3e7589",
       "Name": "Card",
       "Transform": {
-        "posX": -19.6024647,
+        "posX": -19.6024952,
         "posY": 1.53360486,
-        "posZ": 4.151056,
-        "rotX": -1.71249912E-08,
-        "rotY": 270.0,
+        "posZ": 4.15110254,
+        "rotX": -3.821846E-08,
+        "rotY": 270.000031,
         "rotZ": 180.0,
         "scaleX": 1.0,
         "scaleY": 1.0,
@@ -3808,8 +3805,8 @@
         "b": 0.713235259
       },
       "Tags": [
-        "ScenarioCard",
-        "Location"
+        "Location",
+        "ScenarioCard"
       ],
       "LayoutGroupSortIndex": 0,
       "Value": 0,
@@ -3833,7 +3830,7 @@
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2067772400170618562/B5EF4A8A872351C08BAEFF218316F94D2FF774D9/",
           "NumWidth": 7,
           "NumHeight": 2,
-          "BackIsHidden": true,
+          "BackIsHidden": false,
           "UniqueBack": true,
           "Type": 0
         }
@@ -3846,10 +3843,10 @@
       "GUID": "ef5b67",
       "Name": "Card",
       "Transform": {
-        "posX": -19.8548565,
+        "posX": -19.8548946,
         "posY": 1.53360486,
-        "posZ": -3.828415,
-        "rotX": -3.65498174E-08,
+        "posZ": -3.828403,
+        "rotX": 4.628494E-08,
         "rotY": 270.000183,
         "rotZ": 180.0,
         "scaleX": 1.0,
@@ -3870,8 +3867,8 @@
         "b": 0.713235259
       },
       "Tags": [
-        "ScenarioCard",
-        "Location"
+        "Location",
+        "ScenarioCard"
       ],
       "LayoutGroupSortIndex": 0,
       "Value": 0,
@@ -3895,7 +3892,7 @@
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2067772400170618562/B5EF4A8A872351C08BAEFF218316F94D2FF774D9/",
           "NumWidth": 7,
           "NumHeight": 2,
-          "BackIsHidden": true,
+          "BackIsHidden": false,
           "UniqueBack": true,
           "Type": 0
         }
@@ -3908,11 +3905,11 @@
       "GUID": "0e06ab",
       "Name": "Card",
       "Transform": {
-        "posX": -25.7708511,
+        "posX": -25.7709,
         "posY": 1.53360486,
-        "posZ": 9.229072,
-        "rotX": 1.30205713E-08,
-        "rotY": 269.999969,
+        "posZ": 9.229108,
+        "rotX": -3.091578E-08,
+        "rotY": 269.999939,
         "rotZ": 180.0,
         "scaleX": 1.0,
         "scaleY": 1.0,
@@ -3932,8 +3929,8 @@
         "b": 0.713235259
       },
       "Tags": [
-        "ScenarioCard",
-        "Location"
+        "Location",
+        "ScenarioCard"
       ],
       "LayoutGroupSortIndex": 0,
       "Value": 0,
@@ -3957,7 +3954,7 @@
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2067772400170618562/B5EF4A8A872351C08BAEFF218316F94D2FF774D9/",
           "NumWidth": 7,
           "NumHeight": 2,
-          "BackIsHidden": true,
+          "BackIsHidden": false,
           "UniqueBack": true,
           "Type": 0
         }
@@ -3970,11 +3967,11 @@
       "GUID": "1af8ed",
       "Name": "Card",
       "Transform": {
-        "posX": -25.8691063,
-        "posY": 1.53360689,
+        "posX": -25.8690987,
+        "posY": 1.53360677,
         "posZ": -9.195909,
-        "rotX": -1.29398795E-05,
-        "rotY": 269.998535,
+        "rotX": -1.2400621E-05,
+        "rotY": 269.998474,
         "rotZ": 179.999878,
         "scaleX": 1.0,
         "scaleY": 1.0,
@@ -3994,8 +3991,8 @@
         "b": 0.713235259
       },
       "Tags": [
-        "ScenarioCard",
-        "Location"
+        "Location",
+        "ScenarioCard"
       ],
       "LayoutGroupSortIndex": 0,
       "Value": 0,
@@ -4019,7 +4016,7 @@
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2067772400170618562/B5EF4A8A872351C08BAEFF218316F94D2FF774D9/",
           "NumWidth": 7,
           "NumHeight": 2,
-          "BackIsHidden": true,
+          "BackIsHidden": false,
           "UniqueBack": true,
           "Type": 0
         }
@@ -4032,11 +4029,11 @@
       "GUID": "da6e47",
       "Name": "Card",
       "Transform": {
-        "posX": -33.4393539,
+        "posX": -33.4394,
         "posY": 1.53360486,
-        "posZ": 7.744493,
-        "rotX": -2.30062476E-08,
-        "rotY": 269.999817,
+        "posZ": 7.744506,
+        "rotX": -5.78825734E-08,
+        "rotY": 269.999634,
         "rotZ": 180.0,
         "scaleX": 1.0,
         "scaleY": 1.0,
@@ -4056,8 +4053,8 @@
         "b": 0.713235259
       },
       "Tags": [
-        "ScenarioCard",
-        "Location"
+        "Location",
+        "ScenarioCard"
       ],
       "LayoutGroupSortIndex": 0,
       "Value": 0,
@@ -4081,7 +4078,7 @@
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2067772400170618562/B5EF4A8A872351C08BAEFF218316F94D2FF774D9/",
           "NumWidth": 7,
           "NumHeight": 2,
-          "BackIsHidden": true,
+          "BackIsHidden": false,
           "UniqueBack": true,
           "Type": 0
         }
@@ -4094,11 +4091,11 @@
       "GUID": "6b0e9f",
       "Name": "Card",
       "Transform": {
-        "posX": -33.4634972,
+        "posX": -33.54,
         "posY": 1.53360486,
-        "posZ": -7.58056545,
-        "rotX": -2.96652125E-08,
-        "rotY": 270.000244,
+        "posZ": -7.650003,
+        "rotX": 2.35538113E-08,
+        "rotY": 270.000153,
         "rotZ": 180.0,
         "scaleX": 1.0,
         "scaleY": 1.0,
@@ -4118,8 +4115,8 @@
         "b": 0.713235259
       },
       "Tags": [
-        "ScenarioCard",
-        "Location"
+        "Location",
+        "ScenarioCard"
       ],
       "LayoutGroupSortIndex": 0,
       "Value": 0,
@@ -4143,7 +4140,7 @@
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2067772400170618562/B5EF4A8A872351C08BAEFF218316F94D2FF774D9/",
           "NumWidth": 7,
           "NumHeight": 2,
-          "BackIsHidden": true,
+          "BackIsHidden": false,
           "UniqueBack": true,
           "Type": 0
         }
@@ -4156,10 +4153,10 @@
       "GUID": "167e15",
       "Name": "Card",
       "Transform": {
-        "posX": -36.8383865,
+        "posX": -36.83841,
         "posY": 1.53360486,
-        "posZ": 0.0457756519,
-        "rotX": 2.783125E-08,
+        "posZ": 0.0458005,
+        "rotX": -9.080322E-08,
         "rotY": 270.000061,
         "rotZ": 180.0,
         "scaleX": 1.0,
@@ -4180,8 +4177,8 @@
         "b": 0.713235259
       },
       "Tags": [
-        "ScenarioCard",
-        "Location"
+        "Location",
+        "ScenarioCard"
       ],
       "LayoutGroupSortIndex": 0,
       "Value": 0,
@@ -4205,7 +4202,7 @@
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2067772400170618562/B5EF4A8A872351C08BAEFF218316F94D2FF774D9/",
           "NumWidth": 7,
           "NumHeight": 2,
-          "BackIsHidden": true,
+          "BackIsHidden": false,
           "UniqueBack": true,
           "Type": 0
         }
@@ -4218,12 +4215,12 @@
       "GUID": "9014b5",
       "Name": "Card",
       "Transform": {
-        "posX": -23.8263741,
-        "posY": 1.54731214,
-        "posZ": -11.3622751,
-        "rotX": 8.297613E-06,
-        "rotY": 269.982727,
-        "rotZ": 0.718108,
+        "posX": -23.8264,
+        "posY": 1.5473119,
+        "posZ": -11.3623066,
+        "rotX": 7.23039557E-06,
+        "rotY": 269.982544,
+        "rotZ": 0.718096,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -4279,15 +4276,15 @@
   "AttachedDecals": [
     {
       "Transform": {
-        "posX": 0,
-        "posY": 0,
-        "posZ": 0,
-        "rotX": 270,
-        "rotY": 0,
-        "rotZ": 0,
-        "scaleX": 2,
-        "scaleY": 2,
-        "scaleZ": 2
+        "posX": -0.0021877822,
+        "posY": -0.08963572,
+        "posZ": -0.00288731651,
+        "rotX": 270.0,
+        "rotY": 359.869568,
+        "rotZ": 0.0,
+        "scaleX": 2.00000215,
+        "scaleY": 2.00000238,
+        "scaleZ": 2.00000262
       },
       "CustomDecal": {
         "Name": "dunwich_back",
