@@ -64,7 +64,7 @@
   "Bag": {
     "Order": 0
   },
-  "LuaScript": "-- Utility memory bag by Directsun\r\n-- Version 2.5.2\r\n-- Fork of Memory Bag 2.0 by MrStump\r\n\r\nfunction updateSave()\r\n    local data_to_save = {[\"ml\"]=memoryList}\r\n    saved_data = JSON.encode(data_to_save)\r\n    self.script_state = saved_data\r\nend\r\n\r\nfunction combineMemoryFromBagsWithin()\r\n  local bagObjList = self.getObjects()\r\n  for _, bagObj in ipairs(bagObjList) do\r\n    local data = bagObj.lua_script_state\r\n      if data ~= nil then\r\n        local j = JSON.decode(data)\r\n        if j ~= nil and j.ml ~= nil then\r\n          for guid, entry in pairs(j.ml) do\r\n            memoryList[guid] = entry\r\n          end\r\n        end\r\n      end\r\n    end\r\nend\r\n\r\nfunction updateMemoryWithMoves()\r\n    memoryList = memoryListBackup\r\n    --get the first transposed object's coordinates\r\n    local obj = getObjectFromGUID(moveGuid)\r\n\r\n    -- p1 is where needs to go, p2 is where it was\r\n    local refObjPos = memoryList[moveGuid].pos\r\n    local deltaPos = findOffsetDistance(obj.getPosition(), refObjPos, nil)\r\n    local movedRotation = obj.getRotation()\r\n    for guid, entry in pairs(memoryList) do\r\n        memoryList[guid].pos.x = entry.pos.x - deltaPos.x\r\n        memoryList[guid].pos.y = entry.pos.y - deltaPos.y\r\n        memoryList[guid].pos.z = entry.pos.z - deltaPos.z\r\n        -- memoryList[guid].rot.x = movedRotation.x\r\n        -- memoryList[guid].rot.y = movedRotation.y\r\n        -- memoryList[guid].rot.z = movedRotation.z\r\n    end\r\n\r\n    --theList[obj.getGUID()] = {\r\n    --    pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\r\n    --    rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\r\n    --    lock=obj.getLock()\r\n    --}\r\n    moveList = {}\r\nend\r\n\r\nfunction onload(saved_data)\r\n    fresh = true\r\n    if saved_data ~= \"\" then\r\n        local loaded_data = JSON.decode(saved_data)\r\n        --Set up information off of loaded_data\r\n        memoryList = loaded_data.ml\r\n    else\r\n        --Set up information for if there is no saved saved data\r\n        memoryList = {}\r\n    end\r\n\r\n    moveList = {}\r\n    moveGuid = nil\r\n\r\n    if next(memoryList) == nil then\r\n        createSetupButton()\r\n    else\r\n        fresh = false\r\n        createMemoryActionButtons()\r\n    end\r\nend\r\n\r\n\r\n--Beginning Setup\r\n\r\n\r\n--Make setup button\r\nfunction createSetupButton()\r\n    self.createButton({\r\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\r\n        position={0,0.1,-2.1}, rotation={0,0,0}, height=220, width=500,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\nend\r\n\r\n--Triggered by Transpose button\r\nfunction buttonClick_transpose()\r\n    moveGuid = nil\r\n    broadcastToAll(\"Select one object and move it- all objects will move relative to the new location\", {0.75, 0.75, 1})\r\n    memoryListBackup = duplicateTable(memoryList)\r\n    memoryList = {}\r\n    moveList = {}\r\n    self.clearButtons()\r\n    createButtonsOnAllObjects(true)\r\n    createSetupActionButtons(true)\r\nend\r\n\r\n--Triggered by setup button,\r\nfunction buttonClick_setup()\r\n    memoryListBackup = duplicateTable(memoryList)\r\n    memoryList = {}\r\n    self.clearButtons()\r\n    createButtonsOnAllObjects(false)\r\n    createSetupActionButtons(false)\r\nend\r\n\r\nfunction getAllObjectsInMemory()\r\n  local objTable = {}\r\n  local curObj = {}\r\n\r\n  for guid in pairs(memoryListBackup) do\r\n    curObj = getObjectFromGUID(guid)\r\n    table.insert(objTable, curObj)\r\n  end\r\n\r\n  return objTable\r\n  -- return getAllObjects()\r\nend\r\n\r\n--Creates selection buttons on objects\r\nfunction createButtonsOnAllObjects(move)\r\n    local howManyButtons = 0\r\n\r\n    local objsToHaveButtons = {}\r\n    if move == true then\r\n      objsToHaveButtons = getAllObjectsInMemory()\r\n    else\r\n      objsToHaveButtons = getAllObjects()\r\n    end\r\n\r\n    for _, obj in ipairs(objsToHaveButtons) do\r\n        if obj ~= self then\r\n            local dummyIndex = howManyButtons\r\n            --On a normal bag, the button positions aren't the same size as the bag.\r\n            globalScaleFactor = 1 * 1/self.getScale().x\r\n            --Super sweet math to set button positions\r\n            local selfPos = self.getPosition()\r\n            local objPos = obj.getPosition()\r\n            local deltaPos = findOffsetDistance(selfPos, objPos, obj)\r\n            local objPos = rotateLocalCoordinates(deltaPos, self)\r\n            objPos.x = -objPos.x * globalScaleFactor\r\n            objPos.y = objPos.y * globalScaleFactor + 2\r\n            objPos.z = objPos.z * globalScaleFactor * 0.9\r\n            --Offset rotation of bag\r\n            local rot = self.getRotation()\r\n            rot.y = -rot.y + 180\r\n            --Create function\r\n            local funcName = \"selectButton_\" .. howManyButtons\r\n            local func = function() buttonClick_selection(dummyIndex, obj, move) end\r\n            local color = {0.75,0.25,0.25,0.6}\r\n            local colorMove = {0,0,1,0.6}\r\n            if move == true then\r\n              color = colorMove\r\n            end\r\n            self.setVar(funcName, func)\r\n            self.createButton({\r\n                click_function=funcName, function_owner=self,\r\n                position=objPos, rotation=rot, height=500, width=500,\r\n                color=color,\r\n            })\r\n            howManyButtons = howManyButtons + 1\r\n        end\r\n    end\r\nend\r\n\r\n--Creates submit and cancel buttons\r\nfunction createSetupActionButtons(move)\r\n    self.createButton({\r\n        label=\"Cancel\", click_function=\"buttonClick_cancel\", function_owner=self,\r\n      position={-0.6,0.1,-2.1}, rotation={0,0,0}, height=220, width=550,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n\r\n    self.createButton({\r\n        label=\"Submit\", click_function=\"buttonClick_submit\", function_owner=self,\r\n        position={-0.6,0.3,-2.5}, rotation={0,0,0}, height=220, width=550,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n\r\n    if move == false then\r\n      self.createButton({\r\n          label=\"Add\", click_function=\"buttonClick_add\", function_owner=self,\r\n          position={0.6,0.3,-2.1}, rotation={0,0,0}, height=220, width=550,\r\n          font_size=130, color={0,0,0}, font_color={0.25,1,0.25}\r\n      })\r\n\r\n        if fresh == false then\r\n            self.createButton({\r\n                label=\"Set New\", click_function=\"buttonClick_setNew\", function_owner=self,\r\n                position={0.6,0.3,-2.9}, rotation={0,0,0}, height=220, width=550,\r\n                font_size=130, color={0,0,0}, font_color={0.75,0.75,1}\r\n            })\r\n            self.createButton({\r\n                label=\"Remove\", click_function=\"buttonClick_remove\", function_owner=self,\r\n                position={0.6,0.3,-2.5}, rotation={0,0,0}, height=220, width=550,\r\n                font_size=130, color={0,0,0}, font_color={1,0.25,0.25}\r\n            })\r\n        end\r\n    end\r\n\r\n    self.createButton({\r\n        label=\"Reset\", click_function=\"buttonClick_reset\", function_owner=self,\r\n        position={-0.6,0.3,-2.9}, rotation={0,0,0}, height=220, width=550,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\nend\r\n\r\n\r\n--During Setup\r\n\r\n\r\n--Checks or unchecks buttons\r\nfunction buttonClick_selection(index, obj, move)\r\n    local colorMove = {0,0,1,0.6}\r\n    local color = {0,1,0,0.6}\r\n\r\n    previousGuid = selectedGuid\r\n    selectedGuid = obj.getGUID()\r\n\r\n    theList = memoryList\r\n    if move == true then\r\n       theList = moveList\r\n       if previousGuid ~= nil and previousGuid ~= selectedGuid then\r\n         local prevObj = getObjectFromGUID(previousGuid)\r\n         prevObj.highlightOff()\r\n         self.editButton({index=previousIndex, color=colorMove})\r\n         theList[previousGuid] = nil\r\n       end\r\n       previousIndex = index\r\n    end\r\n\r\n    if theList[selectedGuid] == nil then\r\n        self.editButton({index=index, color=color})\r\n        --Adding pos/rot to memory table\r\n        local pos, rot = obj.getPosition(), obj.getRotation()\r\n        --I need to add it like this or it won't save due to indexing issue\r\n        theList[obj.getGUID()] = {\r\n            pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\r\n            rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\r\n            lock=obj.getLock()\r\n        }\r\n        obj.highlightOn({0,1,0})\r\n    else\r\n      color = {0.75,0.25,0.25,0.6}\r\n      if move == true then\r\n        color = colorMove\r\n      end\r\n        self.editButton({index=index, color=color})\r\n        theList[obj.getGUID()] = nil\r\n        obj.highlightOff()\r\n    end\r\nend\r\n\r\n--Cancels selection process\r\nfunction buttonClick_cancel()\r\n    memoryList = memoryListBackup\r\n    moveList = {}\r\n    self.clearButtons()\r\n    if next(memoryList) == nil then\r\n        createSetupButton()\r\n    else\r\n        createMemoryActionButtons()\r\n    end\r\n    removeAllHighlights()\r\n    broadcastToAll(\"Selection Canceled\", {1,1,1})\r\n    moveGuid = nil\r\nend\r\n\r\n--Saves selections\r\nfunction buttonClick_submit()\r\n    fresh = false\r\n    if next(moveList) ~= nil then\r\n        for guid in pairs(moveList) do\r\n            moveGuid = guid\r\n        end\r\n        if memoryListBackup[moveGuid] == nil then\r\n            broadcastToAll(\"Item selected for moving is not already in memory\", {1, 0.25, 0.25})\r\n        else\r\n            broadcastToAll(\"Moving all items in memory relative to new objects position!\", {0.75, 0.75, 1})\r\n            self.clearButtons()\r\n            createMemoryActionButtons()\r\n            local count = 0\r\n            for guid in pairs(moveList) do\r\n                moveGuid = guid\r\n                count = count + 1\r\n                local obj = getObjectFromGUID(guid)\r\n                if obj ~= nil then obj.highlightOff() end\r\n            end\r\n            updateMemoryWithMoves()\r\n            updateSave()\r\n            buttonClick_place()\r\n        end\r\n    elseif next(memoryList) == nil and moveGuid == nil then\r\n      memoryList = memoryListBackup\r\n      broadcastToAll(\"No selections made.\", {0.75, 0.25, 0.25})\r\n    end\r\n    combineMemoryFromBagsWithin()\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for guid in pairs(memoryList) do\r\n        count = count + 1\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then obj.highlightOff() end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    updateSave()\r\n    moveGuid = nil\r\nend\r\n\r\nfunction combineTables(first_table, second_table)\r\n  for k,v in pairs(second_table) do first_table[k] = v end\r\nend\r\n\r\nfunction buttonClick_add()\r\n    fresh = false\r\n    combineTables(memoryList, memoryListBackup)\r\n    broadcastToAll(\"Adding internal bags and selections to existing memory\", {0.25, 0.75, 0.25})\r\n    combineMemoryFromBagsWithin()\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for guid in pairs(memoryList) do\r\n        count = count + 1\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then obj.highlightOff() end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    updateSave()\r\nend\r\n\r\nfunction buttonClick_remove()\r\n        broadcastToAll(\"Removing Selected Entries From Memory\", {1.0, 0.25, 0.25})\r\n        self.clearButtons()\r\n        createMemoryActionButtons()\r\n        local count = 0\r\n        for guid in pairs(memoryList) do\r\n            count = count + 1\r\n            memoryListBackup[guid] = nil\r\n            local obj = getObjectFromGUID(guid)\r\n            if obj ~= nil then obj.highlightOff() end\r\n        end\r\n        broadcastToAll(count..\" Objects Removed\", {1,1,1})\r\n        memoryList = memoryListBackup\r\n        updateSave()\r\nend\r\n\r\nfunction buttonClick_setNew()\r\n    broadcastToAll(\"Setting new position relative to items in memory\", {0.75, 0.75, 1})\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for _, obj in ipairs(getAllObjects()) do\r\n        guid = obj.guid\r\n        if memoryListBackup[guid] ~= nil then\r\n            count = count + 1\r\n            memoryListBackup[guid].pos = obj.getPosition()\r\n            memoryListBackup[guid].rot = obj.getRotation()\r\n            memoryListBackup[guid].lock = obj.getLock()\r\n        end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    memoryList = memoryListBackup\r\n    updateSave()\r\nend\r\n\r\n--Resets bag to starting status\r\nfunction buttonClick_reset()\r\n    fresh = true\r\n    memoryList = {}\r\n    self.clearButtons()\r\n    createSetupButton()\r\n    removeAllHighlights()\r\n    broadcastToAll(\"Tool Reset\", {1,1,1})\r\n    updateSave()\r\nend\r\n\r\n\r\n--After Setup\r\n\r\n\r\n--Creates recall and place buttons\r\nfunction createMemoryActionButtons()\r\n    self.createButton({\r\n        label=\"Place\", click_function=\"buttonClick_place\", function_owner=self,\r\n        position={0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n    self.createButton({\r\n        label=\"Recall\", click_function=\"buttonClick_recall\", function_owner=self,\r\n        position={-0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n    self.createButton({\r\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\r\n        position={0,0.1,-2.1}, rotation={0,0,0}, height=220, width=500,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n---    self.createButton({\r\n---      label=\"Move\", click_function=\"buttonClick_transpose\", function_owner=self,\r\n---      position={-2.8,0.3,0}, rotation={0,0,0}, height=350, width=800,\r\n---      font_size=250, color={0,0,0}, font_color={0.75,0.75,1}\r\n---    })\r\nend\r\n\r\n--Sends objects from bag/table to their saved position/rotation\r\nfunction buttonClick_place()\r\n    local bagObjList = self.getObjects()\r\n    for guid, entry in pairs(memoryList) do\r\n        local obj = getObjectFromGUID(guid)\r\n        --If obj is out on the table, move it to the saved pos/rot\r\n        if obj ~= nil then\r\n            obj.setPositionSmooth(entry.pos)\r\n            obj.setRotationSmooth(entry.rot)\r\n            obj.setLock(entry.lock)\r\n        else\r\n            --If obj is inside of the bag\r\n            for _, bagObj in ipairs(bagObjList) do\r\n                if bagObj.guid == guid then\r\n                    local item = self.takeObject({\r\n                        guid=guid, position=entry.pos, rotation=entry.rot, smooth=false\r\n                    })\r\n                    item.setLock(entry.lock)\r\n                    break\r\n                end\r\n            end\r\n        end\r\n    end\r\n    broadcastToAll(\"Objects Placed\", {1,1,1})\r\nend\r\n\r\n--Recalls objects to bag from table\r\nfunction buttonClick_recall()\r\n    for guid, entry in pairs(memoryList) do\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then self.putObject(obj) end\r\n    end\r\n    broadcastToAll(\"Objects Recalled\", {1,1,1})\r\nend\r\n\r\n\r\n--Utility functions\r\n\r\n\r\n--Find delta (difference) between 2 x/y/z coordinates\r\nfunction findOffsetDistance(p1, p2, obj)\r\n    local yOffset = 0\r\n    if obj ~= nil then\r\n        local bounds = obj.getBounds()\r\n        yOffset = (bounds.size.y - bounds.offset.y)\r\n    end\r\n    local deltaPos = {}\r\n    deltaPos.x = (p2.x-p1.x)\r\n    deltaPos.y = (p2.y-p1.y) + yOffset\r\n    deltaPos.z = (p2.z-p1.z)\r\n    return deltaPos\r\nend\r\n\r\n--Used to rotate a set of coordinates by an angle\r\nfunction rotateLocalCoordinates(desiredPos, obj)\r\n\tlocal objPos, objRot = obj.getPosition(), obj.getRotation()\r\n    local angle = math.rad(objRot.y)\r\n\tlocal x = desiredPos.x * math.cos(angle) - desiredPos.z * math.sin(angle)\r\n\tlocal z = desiredPos.x * math.sin(angle) + desiredPos.z * math.cos(angle)\r\n\t--return {x=objPos.x+x, y=objPos.y+desiredPos.y, z=objPos.z+z}\r\n    return {x=x, y=desiredPos.y, z=z}\r\nend\r\n\r\nfunction rotateMyCoordinates(desiredPos, obj)\r\n\tlocal angle = math.rad(obj.getRotation().y)\r\n  local x = desiredPos.x * math.sin(angle)\r\n\tlocal z = desiredPos.z * math.cos(angle)\r\n    return {x=x, y=desiredPos.y, z=z}\r\nend\r\n\r\n--Coroutine delay, in seconds\r\nfunction wait(time)\r\n    local start = os.time()\r\n    repeat coroutine.yield(0) until os.time() > start + time\r\nend\r\n\r\n--Duplicates a table (needed to prevent it making reference to the same objects)\r\nfunction duplicateTable(oldTable)\r\n    local newTable = {}\r\n    for k, v in pairs(oldTable) do\r\n        newTable[k] = v\r\n    end\r\n    return newTable\r\nend\r\n\r\n--Moves scripted highlight from all objects\r\nfunction removeAllHighlights()\r\n    for _, obj in ipairs(getAllObjects()) do\r\n        obj.highlightOff()\r\n    end\r\nend\r\n\r\n--Round number (num) to the Nth decimal (dec)\r\nfunction round(num, dec)\r\n  local mult = 10^(dec or 0)\r\n  return math.floor(num * mult + 0.5) / mult\r\nend\r\n",
+  "LuaScript": "-- Utility memory bag by Directsun\n-- Version 2.5.2\n-- Fork of Memory Bag 2.0 by MrStump\n\nfunction updateSave()\n    local data_to_save = {[\"ml\"]=memoryList}\n    saved_data = JSON.encode(data_to_save)\n    self.script_state = saved_data\nend\n\nfunction combineMemoryFromBagsWithin()\n  local bagObjList = self.getObjects()\n  for _, bagObj in ipairs(bagObjList) do\n    local data = bagObj.lua_script_state\n      if data ~= nil then\n        local j = JSON.decode(data)\n        if j ~= nil and j.ml ~= nil then\n          for guid, entry in pairs(j.ml) do\n            memoryList[guid] = entry\n          end\n        end\n      end\n    end\nend\n\nfunction updateMemoryWithMoves()\n    memoryList = memoryListBackup\n    --get the first transposed object's coordinates\n    local obj = getObjectFromGUID(moveGuid)\n\n    -- p1 is where needs to go, p2 is where it was\n    local refObjPos = memoryList[moveGuid].pos\n    local deltaPos = findOffsetDistance(obj.getPosition(), refObjPos, nil)\n    local movedRotation = obj.getRotation()\n    for guid, entry in pairs(memoryList) do\n        memoryList[guid].pos.x = entry.pos.x - deltaPos.x\n        memoryList[guid].pos.y = entry.pos.y - deltaPos.y\n        memoryList[guid].pos.z = entry.pos.z - deltaPos.z\n        -- memoryList[guid].rot.x = movedRotation.x\n        -- memoryList[guid].rot.y = movedRotation.y\n        -- memoryList[guid].rot.z = movedRotation.z\n    end\n\n    --theList[obj.getGUID()] = {\n    --    pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\n    --    rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\n    --    lock=obj.getLock()\n    --}\n    moveList = {}\nend\n\nfunction onload(saved_data)\n    fresh = true\n    if saved_data ~= \"\" then\n        local loaded_data = JSON.decode(saved_data)\n        --Set up information off of loaded_data\n        memoryList = loaded_data.ml\n    else\n        --Set up information for if there is no saved saved data\n        memoryList = {}\n    end\n\n    moveList = {}\n    moveGuid = nil\n\n    if next(memoryList) == nil then\n        createSetupButton()\n    else\n        fresh = false\n        createMemoryActionButtons()\n    end\nend\n\n\n--Beginning Setup\n\n\n--Make setup button\nfunction createSetupButton()\n    self.createButton({\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\n        position={0,0.1,-2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\nend\n\n--Triggered by Transpose button\nfunction buttonClick_transpose()\n    moveGuid = nil\n    broadcastToAll(\"Select one object and move it- all objects will move relative to the new location\", {0.75, 0.75, 1})\n    memoryListBackup = duplicateTable(memoryList)\n    memoryList = {}\n    moveList = {}\n    self.clearButtons()\n    createButtonsOnAllObjects(true)\n    createSetupActionButtons(true)\nend\n\n--Triggered by setup button,\nfunction buttonClick_setup()\n    memoryListBackup = duplicateTable(memoryList)\n    memoryList = {}\n    self.clearButtons()\n    createButtonsOnAllObjects(false)\n    createSetupActionButtons(false)\nend\n\nfunction getAllObjectsInMemory()\n  local objTable = {}\n  local curObj = {}\n\n  for guid in pairs(memoryListBackup) do\n    curObj = getObjectFromGUID(guid)\n    table.insert(objTable, curObj)\n  end\n\n  return objTable\n  -- return getAllObjects()\nend\n\n--Creates selection buttons on objects\nfunction createButtonsOnAllObjects(move)\n    local howManyButtons = 0\n\n    local objsToHaveButtons = {}\n    if move == true then\n      objsToHaveButtons = getAllObjectsInMemory()\n    else\n      objsToHaveButtons = getAllObjects()\n    end\n\n    for _, obj in ipairs(objsToHaveButtons) do\n        if obj ~= self then\n            local dummyIndex = howManyButtons\n            --On a normal bag, the button positions aren't the same size as the bag.\n            globalScaleFactor = 1 * 1/self.getScale().x\n            --Super sweet math to set button positions\n            local selfPos = self.getPosition()\n            local objPos = obj.getPosition()\n            local deltaPos = findOffsetDistance(selfPos, objPos, obj)\n            local objPos = rotateLocalCoordinates(deltaPos, self)\n            objPos.x = -objPos.x * globalScaleFactor\n            objPos.y = objPos.y * globalScaleFactor + 2\n            objPos.z = objPos.z * globalScaleFactor * 0.9\n            --Offset rotation of bag\n            local rot = self.getRotation()\n            rot.y = -rot.y + 180\n            --Create function\n            local funcName = \"selectButton_\" .. howManyButtons\n            local func = function() buttonClick_selection(dummyIndex, obj, move) end\n            local color = {0.75,0.25,0.25,0.6}\n            local colorMove = {0,0,1,0.6}\n            if move == true then\n              color = colorMove\n            end\n            self.setVar(funcName, func)\n            self.createButton({\n                click_function=funcName, function_owner=self,\n                position=objPos, rotation=rot, height=500, width=500,\n                color=color,\n            })\n            howManyButtons = howManyButtons + 1\n        end\n    end\nend\n\n--Creates submit and cancel buttons\nfunction createSetupActionButtons(move)\n    self.createButton({\n        label=\"Cancel\", click_function=\"buttonClick_cancel\", function_owner=self,\n      position={-0.6,0.1,-2.1}, rotation={0,0,0}, height=220, width=550,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n\n    self.createButton({\n        label=\"Submit\", click_function=\"buttonClick_submit\", function_owner=self,\n        position={-0.6,0.3,-2.5}, rotation={0,0,0}, height=220, width=550,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n\n    if move == false then\n      self.createButton({\n          label=\"Add\", click_function=\"buttonClick_add\", function_owner=self,\n          position={0.6,0.3,-2.1}, rotation={0,0,0}, height=220, width=550,\n          font_size=130, color={0,0,0}, font_color={0.25,1,0.25}\n      })\n\n        if fresh == false then\n            self.createButton({\n                label=\"Set New\", click_function=\"buttonClick_setNew\", function_owner=self,\n                position={0.6,0.3,-2.9}, rotation={0,0,0}, height=220, width=550,\n                font_size=130, color={0,0,0}, font_color={0.75,0.75,1}\n            })\n            self.createButton({\n                label=\"Remove\", click_function=\"buttonClick_remove\", function_owner=self,\n                position={0.6,0.3,-2.5}, rotation={0,0,0}, height=220, width=550,\n                font_size=130, color={0,0,0}, font_color={1,0.25,0.25}\n            })\n        end\n    end\n\n    self.createButton({\n        label=\"Reset\", click_function=\"buttonClick_reset\", function_owner=self,\n        position={-0.6,0.3,-2.9}, rotation={0,0,0}, height=220, width=550,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\nend\n\n\n--During Setup\n\n\n--Checks or unchecks buttons\nfunction buttonClick_selection(index, obj, move)\n    local colorMove = {0,0,1,0.6}\n    local color = {0,1,0,0.6}\n\n    previousGuid = selectedGuid\n    selectedGuid = obj.getGUID()\n\n    theList = memoryList\n    if move == true then\n       theList = moveList\n       if previousGuid ~= nil and previousGuid ~= selectedGuid then\n         local prevObj = getObjectFromGUID(previousGuid)\n         prevObj.highlightOff()\n         self.editButton({index=previousIndex, color=colorMove})\n         theList[previousGuid] = nil\n       end\n       previousIndex = index\n    end\n\n    if theList[selectedGuid] == nil then\n        self.editButton({index=index, color=color})\n        --Adding pos/rot to memory table\n        local pos, rot = obj.getPosition(), obj.getRotation()\n        --I need to add it like this or it won't save due to indexing issue\n        theList[obj.getGUID()] = {\n            pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\n            rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\n            lock=obj.getLock()\n        }\n        obj.highlightOn({0,1,0})\n    else\n      color = {0.75,0.25,0.25,0.6}\n      if move == true then\n        color = colorMove\n      end\n        self.editButton({index=index, color=color})\n        theList[obj.getGUID()] = nil\n        obj.highlightOff()\n    end\nend\n\n--Cancels selection process\nfunction buttonClick_cancel()\n    memoryList = memoryListBackup\n    moveList = {}\n    self.clearButtons()\n    if next(memoryList) == nil then\n        createSetupButton()\n    else\n        createMemoryActionButtons()\n    end\n    removeAllHighlights()\n    broadcastToAll(\"Selection Canceled\", {1,1,1})\n    moveGuid = nil\nend\n\n--Saves selections\nfunction buttonClick_submit()\n    fresh = false\n    if next(moveList) ~= nil then\n        for guid in pairs(moveList) do\n            moveGuid = guid\n        end\n        if memoryListBackup[moveGuid] == nil then\n            broadcastToAll(\"Item selected for moving is not already in memory\", {1, 0.25, 0.25})\n        else\n            broadcastToAll(\"Moving all items in memory relative to new objects position!\", {0.75, 0.75, 1})\n            self.clearButtons()\n            createMemoryActionButtons()\n            local count = 0\n            for guid in pairs(moveList) do\n                moveGuid = guid\n                count = count + 1\n                local obj = getObjectFromGUID(guid)\n                if obj ~= nil then obj.highlightOff() end\n            end\n            updateMemoryWithMoves()\n            updateSave()\n            buttonClick_place()\n        end\n    elseif next(memoryList) == nil and moveGuid == nil then\n      memoryList = memoryListBackup\n      broadcastToAll(\"No selections made.\", {0.75, 0.25, 0.25})\n    end\n    combineMemoryFromBagsWithin()\n    self.clearButtons()\n    createMemoryActionButtons()\n    local count = 0\n    for guid in pairs(memoryList) do\n        count = count + 1\n        local obj = getObjectFromGUID(guid)\n        if obj ~= nil then obj.highlightOff() end\n    end\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\n    updateSave()\n    moveGuid = nil\nend\n\nfunction combineTables(first_table, second_table)\n  for k,v in pairs(second_table) do first_table[k] = v end\nend\n\nfunction buttonClick_add()\n    fresh = false\n    combineTables(memoryList, memoryListBackup)\n    broadcastToAll(\"Adding internal bags and selections to existing memory\", {0.25, 0.75, 0.25})\n    combineMemoryFromBagsWithin()\n    self.clearButtons()\n    createMemoryActionButtons()\n    local count = 0\n    for guid in pairs(memoryList) do\n        count = count + 1\n        local obj = getObjectFromGUID(guid)\n        if obj ~= nil then obj.highlightOff() end\n    end\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\n    updateSave()\nend\n\nfunction buttonClick_remove()\n        broadcastToAll(\"Removing Selected Entries From Memory\", {1.0, 0.25, 0.25})\n        self.clearButtons()\n        createMemoryActionButtons()\n        local count = 0\n        for guid in pairs(memoryList) do\n            count = count + 1\n            memoryListBackup[guid] = nil\n            local obj = getObjectFromGUID(guid)\n            if obj ~= nil then obj.highlightOff() end\n        end\n        broadcastToAll(count..\" Objects Removed\", {1,1,1})\n        memoryList = memoryListBackup\n        updateSave()\nend\n\nfunction buttonClick_setNew()\n    broadcastToAll(\"Setting new position relative to items in memory\", {0.75, 0.75, 1})\n    self.clearButtons()\n    createMemoryActionButtons()\n    local count = 0\n    for _, obj in ipairs(getAllObjects()) do\n        guid = obj.guid\n        if memoryListBackup[guid] ~= nil then\n            count = count + 1\n            memoryListBackup[guid].pos = obj.getPosition()\n            memoryListBackup[guid].rot = obj.getRotation()\n            memoryListBackup[guid].lock = obj.getLock()\n        end\n    end\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\n    memoryList = memoryListBackup\n    updateSave()\nend\n\n--Resets bag to starting status\nfunction buttonClick_reset()\n    fresh = true\n    memoryList = {}\n    self.clearButtons()\n    createSetupButton()\n    removeAllHighlights()\n    broadcastToAll(\"Tool Reset\", {1,1,1})\n    updateSave()\nend\n\n\n--After Setup\n\n\n--Creates recall and place buttons\nfunction createMemoryActionButtons()\n    self.createButton({\n        label=\"Place\", click_function=\"buttonClick_place\", function_owner=self,\n        position={0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n    self.createButton({\n        label=\"Recall\", click_function=\"buttonClick_recall\", function_owner=self,\n        position={-0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n    self.createButton({\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\n        position={0,0.1,-2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n---    self.createButton({\n---      label=\"Move\", click_function=\"buttonClick_transpose\", function_owner=self,\n---      position={-2.8,0.3,0}, rotation={0,0,0}, height=350, width=800,\n---      font_size=250, color={0,0,0}, font_color={0.75,0.75,1}\n---    })\nend\n\n--Sends objects from bag/table to their saved position/rotation\nfunction buttonClick_place()\n    local bagObjList = self.getObjects()\n    for guid, entry in pairs(memoryList) do\n        local obj = getObjectFromGUID(guid)\n        --If obj is out on the table, move it to the saved pos/rot\n        if obj ~= nil then\n            obj.setPositionSmooth(entry.pos)\n            obj.setRotationSmooth(entry.rot)\n            obj.setLock(entry.lock)\n        else\n            --If obj is inside of the bag\n            for _, bagObj in ipairs(bagObjList) do\n                if bagObj.guid == guid then\n                    local item = self.takeObject({\n                        guid=guid, position=entry.pos, rotation=entry.rot, smooth=false\n                    })\n                    item.setLock(entry.lock)\n                    break\n                end\n            end\n        end\n    end\n    broadcastToAll(\"Objects Placed\", {1,1,1})\nend\n\n--Recalls objects to bag from table\nfunction buttonClick_recall()\n    for guid, entry in pairs(memoryList) do\n        local obj = getObjectFromGUID(guid)\n        if obj ~= nil then self.putObject(obj) end\n    end\n    broadcastToAll(\"Objects Recalled\", {1,1,1})\nend\n\n\n--Utility functions\n\n\n--Find delta (difference) between 2 x/y/z coordinates\nfunction findOffsetDistance(p1, p2, obj)\n    local yOffset = 0\n    if obj ~= nil then\n        local bounds = obj.getBounds()\n        yOffset = (bounds.size.y - bounds.offset.y)\n    end\n    local deltaPos = {}\n    deltaPos.x = (p2.x-p1.x)\n    deltaPos.y = (p2.y-p1.y) + yOffset\n    deltaPos.z = (p2.z-p1.z)\n    return deltaPos\nend\n\n--Used to rotate a set of coordinates by an angle\nfunction rotateLocalCoordinates(desiredPos, obj)\n\tlocal objPos, objRot = obj.getPosition(), obj.getRotation()\n    local angle = math.rad(objRot.y)\n\tlocal x = desiredPos.x * math.cos(angle) - desiredPos.z * math.sin(angle)\n\tlocal z = desiredPos.x * math.sin(angle) + desiredPos.z * math.cos(angle)\n\t--return {x=objPos.x+x, y=objPos.y+desiredPos.y, z=objPos.z+z}\n    return {x=x, y=desiredPos.y, z=z}\nend\n\nfunction rotateMyCoordinates(desiredPos, obj)\n\tlocal angle = math.rad(obj.getRotation().y)\n  local x = desiredPos.x * math.sin(angle)\n\tlocal z = desiredPos.z * math.cos(angle)\n    return {x=x, y=desiredPos.y, z=z}\nend\n\n--Coroutine delay, in seconds\nfunction wait(time)\n    local start = os.time()\n    repeat coroutine.yield(0) until os.time() > start + time\nend\n\n--Duplicates a table (needed to prevent it making reference to the same objects)\nfunction duplicateTable(oldTable)\n    local newTable = {}\n    for k, v in pairs(oldTable) do\n        newTable[k] = v\n    end\n    return newTable\nend\n\n--Moves scripted highlight from all objects\nfunction removeAllHighlights()\n    for _, obj in ipairs(getAllObjects()) do\n        obj.highlightOff()\n    end\nend\n\n--Round number (num) to the Nth decimal (dec)\nfunction round(num, dec)\n  local mult = 10^(dec or 0)\n  return math.floor(num * mult + 0.5) / mult\nend\n",
   "LuaScriptState": "{\"ml\":{\"028367\":{\"lock\":true,\"pos\":{\"x\":-4.1029,\"y\":1.583,\"z\":-14.9498},\"rot\":{\"x\":0,\"y\":269.9966,\"z\":0}},\"04d26a\":{\"lock\":false,\"pos\":{\"x\":-3.8502,\"y\":1.5966,\"z\":-10.3856},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"0689c6\":{\"lock\":false,\"pos\":{\"x\":-12.1419,\"y\":1.5891,\"z\":-9.4949},\"rot\":{\"x\":0,\"y\":269.9998,\"z\":180}},\"0e42d0\":{\"lock\":false,\"pos\":{\"x\":-0.7382,\"y\":1.4872,\"z\":44.2089},\"rot\":{\"x\":0,\"y\":270.0013,\"z\":359.9233}},\"24d254\":{\"lock\":false,\"pos\":{\"x\":-23.64,\"y\":1.52,\"z\":-3.83},\"rot\":{\"x\":0,\"y\":359.993,\"z\":0}},\"2a5bf9\":{\"lock\":false,\"pos\":{\"x\":-33.54,\"y\":1.52,\"z\":-7.65},\"rot\":{\"x\":0,\"y\":89.9992,\"z\":0}},\"2c58b1\":{\"lock\":false,\"pos\":{\"x\":-26.94,\"y\":1.52,\"z\":0},\"rot\":{\"x\":0,\"y\":90,\"z\":0}},\"3e2b87\":{\"lock\":false,\"pos\":{\"x\":-30.233,\"y\":1.52,\"z\":3.8301},\"rot\":{\"x\":0,\"y\":359.993,\"z\":0}},\"4ec7d2\":{\"lock\":false,\"pos\":{\"x\":47.8652,\"y\":1.4951,\"z\":70.6974},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"53c420\":{\"lock\":false,\"pos\":{\"x\":-40.14,\"y\":1.52,\"z\":0},\"rot\":{\"x\":0,\"y\":90,\"z\":0}},\"5870b6\":{\"lock\":false,\"pos\":{\"x\":-36.84,\"y\":1.52,\"z\":-3.83},\"rot\":{\"x\":0,\"y\":359.9929,\"z\":0}},\"5f1dd1\":{\"lock\":false,\"pos\":{\"x\":44.7747,\"y\":1.4951,\"z\":70.8778},\"rot\":{\"x\":0,\"y\":179.9998,\"z\":0}},\"6e9cec\":{\"lock\":false,\"pos\":{\"x\":-33.5399,\"y\":1.52,\"z\":7.65},\"rot\":{\"x\":0,\"y\":89.9998,\"z\":0}},\"6f9785\":{\"lock\":false,\"pos\":{\"x\":-30.24,\"y\":1.52,\"z\":-3.83},\"rot\":{\"x\":0,\"y\":359.9931,\"z\":0}},\"6f9866\":{\"lock\":false,\"pos\":{\"x\":-26.9427,\"y\":1.52,\"z\":7.6503},\"rot\":{\"x\":0,\"y\":90,\"z\":0}},\"7234af\":{\"lock\":false,\"pos\":{\"x\":-36.8421,\"y\":1.52,\"z\":3.8298},\"rot\":{\"x\":0,\"y\":359.9933,\"z\":0}},\"8c6827\":{\"lock\":false,\"pos\":{\"x\":-26.94,\"y\":1.52,\"z\":-7.65},\"rot\":{\"x\":0,\"y\":90,\"z\":0}},\"98554c\":{\"lock\":false,\"pos\":{\"x\":-23.6378,\"y\":1.52,\"z\":3.83},\"rot\":{\"x\":0,\"y\":359.993,\"z\":0}},\"a332b0\":{\"lock\":false,\"pos\":{\"x\":-33.54,\"y\":1.52,\"z\":0},\"rot\":{\"x\":0,\"y\":89.9993,\"z\":0}},\"a52301\":{\"lock\":false,\"pos\":{\"x\":41.4141,\"y\":1.4565,\"z\":70.8599},\"rot\":{\"x\":0,\"y\":90.004,\"z\":0}},\"a69f5b\":{\"lock\":false,\"pos\":{\"x\":-13.475,\"y\":1.4872,\"z\":44.1896},\"rot\":{\"x\":0,\"y\":270.0016,\"z\":359.9231}},\"b64654\":{\"lock\":false,\"pos\":{\"x\":-2.9419,\"y\":1.6184,\"z\":-5.1062},\"rot\":{\"x\":0,\"y\":180.0559,\"z\":0}},\"c3e31e\":{\"lock\":false,\"pos\":{\"x\":-43.4441,\"y\":1.5336,\"z\":0},\"rot\":{\"x\":0,\"y\":270.0008,\"z\":180}},\"e01650\":{\"lock\":false,\"pos\":{\"x\":-12.1034,\"y\":1.5336,\"z\":-6.7749},\"rot\":{\"x\":0,\"y\":270.0003,\"z\":180}},\"f642af\":{\"lock\":false,\"pos\":{\"x\":-3.9341,\"y\":1.758,\"z\":5.7194},\"rot\":{\"x\":0,\"y\":270.0007,\"z\":180}},\"f995b0\":{\"lock\":false,\"pos\":{\"x\":-2.9411,\"y\":1.6184,\"z\":0.3932},\"rot\":{\"x\":0,\"y\":180.0007,\"z\":0}},\"fbf096\":{\"lock\":false,\"pos\":{\"x\":1.694,\"y\":1.558,\"z\":14.2415},\"rot\":{\"x\":0,\"y\":225,\"z\":0}},\"fbf20d\":{\"lock\":false,\"pos\":{\"x\":-41.861,\"y\":1.5336,\"z\":2.3808},\"rot\":{\"x\":0,\"y\":269.9901,\"z\":0}}}}",
   "XmlUI": "",
   "ContainedObjects": [
@@ -467,7 +467,7 @@
                   },
                   "Nickname": "Lobotomized",
                   "Description": "",
-                  "GMNotes": "{\r\n  \"id\": \"MCR71\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Injury.\",\n  \"weakness\": true,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+                  "GMNotes": "{\n  \"id\": \"MCR71\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Injury.\",\n  \"weakness\": true,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
                   "AltLookAngle": {
                     "x": 0.0,
                     "y": 0.0,
@@ -529,7 +529,7 @@
                   },
                   "Nickname": "Lobotomized",
                   "Description": "",
-                  "GMNotes": "{\r\n  \"id\": \"MCR72\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Injury.\",\n  \"weakness\": true,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+                  "GMNotes": "{\n  \"id\": \"MCR72\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Injury.\",\n  \"weakness\": true,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
                   "AltLookAngle": {
                     "x": 0.0,
                     "y": 0.0,
@@ -591,7 +591,7 @@
                   },
                   "Nickname": "Lobotomized",
                   "Description": "",
-                  "GMNotes": "{\r\n  \"id\": \"MCR73\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Injury.\",\n  \"weakness\": true,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+                  "GMNotes": "{\n  \"id\": \"MCR73\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Injury.\",\n  \"weakness\": true,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
                   "AltLookAngle": {
                     "x": 0.0,
                     "y": 0.0,
@@ -653,7 +653,7 @@
                   },
                   "Nickname": "Lobotomized",
                   "Description": "",
-                  "GMNotes": "{\r\n  \"id\": \"MCR74\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Injury.\",\n  \"weakness\": true,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+                  "GMNotes": "{\n  \"id\": \"MCR74\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Injury.\",\n  \"weakness\": true,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
                   "AltLookAngle": {
                     "x": 0.0,
                     "y": 0.0,
@@ -810,7 +810,7 @@
                   },
                   "Nickname": "The Quickening",
                   "Description": "",
-                  "GMNotes": "{\r\n  \"id\": \"MCR75\",\n  \"class\": \"Neutral\",\r\n  \"type\": \"Event\",\n  \"traits\": \"Insight. Spirit.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+                  "GMNotes": "{\n  \"id\": \"MCR75\",\n  \"class\": \"Neutral\",\n  \"type\": \"Event\",\n  \"traits\": \"Insight. Spirit.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
                   "AltLookAngle": {
                     "x": 0.0,
                     "y": 0.0,
@@ -871,7 +871,7 @@
                   },
                   "Nickname": "The Quickening",
                   "Description": "",
-                  "GMNotes": "{\r\n  \"id\": \"MCR76\",\n  \"class\": \"Neutral\",\r\n  \"type\": \"Event\",\n  \"traits\": \"Insight. Spirit.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+                  "GMNotes": "{\n  \"id\": \"MCR76\",\n  \"class\": \"Neutral\",\n  \"type\": \"Event\",\n  \"traits\": \"Insight. Spirit.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
                   "AltLookAngle": {
                     "x": 0.0,
                     "y": 0.0,
@@ -932,7 +932,7 @@
                   },
                   "Nickname": "The Quickening",
                   "Description": "",
-                  "GMNotes": "{\r\n  \"id\": \"MCR77\",\n  \"class\": \"Neutral\",\r\n  \"type\": \"Event\",\n  \"traits\": \"Insight. Spirit.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+                  "GMNotes": "{\n  \"id\": \"MCR77\",\n  \"class\": \"Neutral\",\n  \"type\": \"Event\",\n  \"traits\": \"Insight. Spirit.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
                   "AltLookAngle": {
                     "x": 0.0,
                     "y": 0.0,
@@ -993,7 +993,7 @@
                   },
                   "Nickname": "The Quickening",
                   "Description": "",
-                  "GMNotes": "{\r\n  \"id\": \"MCR78\",\n  \"class\": \"Neutral\",\r\n  \"type\": \"Event\",\n  \"traits\": \"Insight. Spirit.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+                  "GMNotes": "{\n  \"id\": \"MCR78\",\n  \"class\": \"Neutral\",\n  \"type\": \"Event\",\n  \"traits\": \"Insight. Spirit.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
                   "AltLookAngle": {
                     "x": 0.0,
                     "y": 0.0,
@@ -1056,7 +1056,7 @@
               },
               "Nickname": "Fringe Tourniquet: Plume of Samael",
               "Description": "",
-              "GMNotes": "{\r\n  \"id\": \"MCR70\",\n  \"class\": \"Neutral\",\r\n  \"type\": \"Asset\",\n  \"cost\": 3,\n  \"traits\": \"Item. Charm. Occult.\",\n  \"wildIcons\": 1,\n  \"willpowerIcons\": 1,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+              "GMNotes": "{\n  \"id\": \"MCR70\",\n  \"class\": \"Neutral\",\n  \"type\": \"Asset\",\n  \"cost\": 3,\n  \"traits\": \"Item. Charm. Occult.\",\n  \"wildIcons\": 1,\n  \"willpowerIcons\": 1,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
               "AltLookAngle": {
                 "x": 0.0,
                 "y": 0.0,
@@ -1118,7 +1118,7 @@
               },
               "Nickname": "Archibald Killjoy: In Treatment",
               "Description": "",
-              "GMNotes": "{\r\n  \"id\": \"MCR69\",\n  \"class\": \"Neutral\",\r\n  \"type\": \"Asset\",\n  \"cost\": 2,\n  \"traits\": \"Ally. Medic.\",\n  \"wildIcons\": 1,\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+              "GMNotes": "{\n  \"id\": \"MCR69\",\n  \"class\": \"Neutral\",\n  \"type\": \"Asset\",\n  \"cost\": 2,\n  \"traits\": \"Ally. Medic.\",\n  \"wildIcons\": 1,\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
               "AltLookAngle": {
                 "x": 0.0,
                 "y": 0.0,
@@ -1275,7 +1275,7 @@
               },
               "Nickname": "Sanguis Aeternum",
               "Description": "",
-              "GMNotes": "{\r\n  \"id\": \"MCR65\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Omen. Endtimes.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+              "GMNotes": "{\n  \"id\": \"MCR65\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Omen. Endtimes.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
               "AltLookAngle": {
                 "x": 0.0,
                 "y": 0.0,
@@ -1336,7 +1336,7 @@
               },
               "Nickname": "Sanguis Aeternum",
               "Description": "",
-              "GMNotes": "{\r\n  \"id\": \"MCR66\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Omen. Endtimes.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+              "GMNotes": "{\n  \"id\": \"MCR66\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Omen. Endtimes.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
               "AltLookAngle": {
                 "x": 0.0,
                 "y": 0.0,
@@ -1397,7 +1397,7 @@
               },
               "Nickname": "Sanguis Aeternum",
               "Description": "",
-              "GMNotes": "{\r\n  \"id\": \"MCR67\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Omen. Endtimes.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+              "GMNotes": "{\n  \"id\": \"MCR67\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Omen. Endtimes.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
               "AltLookAngle": {
                 "x": 0.0,
                 "y": 0.0,
@@ -1458,7 +1458,7 @@
               },
               "Nickname": "Sanguis Aeternum",
               "Description": "",
-              "GMNotes": "{\r\n  \"id\": \"MCR68\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Omen. Endtimes.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+              "GMNotes": "{\n  \"id\": \"MCR68\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Omen. Endtimes.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
               "AltLookAngle": {
                 "x": 0.0,
                 "y": 0.0,
@@ -1521,7 +1521,7 @@
           },
           "Nickname": "Samael: Messenger of Uvhash",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR64\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Enemy\",\n  \"traits\": \"Ancient One. Elite. Vampyr.\",\n  \"victory\": 1,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR64\",\n  \"class\": \"Mythos\",\n  \"type\": \"Enemy\",\n  \"traits\": \"Ancient One. Elite. Vampyr.\",\n  \"victory\": 1,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -1582,7 +1582,7 @@
           },
           "Nickname": "Archibald Killjoy: Butcher of Uvhash",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR63\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Enemy\",\n  \"traits\": \"Humanoid. Elite. Abomination.\",\n  \"victory\": 1,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR63\",\n  \"class\": \"Mythos\",\n  \"type\": \"Enemy\",\n  \"traits\": \"Humanoid. Elite. Abomination.\",\n  \"victory\": 1,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -1643,7 +1643,7 @@
           },
           "Nickname": "Grafted Seraph: The First Verse",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR62\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Enemy\",\n  \"traits\": \"Humanoid. Elite. Hybrid.\",\n  \"victory\": 1,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR62\",\n  \"class\": \"Mythos\",\n  \"type\": \"Enemy\",\n  \"traits\": \"Humanoid. Elite. Hybrid.\",\n  \"victory\": 1,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -1798,7 +1798,7 @@
               },
               "Nickname": "Doctor Killjoy: Malpracticing Malefactor",
               "Description": "",
-              "GMNotes": "{\r\n  \"id\": \"MCR58\",\n  \"class\": \"Neutral\",\r\n  \"type\": \"Asset\",\n  \"traits\": \"Staff. Medic. Possessed.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+              "GMNotes": "{\n  \"id\": \"MCR58\",\n  \"class\": \"Neutral\",\n  \"type\": \"Asset\",\n  \"traits\": \"Staff. Medic. Possessed.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
               "AltLookAngle": {
                 "x": 0.0,
                 "y": 0.0,
@@ -1860,7 +1860,7 @@
               },
               "Nickname": "Pulse Mimic",
               "Description": "",
-              "GMNotes": "{\r\n  \"id\": \"MCR59\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Enemy\",\n  \"traits\": \"Geist. Elite.\",\n  \"victory\": 1,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+              "GMNotes": "{\n  \"id\": \"MCR59\",\n  \"class\": \"Mythos\",\n  \"type\": \"Enemy\",\n  \"traits\": \"Geist. Elite.\",\n  \"victory\": 1,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
               "AltLookAngle": {
                 "x": 0.0,
                 "y": 0.0,
@@ -1922,7 +1922,7 @@
               },
               "Nickname": "Pulse Mimic",
               "Description": "",
-              "GMNotes": "{\r\n  \"id\": \"MCR60\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Enemy\",\n  \"traits\": \"Geist. Elite.\",\n  \"victory\": 1,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+              "GMNotes": "{\n  \"id\": \"MCR60\",\n  \"class\": \"Mythos\",\n  \"type\": \"Enemy\",\n  \"traits\": \"Geist. Elite.\",\n  \"victory\": 1,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
               "AltLookAngle": {
                 "x": 0.0,
                 "y": 0.0,
@@ -1984,7 +1984,7 @@
               },
               "Nickname": "Pulse Mimic",
               "Description": "",
-              "GMNotes": "{\r\n  \"id\": \"MCR61\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Enemy\",\n  \"traits\": \"Geist. Elite.\",\n  \"victory\": 1,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+              "GMNotes": "{\n  \"id\": \"MCR61\",\n  \"class\": \"Mythos\",\n  \"type\": \"Enemy\",\n  \"traits\": \"Geist. Elite.\",\n  \"victory\": 1,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
               "AltLookAngle": {
                 "x": 0.0,
                 "y": 0.0,
@@ -2078,7 +2078,7 @@
           "Bag": {
             "Order": 0
           },
-          "LuaScript": "function updateSave()\r\n    local data_to_save = {[\"ml\"]=memoryList}\r\n    saved_data = JSON.encode(data_to_save)\r\n    self.script_state = saved_data\r\nend\r\n\r\nfunction onload(saved_data)\r\n    if saved_data ~= \"\" then\r\n        local loaded_data = JSON.decode(saved_data)\r\n        --Set up information off of loaded_data\r\n        memoryList = loaded_data.ml\r\n    else\r\n        --Set up information for if there is no saved saved data\r\n        memoryList = {}\r\n    end\r\n\r\n    if next(memoryList) == nil then\r\n        createSetupButton()\r\n    else\r\n        createMemoryActionButtons()\r\n    end\r\nend\r\n\r\n\r\n--Beginning Setup\r\n\r\n\r\n--Make setup button\r\nfunction createSetupButton()\r\n    self.createButton({\r\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\r\n        position={0,0.3,-2}, rotation={0,180,0}, height=350, width=800,\r\n        font_size=250, color={0,0,0}, font_color={1,1,1}\r\n    })\r\nend\r\n\r\n--Triggered by setup button,\r\nfunction buttonClick_setup()\r\n    memoryListBackup = duplicateTable(memoryList)\r\n    memoryList = {}\r\n    self.clearButtons()\r\n    createButtonsOnAllObjects()\r\n    createSetupActionButtons()\r\nend\r\n\r\n--Creates selection buttons on objects\r\nfunction createButtonsOnAllObjects()\r\n    local howManyButtons = 0\r\n    for _, obj in ipairs(getAllObjects()) do\r\n        if obj ~= self then\r\n            local dummyIndex = howManyButtons\r\n            --On a normal bag, the button positions aren't the same size as the bag.\r\n            globalScaleFactor = 1.25 * 1/self.getScale().x\r\n            --Super sweet math to set button positions\r\n            local selfPos = self.getPosition()\r\n            local objPos = obj.getPosition()\r\n            local deltaPos = findOffsetDistance(selfPos, objPos, obj)\r\n            local objPos = rotateLocalCoordinates(deltaPos, self)\r\n            objPos.x = -objPos.x * globalScaleFactor\r\n            objPos.y = objPos.y * globalScaleFactor\r\n            objPos.z = objPos.z * globalScaleFactor\r\n            --Offset rotation of bag\r\n            local rot = self.getRotation()\r\n            rot.y = -rot.y + 180\r\n            --Create function\r\n            local funcName = \"selectButton_\" .. howManyButtons\r\n            local func = function() buttonClick_selection(dummyIndex, obj) end\r\n            self.setVar(funcName, func)\r\n            self.createButton({\r\n                click_function=funcName, function_owner=self,\r\n                position=objPos, rotation=rot, height=1000, width=1000,\r\n                color={0.75,0.25,0.25,0.6},\r\n            })\r\n            howManyButtons = howManyButtons + 1\r\n        end\r\n    end\r\nend\r\n\r\n--Creates submit and cancel buttons\r\nfunction createSetupActionButtons()\r\n    self.createButton({\r\n        label=\"Cancel\", click_function=\"buttonClick_cancel\", function_owner=self,\r\n        position={0,0.3,-2}, rotation={0,180,0}, height=350, width=1100,\r\n        font_size=250, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n    self.createButton({\r\n        label=\"Submit\", click_function=\"buttonClick_submit\", function_owner=self,\r\n        position={0,0.3,-2.8}, rotation={0,180,0}, height=350, width=1100,\r\n        font_size=250, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n    self.createButton({\r\n        label=\"Reset\", click_function=\"buttonClick_reset\", function_owner=self,\r\n        position={-2,0.3,0}, rotation={0,270,0}, height=350, width=800,\r\n        font_size=250, color={0,0,0}, font_color={1,1,1}\r\n    })\r\nend\r\n\r\n\r\n--During Setup\r\n\r\n\r\n--Checks or unchecks buttons\r\nfunction buttonClick_selection(index, obj)\r\n    local color = {0,1,0,0.6}\r\n    if memoryList[obj.getGUID()] == nil then\r\n        self.editButton({index=index, color=color})\r\n        --Adding pos/rot to memory table\r\n        local pos, rot = obj.getPosition(), obj.getRotation()\r\n        --I need to add it like this or it won't save due to indexing issue\r\n        memoryList[obj.getGUID()] = {\r\n            pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\r\n            rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\r\n            lock=obj.getLock()\r\n        }\r\n        obj.highlightOn({0,1,0})\r\n    else\r\n        color = {0.75,0.25,0.25,0.6}\r\n        self.editButton({index=index, color=color})\r\n        memoryList[obj.getGUID()] = nil\r\n        obj.highlightOff()\r\n    end\r\nend\r\n\r\n--Cancels selection process\r\nfunction buttonClick_cancel()\r\n    memoryList = memoryListBackup\r\n    self.clearButtons()\r\n    if next(memoryList) == nil then\r\n        createSetupButton()\r\n    else\r\n        createMemoryActionButtons()\r\n    end\r\n    removeAllHighlights()\r\n    broadcastToAll(\"Selection Canceled\", {1,1,1})\r\nend\r\n\r\n--Saves selections\r\nfunction buttonClick_submit()\r\n    if next(memoryList) == nil then\r\n        broadcastToAll(\"You cannot submit without any selections.\", {0.75, 0.25, 0.25})\r\n    else\r\n        self.clearButtons()\r\n        createMemoryActionButtons()\r\n        local count = 0\r\n        for guid in pairs(memoryList) do\r\n            count = count + 1\r\n            local obj = getObjectFromGUID(guid)\r\n            if obj ~= nil then obj.highlightOff() end\r\n        end\r\n        broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n        updateSave()\r\n    end\r\nend\r\n\r\n--Resets bag to starting status\r\nfunction buttonClick_reset()\r\n    memoryList = {}\r\n    self.clearButtons()\r\n    createSetupButton()\r\n    removeAllHighlights()\r\n    broadcastToAll(\"Tool Reset\", {1,1,1})\r\n    updateSave()\r\nend\r\n\r\n\r\n--After Setup\r\n\r\n\r\n--Creates recall and place buttons\r\nfunction createMemoryActionButtons()\r\n    self.createButton({\r\n        label=\"Place\", click_function=\"buttonClick_place\", function_owner=self,\r\n        position={0,0.3,-2}, rotation={0,180,0}, height=350, width=800,\r\n        font_size=250, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n    self.createButton({\r\n        label=\"Recall\", click_function=\"buttonClick_recall\", function_owner=self,\r\n        position={0,0.3,-2.8}, rotation={0,180,0}, height=350, width=800,\r\n        font_size=250, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n    self.createButton({\r\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\r\n        position={-2,0.3,0}, rotation={0,270,0}, height=350, width=800,\r\n        font_size=250, color={0,0,0}, font_color={1,1,1}\r\n    })\r\nend\r\n\r\n--Sends objects from bag/table to their saved position/rotation\r\nfunction buttonClick_place()\r\n    local bagObjList = self.getObjects()\r\n    for guid, entry in pairs(memoryList) do\r\n        local obj = getObjectFromGUID(guid)\r\n        --If obj is out on the table, move it to the saved pos/rot\r\n        if obj ~= nil then\r\n            obj.setPositionSmooth(entry.pos)\r\n            obj.setRotationSmooth(entry.rot)\r\n            obj.setLock(entry.lock)\r\n        else\r\n            --If obj is inside of the bag\r\n            for _, bagObj in ipairs(bagObjList) do\r\n                if bagObj.guid == guid then\r\n                    local item = self.takeObject({\r\n                        guid=guid, position=entry.pos, rotation=entry.rot,\r\n                    })\r\n                    item.setLock(entry.lock)\r\n                    break\r\n                end\r\n            end\r\n        end\r\n    end\r\n    broadcastToAll(\"Objects Placed\", {1,1,1})\r\nend\r\n\r\n--Recalls objects to bag from table\r\nfunction buttonClick_recall()\r\n    for guid, entry in pairs(memoryList) do\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then self.putObject(obj) end\r\n    end\r\n    broadcastToAll(\"Objects Recalled\", {1,1,1})\r\nend\r\n\r\n\r\n--Utility functions\r\n\r\n\r\n--Find delta (difference) between 2 x/y/z coordinates\r\nfunction findOffsetDistance(p1, p2, obj)\r\n    local deltaPos = {}\r\n    local bounds = obj.getBounds()\r\n    deltaPos.x = (p2.x-p1.x)\r\n    deltaPos.y = (p2.y-p1.y) + (bounds.size.y - bounds.offset.y)\r\n    deltaPos.z = (p2.z-p1.z)\r\n    return deltaPos\r\nend\r\n\r\n--Used to rotate a set of coordinates by an angle\r\nfunction rotateLocalCoordinates(desiredPos, obj)\r\n\tlocal objPos, objRot = obj.getPosition(), obj.getRotation()\r\n    local angle = math.rad(objRot.y)\r\n\tlocal x = desiredPos.x * math.cos(angle) - desiredPos.z * math.sin(angle)\r\n\tlocal z = desiredPos.x * math.sin(angle) + desiredPos.z * math.cos(angle)\r\n\t--return {x=objPos.x+x, y=objPos.y+desiredPos.y, z=objPos.z+z}\r\n    return {x=x, y=desiredPos.y, z=z}\r\nend\r\n\r\n--Coroutine delay, in seconds\r\nfunction wait(time)\r\n    local start = os.time()\r\n    repeat coroutine.yield(0) until os.time() > start + time\r\nend\r\n\r\n--Duplicates a table (needed to prevent it making reference to the same objects)\r\nfunction duplicateTable(oldTable)\r\n    local newTable = {}\r\n    for k, v in pairs(oldTable) do\r\n        newTable[k] = v\r\n    end\r\n    return newTable\r\nend\r\n\r\n--Moves scripted highlight from all objects\r\nfunction removeAllHighlights()\r\n    for _, obj in ipairs(getAllObjects()) do\r\n        obj.highlightOff()\r\n    end\r\nend\r\n\r\n--Round number (num) to the Nth decimal (dec)\r\nfunction round(num, dec)\r\n  local mult = 10^(dec or 0)\r\n  return math.floor(num * mult + 0.5) / mult\r\nend\r\n",
+          "LuaScript": "function updateSave()\n    local data_to_save = {[\"ml\"]=memoryList}\n    saved_data = JSON.encode(data_to_save)\n    self.script_state = saved_data\nend\n\nfunction onload(saved_data)\n    if saved_data ~= \"\" then\n        local loaded_data = JSON.decode(saved_data)\n        --Set up information off of loaded_data\n        memoryList = loaded_data.ml\n    else\n        --Set up information for if there is no saved saved data\n        memoryList = {}\n    end\n\n    if next(memoryList) == nil then\n        createSetupButton()\n    else\n        createMemoryActionButtons()\n    end\nend\n\n\n--Beginning Setup\n\n\n--Make setup button\nfunction createSetupButton()\n    self.createButton({\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\n        position={0,0.3,-2}, rotation={0,180,0}, height=350, width=800,\n        font_size=250, color={0,0,0}, font_color={1,1,1}\n    })\nend\n\n--Triggered by setup button,\nfunction buttonClick_setup()\n    memoryListBackup = duplicateTable(memoryList)\n    memoryList = {}\n    self.clearButtons()\n    createButtonsOnAllObjects()\n    createSetupActionButtons()\nend\n\n--Creates selection buttons on objects\nfunction createButtonsOnAllObjects()\n    local howManyButtons = 0\n    for _, obj in ipairs(getAllObjects()) do\n        if obj ~= self then\n            local dummyIndex = howManyButtons\n            --On a normal bag, the button positions aren't the same size as the bag.\n            globalScaleFactor = 1.25 * 1/self.getScale().x\n            --Super sweet math to set button positions\n            local selfPos = self.getPosition()\n            local objPos = obj.getPosition()\n            local deltaPos = findOffsetDistance(selfPos, objPos, obj)\n            local objPos = rotateLocalCoordinates(deltaPos, self)\n            objPos.x = -objPos.x * globalScaleFactor\n            objPos.y = objPos.y * globalScaleFactor\n            objPos.z = objPos.z * globalScaleFactor\n            --Offset rotation of bag\n            local rot = self.getRotation()\n            rot.y = -rot.y + 180\n            --Create function\n            local funcName = \"selectButton_\" .. howManyButtons\n            local func = function() buttonClick_selection(dummyIndex, obj) end\n            self.setVar(funcName, func)\n            self.createButton({\n                click_function=funcName, function_owner=self,\n                position=objPos, rotation=rot, height=1000, width=1000,\n                color={0.75,0.25,0.25,0.6},\n            })\n            howManyButtons = howManyButtons + 1\n        end\n    end\nend\n\n--Creates submit and cancel buttons\nfunction createSetupActionButtons()\n    self.createButton({\n        label=\"Cancel\", click_function=\"buttonClick_cancel\", function_owner=self,\n        position={0,0.3,-2}, rotation={0,180,0}, height=350, width=1100,\n        font_size=250, color={0,0,0}, font_color={1,1,1}\n    })\n    self.createButton({\n        label=\"Submit\", click_function=\"buttonClick_submit\", function_owner=self,\n        position={0,0.3,-2.8}, rotation={0,180,0}, height=350, width=1100,\n        font_size=250, color={0,0,0}, font_color={1,1,1}\n    })\n    self.createButton({\n        label=\"Reset\", click_function=\"buttonClick_reset\", function_owner=self,\n        position={-2,0.3,0}, rotation={0,270,0}, height=350, width=800,\n        font_size=250, color={0,0,0}, font_color={1,1,1}\n    })\nend\n\n\n--During Setup\n\n\n--Checks or unchecks buttons\nfunction buttonClick_selection(index, obj)\n    local color = {0,1,0,0.6}\n    if memoryList[obj.getGUID()] == nil then\n        self.editButton({index=index, color=color})\n        --Adding pos/rot to memory table\n        local pos, rot = obj.getPosition(), obj.getRotation()\n        --I need to add it like this or it won't save due to indexing issue\n        memoryList[obj.getGUID()] = {\n            pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\n            rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\n            lock=obj.getLock()\n        }\n        obj.highlightOn({0,1,0})\n    else\n        color = {0.75,0.25,0.25,0.6}\n        self.editButton({index=index, color=color})\n        memoryList[obj.getGUID()] = nil\n        obj.highlightOff()\n    end\nend\n\n--Cancels selection process\nfunction buttonClick_cancel()\n    memoryList = memoryListBackup\n    self.clearButtons()\n    if next(memoryList) == nil then\n        createSetupButton()\n    else\n        createMemoryActionButtons()\n    end\n    removeAllHighlights()\n    broadcastToAll(\"Selection Canceled\", {1,1,1})\nend\n\n--Saves selections\nfunction buttonClick_submit()\n    if next(memoryList) == nil then\n        broadcastToAll(\"You cannot submit without any selections.\", {0.75, 0.25, 0.25})\n    else\n        self.clearButtons()\n        createMemoryActionButtons()\n        local count = 0\n        for guid in pairs(memoryList) do\n            count = count + 1\n            local obj = getObjectFromGUID(guid)\n            if obj ~= nil then obj.highlightOff() end\n        end\n        broadcastToAll(count..\" Objects Saved\", {1,1,1})\n        updateSave()\n    end\nend\n\n--Resets bag to starting status\nfunction buttonClick_reset()\n    memoryList = {}\n    self.clearButtons()\n    createSetupButton()\n    removeAllHighlights()\n    broadcastToAll(\"Tool Reset\", {1,1,1})\n    updateSave()\nend\n\n\n--After Setup\n\n\n--Creates recall and place buttons\nfunction createMemoryActionButtons()\n    self.createButton({\n        label=\"Place\", click_function=\"buttonClick_place\", function_owner=self,\n        position={0,0.3,-2}, rotation={0,180,0}, height=350, width=800,\n        font_size=250, color={0,0,0}, font_color={1,1,1}\n    })\n    self.createButton({\n        label=\"Recall\", click_function=\"buttonClick_recall\", function_owner=self,\n        position={0,0.3,-2.8}, rotation={0,180,0}, height=350, width=800,\n        font_size=250, color={0,0,0}, font_color={1,1,1}\n    })\n    self.createButton({\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\n        position={-2,0.3,0}, rotation={0,270,0}, height=350, width=800,\n        font_size=250, color={0,0,0}, font_color={1,1,1}\n    })\nend\n\n--Sends objects from bag/table to their saved position/rotation\nfunction buttonClick_place()\n    local bagObjList = self.getObjects()\n    for guid, entry in pairs(memoryList) do\n        local obj = getObjectFromGUID(guid)\n        --If obj is out on the table, move it to the saved pos/rot\n        if obj ~= nil then\n            obj.setPositionSmooth(entry.pos)\n            obj.setRotationSmooth(entry.rot)\n            obj.setLock(entry.lock)\n        else\n            --If obj is inside of the bag\n            for _, bagObj in ipairs(bagObjList) do\n                if bagObj.guid == guid then\n                    local item = self.takeObject({\n                        guid=guid, position=entry.pos, rotation=entry.rot,\n                    })\n                    item.setLock(entry.lock)\n                    break\n                end\n            end\n        end\n    end\n    broadcastToAll(\"Objects Placed\", {1,1,1})\nend\n\n--Recalls objects to bag from table\nfunction buttonClick_recall()\n    for guid, entry in pairs(memoryList) do\n        local obj = getObjectFromGUID(guid)\n        if obj ~= nil then self.putObject(obj) end\n    end\n    broadcastToAll(\"Objects Recalled\", {1,1,1})\nend\n\n\n--Utility functions\n\n\n--Find delta (difference) between 2 x/y/z coordinates\nfunction findOffsetDistance(p1, p2, obj)\n    local deltaPos = {}\n    local bounds = obj.getBounds()\n    deltaPos.x = (p2.x-p1.x)\n    deltaPos.y = (p2.y-p1.y) + (bounds.size.y - bounds.offset.y)\n    deltaPos.z = (p2.z-p1.z)\n    return deltaPos\nend\n\n--Used to rotate a set of coordinates by an angle\nfunction rotateLocalCoordinates(desiredPos, obj)\n\tlocal objPos, objRot = obj.getPosition(), obj.getRotation()\n    local angle = math.rad(objRot.y)\n\tlocal x = desiredPos.x * math.cos(angle) - desiredPos.z * math.sin(angle)\n\tlocal z = desiredPos.x * math.sin(angle) + desiredPos.z * math.cos(angle)\n\t--return {x=objPos.x+x, y=objPos.y+desiredPos.y, z=objPos.z+z}\n    return {x=x, y=desiredPos.y, z=z}\nend\n\n--Coroutine delay, in seconds\nfunction wait(time)\n    local start = os.time()\n    repeat coroutine.yield(0) until os.time() > start + time\nend\n\n--Duplicates a table (needed to prevent it making reference to the same objects)\nfunction duplicateTable(oldTable)\n    local newTable = {}\n    for k, v in pairs(oldTable) do\n        newTable[k] = v\n    end\n    return newTable\nend\n\n--Moves scripted highlight from all objects\nfunction removeAllHighlights()\n    for _, obj in ipairs(getAllObjects()) do\n        obj.highlightOff()\n    end\nend\n\n--Round number (num) to the Nth decimal (dec)\nfunction round(num, dec)\n  local mult = 10^(dec or 0)\n  return math.floor(num * mult + 0.5) / mult\nend\n",
           "LuaScriptState": "{\"ml\":{\"117b29\":{\"lock\":false,\"pos\":{\"x\":-30.24,\"y\":1.5336,\"z\":-15.3001},\"rot\":{\"x\":0,\"y\":270.0002,\"z\":180}},\"141c58\":{\"lock\":false,\"pos\":{\"x\":-17.0399,\"y\":1.5336,\"z\":0},\"rot\":{\"x\":0,\"y\":270.0008,\"z\":180}},\"260f53\":{\"lock\":false,\"pos\":{\"x\":-30.24,\"y\":1.52,\"z\":-11.48},\"rot\":{\"x\":0,\"y\":359.9932,\"z\":0}},\"4a513e\":{\"lock\":false,\"pos\":{\"x\":-20.34,\"y\":1.52,\"z\":0},\"rot\":{\"x\":0,\"y\":90,\"z\":0}},\"4bf4f2\":{\"lock\":false,\"pos\":{\"x\":-30.179,\"y\":1.5336,\"z\":15.2796},\"rot\":{\"x\":0,\"y\":270.0005,\"z\":180}},\"d86e0f\":{\"lock\":false,\"pos\":{\"x\":-30.24,\"y\":1.52,\"z\":11.48},\"rot\":{\"x\":0,\"y\":359.9932,\"z\":0}}}}",
           "XmlUI": "",
           "ContainedObjects": [
@@ -2098,7 +2098,7 @@
               },
               "Nickname": "Wax Atrium",
               "Description": "",
-              "GMNotes": "{\r\n  \"id\": \"MCR55\",\r\n  \"type\": \"Location\",\r\n  \"traits\": \"Hospital. Derelict. Sanguine.\",\r\n  \"cycle\": \"Code Red at Bleeding Heart\",\r\n  \"Victory\": 1,\r\n  \"locationBack\": {\r\n    \"uses\": [\r\n      {\r\n        \"countPerInvestigator\": 1,\r\n        \"type\": \"Clue\",\r\n        \"token\": \"clue\"\r\n      }\r\n    ]\r\n  }\r\n}",
+              "GMNotes": "{\n  \"id\": \"MCR55\",\n  \"type\": \"Location\",\n  \"traits\": \"Hospital. Derelict. Sanguine.\",\n  \"cycle\": \"Code Red at Bleeding Heart\",\n  \"Victory\": 1,\n  \"locationBack\": {\n    \"uses\": [\n      {\n        \"countPerInvestigator\": 1,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
               "AltLookAngle": {
                 "x": 0.0,
                 "y": 0.0,
@@ -2160,7 +2160,7 @@
               },
               "Nickname": "Elevator Shaft",
               "Description": "",
-              "GMNotes": "{\r\n  \"id\": \"MCR53\",\r\n  \"type\": \"Location\",\r\n  \"traits\": \"Hospital. Derelict. Sanguine.\",\r\n  \"cycle\": \"Code Red at Bleeding Heart\",\r\n  \"locationBack\": {\r\n    \"uses\": [\r\n      {\r\n        \"countPerInvestigator\": 2,\r\n        \"type\": \"Clue\",\r\n        \"token\": \"clue\"\r\n      }\r\n    ]\r\n  }\r\n}",
+              "GMNotes": "{\n  \"id\": \"MCR53\",\n  \"type\": \"Location\",\n  \"traits\": \"Hospital. Derelict. Sanguine.\",\n  \"cycle\": \"Code Red at Bleeding Heart\",\n  \"locationBack\": {\n    \"uses\": [\n      {\n        \"countPerInvestigator\": 2,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
               "AltLookAngle": {
                 "x": 0.0,
                 "y": 0.0,
@@ -2588,7 +2588,7 @@
               },
               "Nickname": "Operating Suite",
               "Description": "",
-              "GMNotes": "{\r\n  \"id\": \"MCR54\",\r\n  \"type\": \"Location\",\r\n  \"traits\": \"Hospital. Derelict. Sanguine.\",\r\n  \"cycle\": \"Code Red at Bleeding Heart\",\r\n  \"locationBack\": {\r\n    \"uses\": [\r\n      {\r\n        \"countPerInvestigator\": 1,\r\n        \"type\": \"Clue\",\r\n        \"token\": \"clue\"\r\n      }\r\n    ]\r\n  }\r\n}",
+              "GMNotes": "{\n  \"id\": \"MCR54\",\n  \"type\": \"Location\",\n  \"traits\": \"Hospital. Derelict. Sanguine.\",\n  \"cycle\": \"Code Red at Bleeding Heart\",\n  \"locationBack\": {\n    \"uses\": [\n      {\n        \"countPerInvestigator\": 1,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
               "AltLookAngle": {
                 "x": 0.0,
                 "y": 0.0,
@@ -2835,7 +2835,7 @@
           },
           "Nickname": "Hematic Ampoule: Flask of Drakul",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR57\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Asset\",\n  \"traits\": \"Item. Relic. Occult.\",\n  \"weakness\": true,\n  \"cycle\": \"Code Red at Bleeding Hospital\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR57\",\n  \"class\": \"Mythos\",\n  \"type\": \"Asset\",\n  \"traits\": \"Item. Relic. Occult.\",\n  \"weakness\": true,\n  \"cycle\": \"Code Red at Bleeding Hospital\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -2897,7 +2897,7 @@
           },
           "Nickname": "Byzantine Chronicle: Codex of the First House",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR56\",\n  \"class\": \"Neutral\",\r\n  \"type\": \"Asset\",\n  \"traits\": \"Item. Tome. Cursed.\",\n  \"cycle\": \"Code Red at Bleeding Hospital\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR56\",\n  \"class\": \"Neutral\",\n  \"type\": \"Asset\",\n  \"traits\": \"Item. Tome. Cursed.\",\n  \"cycle\": \"Code Red at Bleeding Hospital\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -3334,7 +3334,7 @@
           },
           "Nickname": "Dissection Mannequin",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR22\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Enemy\",\n  \"traits\": \"Monster.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR22\",\n  \"class\": \"Mythos\",\n  \"type\": \"Enemy\",\n  \"traits\": \"Monster.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -3395,7 +3395,7 @@
           },
           "Nickname": "Comorbidity",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR38\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Hex. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR38\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Hex. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -3456,7 +3456,7 @@
           },
           "Nickname": "Visiting Hours",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR51\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Terror. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR51\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Terror. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -3517,7 +3517,7 @@
           },
           "Nickname": "Comorbidity",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR37\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Hex. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR37\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Hex. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -3578,7 +3578,7 @@
           },
           "Nickname": "Malignant Growth",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR43\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Obstacle.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR43\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Obstacle.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -3639,7 +3639,7 @@
           },
           "Nickname": "Aichmophobia",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR32\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Terror. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR32\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Terror. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -3700,7 +3700,7 @@
           },
           "Nickname": "Toxoplasmic Bacteriophage",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR29\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Enemy\",\n  \"traits\": \"Ooze.\",\n  \"hidden\": true,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR29\",\n  \"class\": \"Mythos\",\n  \"type\": \"Enemy\",\n  \"traits\": \"Ooze.\",\n  \"hidden\": true,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -3761,7 +3761,7 @@
           },
           "Nickname": "Second Opinion",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR47\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Injury. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR47\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Injury. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -3822,7 +3822,7 @@
           },
           "Nickname": "Universal Donor",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR49\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Power. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR49\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Power. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -3883,7 +3883,7 @@
           },
           "Nickname": "Gemini Mannequin: Charnel Twins",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR21\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Enemy\",\n  \"traits\": \"Abomination. Elite. Monster.\",\n  \"victory\": 1,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR21\",\n  \"class\": \"Mythos\",\n  \"type\": \"Enemy\",\n  \"traits\": \"Abomination. Elite. Monster.\",\n  \"victory\": 1,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -3944,7 +3944,7 @@
           },
           "Nickname": "Bleeding Edge",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR36\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Terror.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR36\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Terror.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -4005,7 +4005,7 @@
           },
           "Nickname": "Universal Donor",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR50\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Power. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR50\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Power. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -4066,7 +4066,7 @@
           },
           "Nickname": "Malignant Growth",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR44\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Obstacle.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR44\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Obstacle.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -4127,7 +4127,7 @@
           },
           "Nickname": "Toxoplasmic Bacteriophage",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR30\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Enemy\",\n  \"traits\": \"Ooze.\",\n  \"hidden\": true,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR30\",\n  \"class\": \"Mythos\",\n  \"type\": \"Enemy\",\n  \"traits\": \"Ooze.\",\n  \"hidden\": true,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -4188,7 +4188,7 @@
           },
           "Nickname": "Bedside Manner",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR34\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Terror. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR34\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Terror. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -4249,7 +4249,7 @@
           },
           "Nickname": "Rondo of Blood",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR45\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Madness. Song.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR45\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Madness. Song.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -4310,7 +4310,7 @@
           },
           "Nickname": "Aichmophobia",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR31\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Terror. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR31\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Terror. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -4371,7 +4371,7 @@
           },
           "Nickname": "Infatuated Orderly",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR24\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Enemy\",\n  \"traits\": \"Humanoid. Medic. Possessed.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR24\",\n  \"class\": \"Mythos\",\n  \"type\": \"Enemy\",\n  \"traits\": \"Humanoid. Medic. Possessed.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -4432,7 +4432,7 @@
           },
           "Nickname": "Rondo of Blood",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR46\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Madness. Song.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR46\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Madness. Song.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -4493,7 +4493,7 @@
           },
           "Nickname": "Toxoplasmic Bacteriophage",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR28\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Enemy\",\n  \"traits\": \"Ooze.\",\n  \"hidden\": true,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR28\",\n  \"class\": \"Mythos\",\n  \"type\": \"Enemy\",\n  \"traits\": \"Ooze.\",\n  \"hidden\": true,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -4554,7 +4554,7 @@
           },
           "Nickname": "Bleeding Edge",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR35\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Terror.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR35\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Terror.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -4615,7 +4615,7 @@
           },
           "Nickname": "Exsanguination",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR40\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Injury. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR40\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Injury. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -4676,7 +4676,7 @@
           },
           "Nickname": "Comorbidity",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR39\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Hex. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR39\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Hex. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -4737,7 +4737,7 @@
           },
           "Nickname": "Swollen Leeches",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR26\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Enemy\",\n  \"traits\": \"Creature. Pack. Symbiote.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR26\",\n  \"class\": \"Mythos\",\n  \"type\": \"Enemy\",\n  \"traits\": \"Creature. Pack. Symbiote.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -4798,7 +4798,7 @@
           },
           "Nickname": "Infatuated Orderly",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR25\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Enemy\",\n  \"traits\": \"Humanoid. Medic. Possessed.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR25\",\n  \"class\": \"Mythos\",\n  \"type\": \"Enemy\",\n  \"traits\": \"Humanoid. Medic. Possessed.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -4859,7 +4859,7 @@
           },
           "Nickname": "Dissection Mannequin",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR23\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Enemy\",\n  \"traits\": \"Monster.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR23\",\n  \"class\": \"Mythos\",\n  \"type\": \"Enemy\",\n  \"traits\": \"Monster.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -4920,7 +4920,7 @@
           },
           "Nickname": "Swollen Leeches",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR27\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Enemy\",\n  \"traits\": \"Creature. Pack. Symbiote.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR27\",\n  \"class\": \"Mythos\",\n  \"type\": \"Enemy\",\n  \"traits\": \"Creature. Pack. Symbiote.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -4981,7 +4981,7 @@
           },
           "Nickname": "Malignant Growth",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR42\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Obstacle.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR42\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Obstacle.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -5042,7 +5042,7 @@
           },
           "Nickname": "Bedside Manner",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR33\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Terror. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR33\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Terror. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -5103,7 +5103,7 @@
           },
           "Nickname": "Second Opinion",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR48\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Injury. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR48\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Injury. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -5164,7 +5164,7 @@
           },
           "Nickname": "Exsanguination",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR41\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Injury. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR41\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Injury. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -5225,7 +5225,7 @@
           },
           "Nickname": "Visiting Hours",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR52\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Treachery\",\n  \"traits\": \"Terror. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR52\",\n  \"class\": \"Mythos\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Terror. Memory.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -5371,7 +5371,7 @@
           },
           "Nickname": "Agenda 3a: Birthing Pains",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR04\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Agenda\",\n  \"doomThreshold\": 8,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR04\",\n  \"class\": \"Mythos\",\n  \"type\": \"Agenda\",\n  \"doomThreshold\": 8,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -5432,7 +5432,7 @@
           },
           "Nickname": "Agenda 2a: Shift Rotation",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR03\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Agenda\",\n  \"doomThreshold\": 13,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR03\",\n  \"class\": \"Mythos\",\n  \"type\": \"Agenda\",\n  \"doomThreshold\": 13,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -5493,7 +5493,7 @@
           },
           "Nickname": "Agenda 1a: Health Code Violation",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR02\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Agenda\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR02\",\n  \"class\": \"Mythos\",\n  \"type\": \"Agenda\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -5639,7 +5639,7 @@
           },
           "Nickname": "Act 3a: Critical Condition",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR07\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Act\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR07\",\n  \"class\": \"Mythos\",\n  \"type\": \"Act\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -5700,7 +5700,7 @@
           },
           "Nickname": "Act 2a: Paging Doctor Killjoy",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR06\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Act\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR06\",\n  \"class\": \"Mythos\",\n  \"type\": \"Act\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -5761,7 +5761,7 @@
           },
           "Nickname": "Act 1a: Urgent Care",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR05\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Act\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR05\",\n  \"class\": \"Mythos\",\n  \"type\": \"Act\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -5824,7 +5824,7 @@
       },
       "Nickname": "Scenario",
       "Description": "Code Red at Bleeding Heart",
-      "GMNotes": "{\r\n  \"id\":\"MCR01\",\r\n  \"type\":\"ScenarioReference\",\r\n  \"class\":\"Mythos\",\r\n  \"tokens\":{\r\n    \"front\":{\r\n      \"Skull\":{\r\n        \"description\":\"-X. X is the amount of damage on your location.\",\r\n        \"modifier\":-999\r\n      },\r\n      \"Cultist\":{\r\n        \"description\":\"-2. If you fail, add 1 curse token to the chaos bag.\",\r\n        \"modifier\":-2\r\n      },\r\n      \"Tablet\":{\r\n        \"description\":\"-4 if you are at a Sanguine location. Otherwise, -3.\",\r\n        \"modifier\":-3\r\n      },\r\n      \"Elder Thing\":{\r\n        \"description\":\"-4. If you fail, place 1 damage on the nearest location that can have damage placed on it.\",\r\n        \"modifier\":-4\r\n      }\r\n    },\r\n    \"back\":{\r\n      \"Skull\":{\r\n        \"description\":\"-X. X is the amount of damage on your location.\",\r\n        \"modifier\":-999\r\n      },\r\n      \"Cultist\":{\r\n        \"description\":\"-3. If you fail, add 1 curse token to the chaos bag for each point you failed by.\",\r\n        \"modifier\":-3\r\n      },\r\n      \"Tablet\":{\r\n        \"description\":\"-5 if you are at a Sanguinelocation. Otherwise, -4.\",\r\n        \"modifier\":-4\r\n      },\r\n      \"Elder Thing\":{\r\n        \"description\":\"-5. If you fail, place 1 damage on the nearest location that can have damage placed on it.\",\r\n        \"modifier\":-5\r\n      }\r\n    }\r\n  }\r\n}",
+      "GMNotes": "{\n  \"id\":\"MCR01\",\n  \"type\":\"ScenarioReference\",\n  \"class\":\"Mythos\",\n  \"tokens\":{\n    \"front\":{\n      \"Skull\":{\n        \"description\":\"-X. X is the amount of damage on your location.\",\n        \"modifier\":-999\n      },\n      \"Cultist\":{\n        \"description\":\"-2. If you fail, add 1 curse token to the chaos bag.\",\n        \"modifier\":-2\n      },\n      \"Tablet\":{\n        \"description\":\"-4 if you are at a Sanguine location. Otherwise, -3.\",\n        \"modifier\":-3\n      },\n      \"Elder Thing\":{\n        \"description\":\"-4. If you fail, place 1 damage on the nearest location that can have damage placed on it.\",\n        \"modifier\":-4\n      }\n    },\n    \"back\":{\n      \"Skull\":{\n        \"description\":\"-X. X is the amount of damage on your location.\",\n        \"modifier\":-999\n      },\n      \"Cultist\":{\n        \"description\":\"-3. If you fail, add 1 curse token to the chaos bag for each point you failed by.\",\n        \"modifier\":-3\n      },\n      \"Tablet\":{\n        \"description\":\"-5 if you are at a Sanguinelocation. Otherwise, -4.\",\n        \"modifier\":-4\n      },\n      \"Elder Thing\":{\n        \"description\":\"-5. If you fail, place 1 damage on the nearest location that can have damage placed on it.\",\n        \"modifier\":-5\n      }\n    }\n  }\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -5923,7 +5923,7 @@
           "Stretch": true
         }
       },
-      "LuaScript": "-- edit the \"tokenData\" table to change the preset difficulties\n-- list of valid ids: 'p1', '0', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8',\n--   'skull', 'cultist', 'tablet', 'elder', 'red', 'blue', 'bless', 'curse', 'frost'\n\n-- Code Red at Bleeding Heart\r\nlocal tokenData = {\r\n  Easy     = { 'p1', 'p1', '0', '0', '0', 'm1', 'm1', 'm1', 'm2', 'm2', 'skull', 'skull', 'cultist', 'tablet', 'elder', 'red', 'blue' },\r\n  Standard = { 'p1', '0', '0', 'm1', 'm1', 'm1', 'm2', 'm2', 'm3', 'm4', 'skull', 'skull', 'cultist', 'tablet', 'elder', 'red', 'blue' },\r\n  Hard     = { '0', '0', '0', 'm1', 'm1', 'm2', 'm2', 'm3', 'm3', 'm4', 'm5', 'skull', 'skull', 'cultist', 'tablet', 'elder', 'red', 'blue' },\r\n  Expert   = { '0', 'm1', 'm2', 'm2', 'm3', 'm3', 'm4', 'm4', 'm5', 'm6', 'skull', 'skull', 'cultist', 'tablet', 'elder', 'red', 'blue' },\r\n}\n\n-- create buttons on startup\nfunction onLoad()\n  local z_offset = -0.15\n  for difficulty, _ in pairs(tokenData) do\n    local clickFunction = difficulty:lower() .. \"Click\"\n    self.setVar(clickFunction, function() clickFun(difficulty) end)\n\n    self.createButton({\n      label = difficulty,\n      function_owner = self,\n      click_function = clickFunction,\n      position = { 0, 0.1, z_offset },\n      rotation = { 0, 0, 0 },\n      scale = { 0.47, 1, 0.47 },\n      height = 200,\n      width = 1150,\n      font_size = 100,\n      color = { 0.87, 0.8, 0.70 },\n      font_color = { 0, 0, 0 }\n    })\n    z_offset = z_offset + 0.20\n  end\nend\n\nfunction clickFun(difficulty)\n  Global.call(\"setChaosBagState\", tokenData[difficulty])\nend",
+      "LuaScript": "-- edit the \"tokenData\" table to change the preset difficulties\n-- list of valid ids: 'p1', '0', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8',\n--   'skull', 'cultist', 'tablet', 'elder', 'red', 'blue', 'bless', 'curse', 'frost'\n\n-- Code Red at Bleeding Heart\nlocal tokenData = {\n  Easy     = { 'p1', 'p1', '0', '0', '0', 'm1', 'm1', 'm1', 'm2', 'm2', 'skull', 'skull', 'cultist', 'tablet', 'elder', 'red', 'blue' },\n  Standard = { 'p1', '0', '0', 'm1', 'm1', 'm1', 'm2', 'm2', 'm3', 'm4', 'skull', 'skull', 'cultist', 'tablet', 'elder', 'red', 'blue' },\n  Hard     = { '0', '0', '0', 'm1', 'm1', 'm2', 'm2', 'm3', 'm3', 'm4', 'm5', 'skull', 'skull', 'cultist', 'tablet', 'elder', 'red', 'blue' },\n  Expert   = { '0', 'm1', 'm2', 'm2', 'm3', 'm3', 'm4', 'm4', 'm5', 'm6', 'skull', 'skull', 'cultist', 'tablet', 'elder', 'red', 'blue' },\n}\n\n-- create buttons on startup\nfunction onLoad()\n  local z_offset = -0.15\n  for difficulty, _ in pairs(tokenData) do\n    local clickFunction = difficulty:lower() .. \"Click\"\n    self.setVar(clickFunction, function() clickFun(difficulty) end)\n\n    self.createButton({\n      label = difficulty,\n      function_owner = self,\n      click_function = clickFunction,\n      position = { 0, 0.1, z_offset },\n      rotation = { 0, 0, 0 },\n      scale = { 0.47, 1, 0.47 },\n      height = 200,\n      width = 1150,\n      font_size = 100,\n      color = { 0.87, 0.8, 0.70 },\n      font_color = { 0, 0, 0 }\n    })\n    z_offset = z_offset + 0.20\n  end\nend\n\nfunction clickFun(difficulty)\n  Global.call(\"setChaosBagState\", tokenData[difficulty])\nend",
       "LuaScriptState": "",
       "XmlUI": ""
     },
@@ -5943,7 +5943,7 @@
       },
       "Nickname": "Nurse's Station",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MCR09\",\r\n  \"type\": \"Location\",\r\n  \"traits\": \"Hospital. Derlict.\",\r\n  \"cycle\": \"Code Red at Bleeding Heart\"\r\n}",
+      "GMNotes": "{\n  \"id\": \"MCR09\",\n  \"type\": \"Location\",\n  \"traits\": \"Hospital. Derlict.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -6159,7 +6159,7 @@
           },
           "Nickname": "Morgue",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR13\",\r\n  \"type\": \"Location\",\r\n  \"traits\": \"Hospital. Derlict.\",\r\n  \"cycle\": \"Code Red at Bleeding Heart\"\r\n}",
+          "GMNotes": "{\n  \"id\": \"MCR13\",\n  \"type\": \"Location\",\n  \"traits\": \"Hospital. Derlict.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -6221,7 +6221,7 @@
           },
           "Nickname": "Blood Bank",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR10\",\r\n  \"type\": \"Location\",\r\n  \"traits\": \"Hospital. Derlict.\",\r\n  \"cycle\": \"Code Red at Bleeding Heart\"\r\n}",
+          "GMNotes": "{\n  \"id\": \"MCR10\",\n  \"type\": \"Location\",\n  \"traits\": \"Hospital. Derlict.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -6283,7 +6283,7 @@
           },
           "Nickname": "Shower Room",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR17\",\r\n  \"type\": \"Location\",\r\n  \"traits\": \"Hospital. Derelict.\",\r\n  \"cycle\": \"Code Red at Bleeding Heart\",\r\n  \"locationFront\": {\r\n    \"uses\": [\r\n      {\r\n        \"countPerInvestigator\": 1,\r\n        \"type\": \"Clue\",\r\n        \"token\": \"clue\"\r\n      }\r\n    ]\r\n  }\r\n}",
+          "GMNotes": "{\n  \"id\": \"MCR17\",\n  \"type\": \"Location\",\n  \"traits\": \"Hospital. Derelict.\",\n  \"cycle\": \"Code Red at Bleeding Heart\",\n  \"locationFront\": {\n    \"uses\": [\n      {\n        \"countPerInvestigator\": 1,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -6345,7 +6345,7 @@
           },
           "Nickname": "Cafeteria",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR11\",\r\n  \"type\": \"Location\",\r\n  \"traits\": \"Hospital. Derlict.\",\r\n  \"cycle\": \"Code Red at Bleeding Heart\"\r\n}",
+          "GMNotes": "{\n  \"id\": \"MCR11\",\n  \"type\": \"Location\",\n  \"traits\": \"Hospital. Derlict.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -6407,7 +6407,7 @@
           },
           "Nickname": "Trauma Ward",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR19\",\r\n  \"type\": \"Location\",\r\n  \"traits\": \"Hospital. Derlict.\",\r\n  \"cycle\": \"Code Red at Bleeding Heart\"\r\n}",
+          "GMNotes": "{\n  \"id\": \"MCR19\",\n  \"type\": \"Location\",\n  \"traits\": \"Hospital. Derlict.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -6469,7 +6469,7 @@
           },
           "Nickname": "Research Laboratory",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR16\",\r\n  \"type\": \"Location\",\r\n  \"traits\": \"Hospital. Derlict.\",\r\n  \"cycle\": \"Code Red at Bleeding Heart\"\r\n}",
+          "GMNotes": "{\n  \"id\": \"MCR16\",\n  \"type\": \"Location\",\n  \"traits\": \"Hospital. Derlict.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -6531,7 +6531,7 @@
           },
           "Nickname": "Natal Ward",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR14\",\r\n  \"type\": \"Location\",\r\n  \"traits\": \"Hospital. Derelict.\",\r\n  \"cycle\": \"Code Red at Bleeding Heart\",\r\n  \"locationFront\": {\r\n    \"uses\": [\r\n      {\r\n        \"countPerInvestigator\": 1,\r\n        \"type\": \"Clue\",\r\n        \"token\": \"clue\"\r\n      }\r\n    ]\r\n  }\r\n}",
+          "GMNotes": "{\n  \"id\": \"MCR14\",\n  \"type\": \"Location\",\n  \"traits\": \"Hospital. Derelict.\",\n  \"cycle\": \"Code Red at Bleeding Heart\",\n  \"locationFront\": {\n    \"uses\": [\n      {\n        \"countPerInvestigator\": 1,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -6593,7 +6593,7 @@
           },
           "Nickname": "Psychiatric Ward",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR15\",\r\n  \"type\": \"Location\",\r\n  \"traits\": \"Hospital. Derlict.\",\r\n  \"cycle\": \"Code Red at Bleeding Heart\"\r\n}",
+          "GMNotes": "{\n  \"id\": \"MCR15\",\n  \"type\": \"Location\",\n  \"traits\": \"Hospital. Derlict.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -6655,7 +6655,7 @@
           },
           "Nickname": "Examination Room",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR12\",\r\n  \"type\": \"Location\",\r\n  \"traits\": \"Hospital. Derelict.\",\r\n  \"cycle\": \"Code Red at Bleeding Heart\",\r\n  \"locationFront\": {\r\n    \"uses\": [\r\n      {\r\n        \"countPerInvestigator\": 1,\r\n        \"type\": \"Clue\",\r\n        \"token\": \"clue\"\r\n      }\r\n    ]\r\n  }\r\n}",
+          "GMNotes": "{\n  \"id\": \"MCR12\",\n  \"type\": \"Location\",\n  \"traits\": \"Hospital. Derelict.\",\n  \"cycle\": \"Code Red at Bleeding Heart\",\n  \"locationFront\": {\n    \"uses\": [\n      {\n        \"countPerInvestigator\": 1,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -6717,7 +6717,7 @@
           },
           "Nickname": "Supply Closet",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR12\",\r\n  \"type\": \"Location\",\r\n  \"traits\": \"Hospital. Derelict.\",\r\n  \"cycle\": \"Code Red at Bleeding Heart\",\r\n  \"locationFront\": {\n    \"victory\": 1,\r\n    \"uses\": [\r\n      {\r\n        \"countPerInvestigator\": 1,\r\n        \"type\": \"Clue\",\r\n        \"token\": \"clue\"\r\n      }\r\n    ]\r\n  }\r\n}",
+          "GMNotes": "{\n  \"id\": \"MCR12\",\n  \"type\": \"Location\",\n  \"traits\": \"Hospital. Derelict.\",\n  \"cycle\": \"Code Red at Bleeding Heart\",\n  \"locationFront\": {\n    \"victory\": 1,\n    \"uses\": [\n      {\n        \"countPerInvestigator\": 1,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -6781,7 +6781,7 @@
       },
       "Nickname": "Julia Fairchild: Night Shift Nurse",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MCR20\",\n  \"class\": \"Neutral\",\r\n  \"type\": \"Asset\",\r\n  \"traits\": \"Ally. Staff. Medic.\",\r\n  \"cycle\": \"Code Red at Bleeding Heart\"\r\n}",
+      "GMNotes": "{\n  \"id\": \"MCR20\",\n  \"class\": \"Neutral\",\n  \"type\": \"Asset\",\n  \"traits\": \"Ally. Staff. Medic.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -6843,7 +6843,7 @@
       },
       "Nickname": "Waiting Room",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MCR08\",\r\n  \"type\": \"Location\",\r\n  \"traits\": \"Hospital. Derelict.\",\r\n  \"cycle\": \"Code Red at Bleeding Heart\"\r\n}",
+      "GMNotes": "{\n  \"id\": \"MCR08\",\n  \"type\": \"Location\",\n  \"traits\": \"Hospital. Derelict.\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -9357,7 +9357,7 @@
           },
           "Nickname": "Telltale Heart: Cardiac Clockwork",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR81\",\n  \"class\": \"Mythos\",\r\n  \"type\": \"Asset\",\n  \"traits\": \"Item. Science.\",\n  \"weakness\": true,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR81\",\n  \"class\": \"Mythos\",\n  \"type\": \"Asset\",\n  \"traits\": \"Item. Science.\",\n  \"weakness\": true,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -9419,7 +9419,7 @@
           },
           "Nickname": "Fleshcraft: Waste Not, Want Not",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MCR80\",\n  \"class\": \"Neutral\",\r\n  \"type\": \"Asset\",\n  \"cost\": 2,\n  \"traits\": \"Talent.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
+          "GMNotes": "{\n  \"id\": \"MCR80\",\n  \"class\": \"Neutral\",\n  \"type\": \"Asset\",\n  \"cost\": 2,\n  \"traits\": \"Talent.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -9483,7 +9483,7 @@
       },
       "Nickname": "Julia Fairchild: The Hospitalier",
       "Description": "The Professor",
-      "GMNotes": "{\r\n  \"id\": \"MCR79\",\r\n  \"type\": \"Investigator\",\r\n  \"class\": \"Guardian\",\r\n  \"traits\": \"Medic. Veteran.\",\r\n  \"willpowerIcons\": 3,\r\n  \"intellectIcons\": 4,\r\n  \"combatIcons\": 4,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"Code Red at Bleeding Heart\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"MCR79\",\n  \"type\": \"Investigator\",\n  \"class\": \"Guardian\",\n  \"traits\": \"Medic. Veteran.\",\n  \"willpowerIcons\": 3,\n  \"intellectIcons\": 4,\n  \"combatIcons\": 4,\n  \"agilityIcons\": 1,\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -9544,7 +9544,7 @@
       },
       "Nickname": "Julia Fairchild: The Hospitalier",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MCR79-m\",\r\r\n  \"type\": \"Minicard\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\r\n}",
+      "GMNotes": "{\n  \"id\": \"MCR79-m\",\n  \"type\": \"Minicard\",\n  \"cycle\": \"Code Red at Bleeding Heart\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,

@@ -67,7 +67,7 @@
   "Bag": {
     "Order": 0
   },
-  "LuaScript": "-- Utility memory bag by Directsun\r\n-- Version 2.5.2\r\n-- Fork of Memory Bag 2.0 by MrStump\r\n\r\nfunction updateSave()\r\n    local data_to_save = {[\"ml\"]=memoryList}\r\n    saved_data = JSON.encode(data_to_save)\r\n    self.script_state = saved_data\r\nend\r\n\r\nfunction combineMemoryFromBagsWithin()\r\n  local bagObjList = self.getObjects()\r\n  for _, bagObj in ipairs(bagObjList) do\r\n    local data = bagObj.lua_script_state\r\n      if data ~= nil then\r\n        local j = JSON.decode(data)\r\n        if j ~= nil and j.ml ~= nil then\r\n          for guid, entry in pairs(j.ml) do\r\n            memoryList[guid] = entry\r\n          end\r\n        end\r\n      end\r\n    end\r\nend\r\n\r\nfunction updateMemoryWithMoves()\r\n    memoryList = memoryListBackup\r\n    --get the first transposed object's coordinates\r\n    local obj = getObjectFromGUID(moveGuid)\r\n\r\n    -- p1 is where needs to go, p2 is where it was\r\n    local refObjPos = memoryList[moveGuid].pos\r\n    local deltaPos = findOffsetDistance(obj.getPosition(), refObjPos, nil)\r\n    local movedRotation = obj.getRotation()\r\n    for guid, entry in pairs(memoryList) do\r\n        memoryList[guid].pos.x = entry.pos.x - deltaPos.x\r\n        memoryList[guid].pos.y = entry.pos.y - deltaPos.y\r\n        memoryList[guid].pos.z = entry.pos.z - deltaPos.z\r\n        -- memoryList[guid].rot.x = movedRotation.x\r\n        -- memoryList[guid].rot.y = movedRotation.y\r\n        -- memoryList[guid].rot.z = movedRotation.z\r\n    end\r\n\r\n    --theList[obj.getGUID()] = {\r\n    --    pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\r\n    --    rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\r\n    --    lock=obj.getLock()\r\n    --}\r\n    moveList = {}\r\nend\r\n\r\nfunction onload(saved_data)\r\n    fresh = true\r\n    if saved_data ~= \"\" then\r\n        local loaded_data = JSON.decode(saved_data)\r\n        --Set up information off of loaded_data\r\n        memoryList = loaded_data.ml\r\n    else\r\n        --Set up information for if there is no saved saved data\r\n        memoryList = {}\r\n    end\r\n\r\n    moveList = {}\r\n    moveGuid = nil\r\n\r\n    if next(memoryList) == nil then\r\n        createSetupButton()\r\n    else\r\n        fresh = false\r\n        createMemoryActionButtons()\r\n    end\r\nend\r\n\r\n\r\n--Beginning Setup\r\n\r\n\r\n--Make setup button\r\nfunction createSetupButton()\r\n    self.createButton({\r\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\r\n        position={0,0.1,-6}, rotation={0,0,0}, height=500, width=1200,\r\n        font_size=350, color={0,0,0}, font_color={1,1,1}\r\n    })\r\nend\r\n\r\n--Triggered by Transpose button\r\nfunction buttonClick_transpose()\r\n    moveGuid = nil\r\n    broadcastToAll(\"Select one object and move it- all objects will move relative to the new location\", {0.75, 0.75, 1})\r\n    memoryListBackup = duplicateTable(memoryList)\r\n    memoryList = {}\r\n    moveList = {}\r\n    self.clearButtons()\r\n    createButtonsOnAllObjects(true)\r\n    createSetupActionButtons(true)\r\nend\r\n\r\n--Triggered by setup button,\r\nfunction buttonClick_setup()\r\n    memoryListBackup = duplicateTable(memoryList)\r\n    memoryList = {}\r\n    self.clearButtons()\r\n    createButtonsOnAllObjects(false)\r\n    createSetupActionButtons(false)\r\nend\r\n\r\nfunction getAllObjectsInMemory()\r\n  local objTable = {}\r\n  local curObj = {}\r\n\r\n  for guid in pairs(memoryListBackup) do\r\n    curObj = getObjectFromGUID(guid)\r\n    table.insert(objTable, curObj)\r\n  end\r\n\r\n  return objTable\r\n  -- return getAllObjects()\r\nend\r\n\r\n--Creates selection buttons on objects\r\nfunction createButtonsOnAllObjects(move)\r\n    local howManyButtons = 0\r\n\r\n    local objsToHaveButtons = {}\r\n    if move == true then\r\n      objsToHaveButtons = getAllObjectsInMemory()\r\n    else\r\n      objsToHaveButtons = getAllObjects()\r\n    end\r\n\r\n    for _, obj in ipairs(objsToHaveButtons) do\r\n        if obj ~= self then\r\n            local dummyIndex = howManyButtons\r\n            --On a normal bag, the button positions aren't the same size as the bag.\r\n            globalScaleFactor = 1 * 1/self.getScale().x\r\n            --Super sweet math to set button positions\r\n            local selfPos = self.getPosition()\r\n            local objPos = obj.getPosition()\r\n            local deltaPos = findOffsetDistance(selfPos, objPos, obj)\r\n            local objPos = rotateLocalCoordinates(deltaPos, self)\r\n            objPos.x = -objPos.x * globalScaleFactor\r\n            objPos.y = objPos.y * globalScaleFactor + 4\r\n            objPos.z = objPos.z * globalScaleFactor\r\n            --Offset rotation of bag\r\n            local rot = self.getRotation()\r\n            rot.y = -rot.y + 180\r\n            --Create function\r\n            local funcName = \"selectButton_\" .. howManyButtons\r\n            local func = function() buttonClick_selection(dummyIndex, obj, move) end\r\n            local color = {0.75,0.25,0.25,0.6}\r\n            local colorMove = {0,0,1,0.6}\r\n            if move == true then\r\n              color = colorMove\r\n            end\r\n            self.setVar(funcName, func)\r\n            self.createButton({\r\n                click_function=funcName, function_owner=self,\r\n                position=objPos, rotation=rot, height=1000, width=1000,\r\n                color=color,\r\n            })\r\n            howManyButtons = howManyButtons + 1\r\n        end\r\n    end\r\nend\r\n\r\n--Creates submit and cancel buttons\r\nfunction createSetupActionButtons(move)\r\n    self.createButton({\r\n        label=\"Cancel\", click_function=\"buttonClick_cancel\", function_owner=self,\r\n      position={-1.25,0.1,-6}, rotation={0,0,0}, height=500, width=1200,\r\n        font_size=350, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n\r\n    self.createButton({\r\n        label=\"Submit\", click_function=\"buttonClick_submit\", function_owner=self,\r\n        position={-1.25,0.3,-7}, rotation={0,0,0}, height=500, width=1200,\r\n        font_size=350, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n\r\n    if move == false then\r\n      self.createButton({\r\n          label=\"Add\", click_function=\"buttonClick_add\", function_owner=self,\r\n          position={1.25,0.3,-6}, rotation={0,0,0}, height=500, width=1200,\r\n          font_size=350, color={0,0,0}, font_color={0.25,1,0.25}\r\n      })\r\n\r\n        if fresh == false then\r\n            self.createButton({\r\n                label=\"Set New\", click_function=\"buttonClick_setNew\", function_owner=self,\r\n                position={1.25,0.3,-8}, rotation={0,0,0}, height=500, width=1200,\r\n                font_size=350, color={0,0,0}, font_color={0.75,0.75,1}\r\n            })\r\n            self.createButton({\r\n                label=\"Remove\", click_function=\"buttonClick_remove\", function_owner=self,\r\n                position={1.25,0.3,-7}, rotation={0,0,0}, height=500, width=1200,\r\n                font_size=350, color={0,0,0}, font_color={1,0.25,0.25}\r\n            })\r\n        end\r\n    end\r\n\r\n    self.createButton({\r\n        label=\"Reset\", click_function=\"buttonClick_reset\", function_owner=self,\r\n        position={-1.25,0.3,-8}, rotation={0,0,0}, height=500, width=1200,\r\n        font_size=350, color={0,0,0}, font_color={1,1,1}\r\n    })\r\nend\r\n\r\n\r\n--During Setup\r\n\r\n\r\n--Checks or unchecks buttons\r\nfunction buttonClick_selection(index, obj, move)\r\n    local colorMove = {0,0,1,0.6}\r\n    local color = {0,1,0,0.6}\r\n\r\n    previousGuid = selectedGuid\r\n    selectedGuid = obj.getGUID()\r\n\r\n    theList = memoryList\r\n    if move == true then\r\n       theList = moveList\r\n       if previousGuid ~= nil and previousGuid ~= selectedGuid then\r\n         local prevObj = getObjectFromGUID(previousGuid)\r\n         prevObj.highlightOff()\r\n         self.editButton({index=previousIndex, color=colorMove})\r\n         theList[previousGuid] = nil\r\n       end\r\n       previousIndex = index\r\n    end\r\n\r\n    if theList[selectedGuid] == nil then\r\n        self.editButton({index=index, color=color})\r\n        --Adding pos/rot to memory table\r\n        local pos, rot = obj.getPosition(), obj.getRotation()\r\n        --I need to add it like this or it won't save due to indexing issue\r\n        theList[obj.getGUID()] = {\r\n            pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\r\n            rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\r\n            lock=obj.getLock()\r\n        }\r\n        obj.highlightOn({0,1,0})\r\n    else\r\n      color = {0.75,0.25,0.25,0.6}\r\n      if move == true then\r\n        color = colorMove\r\n      end\r\n        self.editButton({index=index, color=color})\r\n        theList[obj.getGUID()] = nil\r\n        obj.highlightOff()\r\n    end\r\nend\r\n\r\n--Cancels selection process\r\nfunction buttonClick_cancel()\r\n    memoryList = memoryListBackup\r\n    moveList = {}\r\n    self.clearButtons()\r\n    if next(memoryList) == nil then\r\n        createSetupButton()\r\n    else\r\n        createMemoryActionButtons()\r\n    end\r\n    removeAllHighlights()\r\n    broadcastToAll(\"Selection Canceled\", {1,1,1})\r\n    moveGuid = nil\r\nend\r\n\r\n--Saves selections\r\nfunction buttonClick_submit()\r\n    fresh = false\r\n    if next(moveList) ~= nil then\r\n        for guid in pairs(moveList) do\r\n            moveGuid = guid\r\n        end\r\n        if memoryListBackup[moveGuid] == nil then\r\n            broadcastToAll(\"Item selected for moving is not already in memory\", {1, 0.25, 0.25})\r\n        else\r\n            broadcastToAll(\"Moving all items in memory relative to new objects position!\", {0.75, 0.75, 1})\r\n            self.clearButtons()\r\n            createMemoryActionButtons()\r\n            local count = 0\r\n            for guid in pairs(moveList) do\r\n                moveGuid = guid\r\n                count = count + 1\r\n                local obj = getObjectFromGUID(guid)\r\n                if obj ~= nil then obj.highlightOff() end\r\n            end\r\n            updateMemoryWithMoves()\r\n            updateSave()\r\n            buttonClick_place()\r\n        end\r\n    elseif next(memoryList) == nil and moveGuid == nil then\r\n      memoryList = memoryListBackup\r\n      broadcastToAll(\"No selections made.\", {0.75, 0.25, 0.25})\r\n    end\r\n    combineMemoryFromBagsWithin()\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for guid in pairs(memoryList) do\r\n        count = count + 1\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then obj.highlightOff() end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    updateSave()\r\n    moveGuid = nil\r\nend\r\n\r\nfunction combineTables(first_table, second_table)\r\n  for k,v in pairs(second_table) do first_table[k] = v end\r\nend\r\n\r\nfunction buttonClick_add()\r\n    fresh = false\r\n    combineTables(memoryList, memoryListBackup)\r\n    broadcastToAll(\"Adding internal bags and selections to existing memory\", {0.25, 0.75, 0.25})\r\n    combineMemoryFromBagsWithin()\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for guid in pairs(memoryList) do\r\n        count = count + 1\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then obj.highlightOff() end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    updateSave()\r\nend\r\n\r\nfunction buttonClick_remove()\r\n        broadcastToAll(\"Removing Selected Entries From Memory\", {1.0, 0.25, 0.25})\r\n        self.clearButtons()\r\n        createMemoryActionButtons()\r\n        local count = 0\r\n        for guid in pairs(memoryList) do\r\n            count = count + 1\r\n            memoryListBackup[guid] = nil\r\n            local obj = getObjectFromGUID(guid)\r\n            if obj ~= nil then obj.highlightOff() end\r\n        end\r\n        broadcastToAll(count..\" Objects Removed\", {1,1,1})\r\n        memoryList = memoryListBackup\r\n        updateSave()\r\nend\r\n\r\nfunction buttonClick_setNew()\r\n    broadcastToAll(\"Setting new position relative to items in memory\", {0.75, 0.75, 1})\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for _, obj in ipairs(getAllObjects()) do\r\n        guid = obj.guid\r\n        if memoryListBackup[guid] ~= nil then\r\n            count = count + 1\r\n            memoryListBackup[guid].pos = obj.getPosition()\r\n            memoryListBackup[guid].rot = obj.getRotation()\r\n            memoryListBackup[guid].lock = obj.getLock()\r\n        end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    memoryList = memoryListBackup\r\n    updateSave()\r\nend\r\n\r\n--Resets bag to starting status\r\nfunction buttonClick_reset()\r\n    fresh = true\r\n    memoryList = {}\r\n    self.clearButtons()\r\n    createSetupButton()\r\n    removeAllHighlights()\r\n    broadcastToAll(\"Tool Reset\", {1,1,1})\r\n    updateSave()\r\nend\r\n\r\n\r\n--After Setup\r\n\r\n\r\n--Creates recall and place buttons\r\nfunction createMemoryActionButtons()\r\n    self.createButton({\r\n        label=\"Place\", click_function=\"buttonClick_place\", function_owner=self,\r\n        position={1.35,1,6}, rotation={0,0,0}, height=500, width=1200,\r\n        font_size=350, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n    self.createButton({\r\n        label=\"Recall\", click_function=\"buttonClick_recall\", function_owner=self,\r\n        position={-1.25,1,6}, rotation={0,0,0}, height=500, width=1200,\r\n        font_size=350, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n    self.createButton({\r\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\r\n        position={0,0.1,-6}, rotation={0,0,0}, height=500, width=1200,\r\n        font_size=350, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n---    self.createButton({\r\n---      label=\"Move\", click_function=\"buttonClick_transpose\", function_owner=self,\r\n---      position={-2.8,0.3,0}, rotation={0,0,0}, height=350, width=800,\r\n---      font_size=250, color={0,0,0}, font_color={0.75,0.75,1}\r\n---    })\r\nend\r\n\r\n--Sends objects from bag/table to their saved position/rotation\r\nfunction buttonClick_place()\r\n    local bagObjList = self.getObjects()\r\n    for guid, entry in pairs(memoryList) do\r\n        local obj = getObjectFromGUID(guid)\r\n        --If obj is out on the table, move it to the saved pos/rot\r\n        if obj ~= nil then\r\n            obj.setPositionSmooth(entry.pos)\r\n            obj.setRotationSmooth(entry.rot)\r\n            obj.setLock(entry.lock)\r\n        else\r\n            --If obj is inside of the bag\r\n            for _, bagObj in ipairs(bagObjList) do\r\n                if bagObj.guid == guid then\r\n                    local item = self.takeObject({\r\n                        guid=guid, position=entry.pos, rotation=entry.rot, smooth=false\r\n                    })\r\n                    item.setLock(entry.lock)\r\n                    break\r\n                end\r\n            end\r\n        end\r\n    end\r\n    broadcastToAll(\"Objects Placed\", {1,1,1})\r\nend\r\n\r\n--Recalls objects to bag from table\r\nfunction buttonClick_recall()\r\n    for guid, entry in pairs(memoryList) do\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then self.putObject(obj) end\r\n    end\r\n    broadcastToAll(\"Objects Recalled\", {1,1,1})\r\nend\r\n\r\n\r\n--Utility functions\r\n\r\n\r\n--Find delta (difference) between 2 x/y/z coordinates\r\nfunction findOffsetDistance(p1, p2, obj)\r\n    local yOffset = 0\r\n    if obj ~= nil then\r\n        local bounds = obj.getBounds()\r\n        yOffset = (bounds.size.y - bounds.offset.y)\r\n    end\r\n    local deltaPos = {}\r\n    deltaPos.x = (p2.x-p1.x)\r\n    deltaPos.y = (p2.y-p1.y) + yOffset\r\n    deltaPos.z = (p2.z-p1.z)\r\n    return deltaPos\r\nend\r\n\r\n--Used to rotate a set of coordinates by an angle\r\nfunction rotateLocalCoordinates(desiredPos, obj)\r\n\tlocal objPos, objRot = obj.getPosition(), obj.getRotation()\r\n    local angle = math.rad(objRot.y)\r\n\tlocal x = desiredPos.x * math.cos(angle) - desiredPos.z * math.sin(angle)\r\n\tlocal z = desiredPos.x * math.sin(angle) + desiredPos.z * math.cos(angle)\r\n\t--return {x=objPos.x+x, y=objPos.y+desiredPos.y, z=objPos.z+z}\r\n    return {x=x, y=desiredPos.y, z=z}\r\nend\r\n\r\nfunction rotateMyCoordinates(desiredPos, obj)\r\n\tlocal angle = math.rad(obj.getRotation().y)\r\n  local x = desiredPos.x * math.sin(angle)\r\n\tlocal z = desiredPos.z * math.cos(angle)\r\n    return {x=x, y=desiredPos.y, z=z}\r\nend\r\n\r\n--Coroutine delay, in seconds\r\nfunction wait(time)\r\n    local start = os.time()\r\n    repeat coroutine.yield(0) until os.time() > start + time\r\nend\r\n\r\n--Duplicates a table (needed to prevent it making reference to the same objects)\r\nfunction duplicateTable(oldTable)\r\n    local newTable = {}\r\n    for k, v in pairs(oldTable) do\r\n        newTable[k] = v\r\n    end\r\n    return newTable\r\nend\r\n\r\n--Moves scripted highlight from all objects\r\nfunction removeAllHighlights()\r\n    for _, obj in ipairs(getAllObjects()) do\r\n        obj.highlightOff()\r\n    end\r\nend\r\n\r\n--Round number (num) to the Nth decimal (dec)\r\nfunction round(num, dec)\r\n  local mult = 10^(dec or 0)\r\n  return math.floor(num * mult + 0.5) / mult\r\nend",
+  "LuaScript": "-- Utility memory bag by Directsun\n-- Version 2.5.2\n-- Fork of Memory Bag 2.0 by MrStump\n\nfunction updateSave()\n    local data_to_save = {[\"ml\"]=memoryList}\n    saved_data = JSON.encode(data_to_save)\n    self.script_state = saved_data\nend\n\nfunction combineMemoryFromBagsWithin()\n  local bagObjList = self.getObjects()\n  for _, bagObj in ipairs(bagObjList) do\n    local data = bagObj.lua_script_state\n      if data ~= nil then\n        local j = JSON.decode(data)\n        if j ~= nil and j.ml ~= nil then\n          for guid, entry in pairs(j.ml) do\n            memoryList[guid] = entry\n          end\n        end\n      end\n    end\nend\n\nfunction updateMemoryWithMoves()\n    memoryList = memoryListBackup\n    --get the first transposed object's coordinates\n    local obj = getObjectFromGUID(moveGuid)\n\n    -- p1 is where needs to go, p2 is where it was\n    local refObjPos = memoryList[moveGuid].pos\n    local deltaPos = findOffsetDistance(obj.getPosition(), refObjPos, nil)\n    local movedRotation = obj.getRotation()\n    for guid, entry in pairs(memoryList) do\n        memoryList[guid].pos.x = entry.pos.x - deltaPos.x\n        memoryList[guid].pos.y = entry.pos.y - deltaPos.y\n        memoryList[guid].pos.z = entry.pos.z - deltaPos.z\n        -- memoryList[guid].rot.x = movedRotation.x\n        -- memoryList[guid].rot.y = movedRotation.y\n        -- memoryList[guid].rot.z = movedRotation.z\n    end\n\n    --theList[obj.getGUID()] = {\n    --    pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\n    --    rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\n    --    lock=obj.getLock()\n    --}\n    moveList = {}\nend\n\nfunction onload(saved_data)\n    fresh = true\n    if saved_data ~= \"\" then\n        local loaded_data = JSON.decode(saved_data)\n        --Set up information off of loaded_data\n        memoryList = loaded_data.ml\n    else\n        --Set up information for if there is no saved saved data\n        memoryList = {}\n    end\n\n    moveList = {}\n    moveGuid = nil\n\n    if next(memoryList) == nil then\n        createSetupButton()\n    else\n        fresh = false\n        createMemoryActionButtons()\n    end\nend\n\n\n--Beginning Setup\n\n\n--Make setup button\nfunction createSetupButton()\n    self.createButton({\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\n        position={0,0.1,-6}, rotation={0,0,0}, height=500, width=1200,\n        font_size=350, color={0,0,0}, font_color={1,1,1}\n    })\nend\n\n--Triggered by Transpose button\nfunction buttonClick_transpose()\n    moveGuid = nil\n    broadcastToAll(\"Select one object and move it- all objects will move relative to the new location\", {0.75, 0.75, 1})\n    memoryListBackup = duplicateTable(memoryList)\n    memoryList = {}\n    moveList = {}\n    self.clearButtons()\n    createButtonsOnAllObjects(true)\n    createSetupActionButtons(true)\nend\n\n--Triggered by setup button,\nfunction buttonClick_setup()\n    memoryListBackup = duplicateTable(memoryList)\n    memoryList = {}\n    self.clearButtons()\n    createButtonsOnAllObjects(false)\n    createSetupActionButtons(false)\nend\n\nfunction getAllObjectsInMemory()\n  local objTable = {}\n  local curObj = {}\n\n  for guid in pairs(memoryListBackup) do\n    curObj = getObjectFromGUID(guid)\n    table.insert(objTable, curObj)\n  end\n\n  return objTable\n  -- return getAllObjects()\nend\n\n--Creates selection buttons on objects\nfunction createButtonsOnAllObjects(move)\n    local howManyButtons = 0\n\n    local objsToHaveButtons = {}\n    if move == true then\n      objsToHaveButtons = getAllObjectsInMemory()\n    else\n      objsToHaveButtons = getAllObjects()\n    end\n\n    for _, obj in ipairs(objsToHaveButtons) do\n        if obj ~= self then\n            local dummyIndex = howManyButtons\n            --On a normal bag, the button positions aren't the same size as the bag.\n            globalScaleFactor = 1 * 1/self.getScale().x\n            --Super sweet math to set button positions\n            local selfPos = self.getPosition()\n            local objPos = obj.getPosition()\n            local deltaPos = findOffsetDistance(selfPos, objPos, obj)\n            local objPos = rotateLocalCoordinates(deltaPos, self)\n            objPos.x = -objPos.x * globalScaleFactor\n            objPos.y = objPos.y * globalScaleFactor + 4\n            objPos.z = objPos.z * globalScaleFactor\n            --Offset rotation of bag\n            local rot = self.getRotation()\n            rot.y = -rot.y + 180\n            --Create function\n            local funcName = \"selectButton_\" .. howManyButtons\n            local func = function() buttonClick_selection(dummyIndex, obj, move) end\n            local color = {0.75,0.25,0.25,0.6}\n            local colorMove = {0,0,1,0.6}\n            if move == true then\n              color = colorMove\n            end\n            self.setVar(funcName, func)\n            self.createButton({\n                click_function=funcName, function_owner=self,\n                position=objPos, rotation=rot, height=1000, width=1000,\n                color=color,\n            })\n            howManyButtons = howManyButtons + 1\n        end\n    end\nend\n\n--Creates submit and cancel buttons\nfunction createSetupActionButtons(move)\n    self.createButton({\n        label=\"Cancel\", click_function=\"buttonClick_cancel\", function_owner=self,\n      position={-1.25,0.1,-6}, rotation={0,0,0}, height=500, width=1200,\n        font_size=350, color={0,0,0}, font_color={1,1,1}\n    })\n\n    self.createButton({\n        label=\"Submit\", click_function=\"buttonClick_submit\", function_owner=self,\n        position={-1.25,0.3,-7}, rotation={0,0,0}, height=500, width=1200,\n        font_size=350, color={0,0,0}, font_color={1,1,1}\n    })\n\n    if move == false then\n      self.createButton({\n          label=\"Add\", click_function=\"buttonClick_add\", function_owner=self,\n          position={1.25,0.3,-6}, rotation={0,0,0}, height=500, width=1200,\n          font_size=350, color={0,0,0}, font_color={0.25,1,0.25}\n      })\n\n        if fresh == false then\n            self.createButton({\n                label=\"Set New\", click_function=\"buttonClick_setNew\", function_owner=self,\n                position={1.25,0.3,-8}, rotation={0,0,0}, height=500, width=1200,\n                font_size=350, color={0,0,0}, font_color={0.75,0.75,1}\n            })\n            self.createButton({\n                label=\"Remove\", click_function=\"buttonClick_remove\", function_owner=self,\n                position={1.25,0.3,-7}, rotation={0,0,0}, height=500, width=1200,\n                font_size=350, color={0,0,0}, font_color={1,0.25,0.25}\n            })\n        end\n    end\n\n    self.createButton({\n        label=\"Reset\", click_function=\"buttonClick_reset\", function_owner=self,\n        position={-1.25,0.3,-8}, rotation={0,0,0}, height=500, width=1200,\n        font_size=350, color={0,0,0}, font_color={1,1,1}\n    })\nend\n\n\n--During Setup\n\n\n--Checks or unchecks buttons\nfunction buttonClick_selection(index, obj, move)\n    local colorMove = {0,0,1,0.6}\n    local color = {0,1,0,0.6}\n\n    previousGuid = selectedGuid\n    selectedGuid = obj.getGUID()\n\n    theList = memoryList\n    if move == true then\n       theList = moveList\n       if previousGuid ~= nil and previousGuid ~= selectedGuid then\n         local prevObj = getObjectFromGUID(previousGuid)\n         prevObj.highlightOff()\n         self.editButton({index=previousIndex, color=colorMove})\n         theList[previousGuid] = nil\n       end\n       previousIndex = index\n    end\n\n    if theList[selectedGuid] == nil then\n        self.editButton({index=index, color=color})\n        --Adding pos/rot to memory table\n        local pos, rot = obj.getPosition(), obj.getRotation()\n        --I need to add it like this or it won't save due to indexing issue\n        theList[obj.getGUID()] = {\n            pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\n            rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\n            lock=obj.getLock()\n        }\n        obj.highlightOn({0,1,0})\n    else\n      color = {0.75,0.25,0.25,0.6}\n      if move == true then\n        color = colorMove\n      end\n        self.editButton({index=index, color=color})\n        theList[obj.getGUID()] = nil\n        obj.highlightOff()\n    end\nend\n\n--Cancels selection process\nfunction buttonClick_cancel()\n    memoryList = memoryListBackup\n    moveList = {}\n    self.clearButtons()\n    if next(memoryList) == nil then\n        createSetupButton()\n    else\n        createMemoryActionButtons()\n    end\n    removeAllHighlights()\n    broadcastToAll(\"Selection Canceled\", {1,1,1})\n    moveGuid = nil\nend\n\n--Saves selections\nfunction buttonClick_submit()\n    fresh = false\n    if next(moveList) ~= nil then\n        for guid in pairs(moveList) do\n            moveGuid = guid\n        end\n        if memoryListBackup[moveGuid] == nil then\n            broadcastToAll(\"Item selected for moving is not already in memory\", {1, 0.25, 0.25})\n        else\n            broadcastToAll(\"Moving all items in memory relative to new objects position!\", {0.75, 0.75, 1})\n            self.clearButtons()\n            createMemoryActionButtons()\n            local count = 0\n            for guid in pairs(moveList) do\n                moveGuid = guid\n                count = count + 1\n                local obj = getObjectFromGUID(guid)\n                if obj ~= nil then obj.highlightOff() end\n            end\n            updateMemoryWithMoves()\n            updateSave()\n            buttonClick_place()\n        end\n    elseif next(memoryList) == nil and moveGuid == nil then\n      memoryList = memoryListBackup\n      broadcastToAll(\"No selections made.\", {0.75, 0.25, 0.25})\n    end\n    combineMemoryFromBagsWithin()\n    self.clearButtons()\n    createMemoryActionButtons()\n    local count = 0\n    for guid in pairs(memoryList) do\n        count = count + 1\n        local obj = getObjectFromGUID(guid)\n        if obj ~= nil then obj.highlightOff() end\n    end\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\n    updateSave()\n    moveGuid = nil\nend\n\nfunction combineTables(first_table, second_table)\n  for k,v in pairs(second_table) do first_table[k] = v end\nend\n\nfunction buttonClick_add()\n    fresh = false\n    combineTables(memoryList, memoryListBackup)\n    broadcastToAll(\"Adding internal bags and selections to existing memory\", {0.25, 0.75, 0.25})\n    combineMemoryFromBagsWithin()\n    self.clearButtons()\n    createMemoryActionButtons()\n    local count = 0\n    for guid in pairs(memoryList) do\n        count = count + 1\n        local obj = getObjectFromGUID(guid)\n        if obj ~= nil then obj.highlightOff() end\n    end\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\n    updateSave()\nend\n\nfunction buttonClick_remove()\n        broadcastToAll(\"Removing Selected Entries From Memory\", {1.0, 0.25, 0.25})\n        self.clearButtons()\n        createMemoryActionButtons()\n        local count = 0\n        for guid in pairs(memoryList) do\n            count = count + 1\n            memoryListBackup[guid] = nil\n            local obj = getObjectFromGUID(guid)\n            if obj ~= nil then obj.highlightOff() end\n        end\n        broadcastToAll(count..\" Objects Removed\", {1,1,1})\n        memoryList = memoryListBackup\n        updateSave()\nend\n\nfunction buttonClick_setNew()\n    broadcastToAll(\"Setting new position relative to items in memory\", {0.75, 0.75, 1})\n    self.clearButtons()\n    createMemoryActionButtons()\n    local count = 0\n    for _, obj in ipairs(getAllObjects()) do\n        guid = obj.guid\n        if memoryListBackup[guid] ~= nil then\n            count = count + 1\n            memoryListBackup[guid].pos = obj.getPosition()\n            memoryListBackup[guid].rot = obj.getRotation()\n            memoryListBackup[guid].lock = obj.getLock()\n        end\n    end\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\n    memoryList = memoryListBackup\n    updateSave()\nend\n\n--Resets bag to starting status\nfunction buttonClick_reset()\n    fresh = true\n    memoryList = {}\n    self.clearButtons()\n    createSetupButton()\n    removeAllHighlights()\n    broadcastToAll(\"Tool Reset\", {1,1,1})\n    updateSave()\nend\n\n\n--After Setup\n\n\n--Creates recall and place buttons\nfunction createMemoryActionButtons()\n    self.createButton({\n        label=\"Place\", click_function=\"buttonClick_place\", function_owner=self,\n        position={1.35,1,6}, rotation={0,0,0}, height=500, width=1200,\n        font_size=350, color={0,0,0}, font_color={1,1,1}\n    })\n    self.createButton({\n        label=\"Recall\", click_function=\"buttonClick_recall\", function_owner=self,\n        position={-1.25,1,6}, rotation={0,0,0}, height=500, width=1200,\n        font_size=350, color={0,0,0}, font_color={1,1,1}\n    })\n    self.createButton({\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\n        position={0,0.1,-6}, rotation={0,0,0}, height=500, width=1200,\n        font_size=350, color={0,0,0}, font_color={1,1,1}\n    })\n---    self.createButton({\n---      label=\"Move\", click_function=\"buttonClick_transpose\", function_owner=self,\n---      position={-2.8,0.3,0}, rotation={0,0,0}, height=350, width=800,\n---      font_size=250, color={0,0,0}, font_color={0.75,0.75,1}\n---    })\nend\n\n--Sends objects from bag/table to their saved position/rotation\nfunction buttonClick_place()\n    local bagObjList = self.getObjects()\n    for guid, entry in pairs(memoryList) do\n        local obj = getObjectFromGUID(guid)\n        --If obj is out on the table, move it to the saved pos/rot\n        if obj ~= nil then\n            obj.setPositionSmooth(entry.pos)\n            obj.setRotationSmooth(entry.rot)\n            obj.setLock(entry.lock)\n        else\n            --If obj is inside of the bag\n            for _, bagObj in ipairs(bagObjList) do\n                if bagObj.guid == guid then\n                    local item = self.takeObject({\n                        guid=guid, position=entry.pos, rotation=entry.rot, smooth=false\n                    })\n                    item.setLock(entry.lock)\n                    break\n                end\n            end\n        end\n    end\n    broadcastToAll(\"Objects Placed\", {1,1,1})\nend\n\n--Recalls objects to bag from table\nfunction buttonClick_recall()\n    for guid, entry in pairs(memoryList) do\n        local obj = getObjectFromGUID(guid)\n        if obj ~= nil then self.putObject(obj) end\n    end\n    broadcastToAll(\"Objects Recalled\", {1,1,1})\nend\n\n\n--Utility functions\n\n\n--Find delta (difference) between 2 x/y/z coordinates\nfunction findOffsetDistance(p1, p2, obj)\n    local yOffset = 0\n    if obj ~= nil then\n        local bounds = obj.getBounds()\n        yOffset = (bounds.size.y - bounds.offset.y)\n    end\n    local deltaPos = {}\n    deltaPos.x = (p2.x-p1.x)\n    deltaPos.y = (p2.y-p1.y) + yOffset\n    deltaPos.z = (p2.z-p1.z)\n    return deltaPos\nend\n\n--Used to rotate a set of coordinates by an angle\nfunction rotateLocalCoordinates(desiredPos, obj)\n\tlocal objPos, objRot = obj.getPosition(), obj.getRotation()\n    local angle = math.rad(objRot.y)\n\tlocal x = desiredPos.x * math.cos(angle) - desiredPos.z * math.sin(angle)\n\tlocal z = desiredPos.x * math.sin(angle) + desiredPos.z * math.cos(angle)\n\t--return {x=objPos.x+x, y=objPos.y+desiredPos.y, z=objPos.z+z}\n    return {x=x, y=desiredPos.y, z=z}\nend\n\nfunction rotateMyCoordinates(desiredPos, obj)\n\tlocal angle = math.rad(obj.getRotation().y)\n  local x = desiredPos.x * math.sin(angle)\n\tlocal z = desiredPos.z * math.cos(angle)\n    return {x=x, y=desiredPos.y, z=z}\nend\n\n--Coroutine delay, in seconds\nfunction wait(time)\n    local start = os.time()\n    repeat coroutine.yield(0) until os.time() > start + time\nend\n\n--Duplicates a table (needed to prevent it making reference to the same objects)\nfunction duplicateTable(oldTable)\n    local newTable = {}\n    for k, v in pairs(oldTable) do\n        newTable[k] = v\n    end\n    return newTable\nend\n\n--Moves scripted highlight from all objects\nfunction removeAllHighlights()\n    for _, obj in ipairs(getAllObjects()) do\n        obj.highlightOff()\n    end\nend\n\n--Round number (num) to the Nth decimal (dec)\nfunction round(num, dec)\n  local mult = 10^(dec or 0)\n  return math.floor(num * mult + 0.5) / mult\nend",
   "LuaScriptState": "{\"ml\":{\"08481a\":{\"lock\":false,\"pos\":{\"x\":21.4064,\"y\":1.4951,\"z\":73.5391},\"rot\":{\"x\":0,\"y\":270.0011,\"z\":0}},\"0929de\":{\"lock\":false,\"pos\":{\"x\":36.9846,\"y\":1.4951,\"z\":68.7667},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"10ad2f\":{\"lock\":false,\"pos\":{\"x\":46.9356,\"y\":1.4951,\"z\":56.4831},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"11489b\":{\"lock\":false,\"pos\":{\"x\":33.8853,\"y\":1.4951,\"z\":75.727},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"17ceaf\":{\"lock\":false,\"pos\":{\"x\":46.8574,\"y\":1.4951,\"z\":73.7929},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"1839e4\":{\"lock\":false,\"pos\":{\"x\":27.6489,\"y\":1.4951,\"z\":73.5078},\"rot\":{\"x\":0,\"y\":270.0002,\"z\":0}},\"1a345b\":{\"lock\":false,\"pos\":{\"x\":40.7587,\"y\":1.4653,\"z\":68.1279},\"rot\":{\"x\":0,\"y\":90,\"z\":0}},\"1ba354\":{\"lock\":false,\"pos\":{\"x\":40.821,\"y\":1.4653,\"z\":62.422},\"rot\":{\"x\":0,\"y\":90.0001,\"z\":0}},\"1de3db\":{\"lock\":false,\"pos\":{\"x\":30.7423,\"y\":1.4951,\"z\":66.5167},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"1fdaa6\":{\"lock\":false,\"pos\":{\"x\":36.9423,\"y\":1.4951,\"z\":64.249},\"rot\":{\"x\":0,\"y\":270.0003,\"z\":0}},\"2a8c74\":{\"lock\":false,\"pos\":{\"x\":17.8817,\"y\":1.4951,\"z\":73.4184},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"2c90a2\":{\"lock\":false,\"pos\":{\"x\":44.1208,\"y\":1.4951,\"z\":68.0297},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"2f2538\":{\"lock\":false,\"pos\":{\"x\":44.1434,\"y\":1.4951,\"z\":79.7471},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"301ae3\":{\"lock\":false,\"pos\":{\"x\":21.3798,\"y\":1.4951,\"z\":71.2913},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"307f73\":{\"lock\":false,\"pos\":{\"x\":30.7492,\"y\":1.4951,\"z\":62.0034},\"rot\":{\"x\":0,\"y\":270.0012,\"z\":0}},\"33471a\":{\"lock\":false,\"pos\":{\"x\":36.9977,\"y\":1.4951,\"z\":75.7282},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"34065c\":{\"lock\":false,\"pos\":{\"x\":17.8926,\"y\":1.4951,\"z\":71.183},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"3b4dd1\":{\"lock\":false,\"pos\":{\"x\":27.6227,\"y\":1.4951,\"z\":71.2617},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"3f744d\":{\"lock\":false,\"pos\":{\"x\":24.5507,\"y\":1.4951,\"z\":75.7541},\"rot\":{\"x\":0,\"y\":270.0007,\"z\":0}},\"40a7c5\":{\"lock\":false,\"pos\":{\"x\":33.8768,\"y\":1.4951,\"z\":66.4983},\"rot\":{\"x\":0,\"y\":270.0002,\"z\":0}},\"40c203\":{\"lock\":false,\"pos\":{\"x\":33.8837,\"y\":1.4951,\"z\":77.9905},\"rot\":{\"x\":0,\"y\":269.9854,\"z\":0}},\"44a0d3\":{\"lock\":false,\"pos\":{\"x\":27.6357,\"y\":1.4951,\"z\":66.5322},\"rot\":{\"x\":0,\"y\":270.0004,\"z\":0}},\"452bc8\":{\"lock\":false,\"pos\":{\"x\":24.542,\"y\":1.4951,\"z\":80.2626},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"453cad\":{\"lock\":false,\"pos\":{\"x\":44.1404,\"y\":1.4951,\"z\":73.9328},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"454e3b\":{\"lock\":false,\"pos\":{\"x\":33.8573,\"y\":1.4951,\"z\":59.7267},\"rot\":{\"x\":0,\"y\":270.0005,\"z\":0}},\"45c74f\":{\"lock\":false,\"pos\":{\"x\":21.4218,\"y\":1.4951,\"z\":62.069},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"4647c6\":{\"lock\":false,\"pos\":{\"x\":33.906,\"y\":1.4951,\"z\":82.4785},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"477a21\":{\"lock\":false,\"pos\":{\"x\":37.0119,\"y\":1.4951,\"z\":82.4875},\"rot\":{\"x\":0,\"y\":270.0008,\"z\":0}},\"47ddae\":{\"lock\":false,\"pos\":{\"x\":30.7733,\"y\":1.4951,\"z\":82.4523},\"rot\":{\"x\":0,\"y\":270.0003,\"z\":0}},\"4943aa\":{\"lock\":false,\"pos\":{\"x\":30.743,\"y\":1.4951,\"z\":59.7326},\"rot\":{\"x\":0,\"y\":270.0005,\"z\":0}},\"4b82f7\":{\"lock\":false,\"pos\":{\"x\":24.5628,\"y\":1.4951,\"z\":82.5183},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"53ddfd\":{\"lock\":false,\"pos\":{\"x\":40.9369,\"y\":1.4653,\"z\":79.799},\"rot\":{\"x\":0,\"y\":90.0003,\"z\":0}},\"544769\":{\"lock\":false,\"pos\":{\"x\":40.8056,\"y\":1.4653,\"z\":56.5617},\"rot\":{\"x\":0,\"y\":90.0001,\"z\":0}},\"569f2c\":{\"lock\":false,\"pos\":{\"x\":21.3913,\"y\":1.4951,\"z\":66.5321},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"59fdc6\":{\"lock\":false,\"pos\":{\"x\":36.9895,\"y\":1.4951,\"z\":66.4918},\"rot\":{\"x\":0,\"y\":270.0003,\"z\":0}},\"5c5f38\":{\"lock\":false,\"pos\":{\"x\":46.8506,\"y\":1.4951,\"z\":67.7392},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"5ccf63\":{\"lock\":false,\"pos\":{\"x\":24.5104,\"y\":1.4951,\"z\":62.0597},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"5d89e1\":{\"lock\":false,\"pos\":{\"x\":33.8645,\"y\":1.4951,\"z\":71.2542},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"61502f\":{\"lock\":false,\"pos\":{\"x\":24.5382,\"y\":1.4951,\"z\":78.0119},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"63151e\":{\"lock\":false,\"pos\":{\"x\":30.7618,\"y\":1.4951,\"z\":77.9834},\"rot\":{\"x\":0,\"y\":270.0003,\"z\":0}},\"635516\":{\"lock\":false,\"pos\":{\"x\":46.8277,\"y\":1.4951,\"z\":85.4526},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"63facb\":{\"lock\":false,\"pos\":{\"x\":27.6406,\"y\":1.4951,\"z\":64.2977},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"640fe8\":{\"lock\":false,\"pos\":{\"x\":33.8817,\"y\":1.4951,\"z\":80.2447},\"rot\":{\"x\":0,\"y\":270.0009,\"z\":0}},\"64648e\":{\"lock\":false,\"pos\":{\"x\":27.6238,\"y\":1.4951,\"z\":68.7793},\"rot\":{\"x\":0,\"y\":270.002,\"z\":0}},\"669235\":{\"lock\":false,\"pos\":{\"x\":21.3775,\"y\":1.4951,\"z\":68.8026},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"66b8bf\":{\"lock\":false,\"pos\":{\"x\":24.4935,\"y\":1.4951,\"z\":71.264},\"rot\":{\"x\":0,\"y\":270.0002,\"z\":0}},\"6fe753\":{\"lock\":false,\"pos\":{\"x\":17.8844,\"y\":1.4951,\"z\":75.6496},\"rot\":{\"x\":0,\"y\":269.9999,\"z\":0}},\"76bdb5\":{\"lock\":false,\"pos\":{\"x\":30.7732,\"y\":1.4951,\"z\":75.7461},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"7ba87d\":{\"lock\":false,\"pos\":{\"x\":21.4139,\"y\":1.4951,\"z\":64.2966},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"82bc2a\":{\"lock\":false,\"pos\":{\"x\":40.8334,\"y\":1.4653,\"z\":73.9828},\"rot\":{\"x\":0,\"y\":90,\"z\":0}},\"858382\":{\"lock\":false,\"pos\":{\"x\":27.6136,\"y\":1.4951,\"z\":59.7565},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"86516a\":{\"lock\":false,\"pos\":{\"x\":44.2027,\"y\":1.4951,\"z\":62.262},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"890eba\":{\"lock\":false,\"pos\":{\"x\":46.8407,\"y\":1.4951,\"z\":79.589},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"8b5188\":{\"lock\":false,\"pos\":{\"x\":17.853,\"y\":1.4951,\"z\":62.2075},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"8d81a6\":{\"lock\":false,\"pos\":{\"x\":36.9554,\"y\":1.4951,\"z\":61.9913},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"9abfc5\":{\"lock\":false,\"pos\":{\"x\":21.403,\"y\":1.4951,\"z\":82.5002},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"9c6742\":{\"lock\":false,\"pos\":{\"x\":40.9847,\"y\":1.4646,\"z\":85.6833},\"rot\":{\"x\":0,\"y\":90.0087,\"z\":0}},\"9ce55c\":{\"lock\":false,\"pos\":{\"x\":21.3888,\"y\":1.4951,\"z\":75.7815},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"9d1ca0\":{\"lock\":false,\"pos\":{\"x\":36.9841,\"y\":1.4951,\"z\":71.2355},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"a1000c\":{\"lock\":false,\"pos\":{\"x\":30.7481,\"y\":1.4951,\"z\":71.2565},\"rot\":{\"x\":0,\"y\":270.001,\"z\":0}},\"a1c762\":{\"lock\":false,\"pos\":{\"x\":21.3964,\"y\":1.4951,\"z\":80.2504},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"a2b469\":{\"lock\":false,\"pos\":{\"x\":46.8753,\"y\":1.4951,\"z\":62.1617},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"a2ed11\":{\"lock\":false,\"pos\":{\"x\":33.8956,\"y\":1.4951,\"z\":68.7579},\"rot\":{\"x\":0,\"y\":269.9987,\"z\":0}},\"a4b738\":{\"lock\":false,\"pos\":{\"x\":30.7747,\"y\":1.4951,\"z\":73.5042},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"aca0f7\":{\"lock\":false,\"pos\":{\"x\":33.889,\"y\":1.4951,\"z\":73.5006},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"ad050e\":{\"lock\":false,\"pos\":{\"x\":17.8876,\"y\":1.4951,\"z\":77.8808},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"ada23c\":{\"lock\":false,\"pos\":{\"x\":30.7262,\"y\":1.4951,\"z\":68.7781},\"rot\":{\"x\":0,\"y\":270.0011,\"z\":0}},\"adfe72\":{\"lock\":false,\"pos\":{\"x\":21.3936,\"y\":1.4951,\"z\":78.0167},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"b2df4f\":{\"lock\":false,\"pos\":{\"x\":17.8994,\"y\":1.4951,\"z\":80.126},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"b7e97a\":{\"lock\":false,\"pos\":{\"x\":27.6198,\"y\":1.4951,\"z\":62.0221},\"rot\":{\"x\":0,\"y\":270.0004,\"z\":0}},\"bb10dd\":{\"lock\":false,\"pos\":{\"x\":17.8964,\"y\":1.4951,\"z\":66.7052},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"c1ad25\":{\"lock\":false,\"pos\":{\"x\":24.5263,\"y\":1.4951,\"z\":64.3057},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"c24670\":{\"lock\":false,\"pos\":{\"x\":30.7416,\"y\":1.4951,\"z\":64.2732},\"rot\":{\"x\":0,\"y\":270.0015,\"z\":0}},\"c3bb50\":{\"lock\":false,\"pos\":{\"x\":44.0606,\"y\":1.4951,\"z\":85.5524},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"c5b388\":{\"lock\":false,\"pos\":{\"x\":37.0095,\"y\":1.4951,\"z\":77.9853},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"c926a1\":{\"lock\":false,\"pos\":{\"x\":36.963,\"y\":1.4951,\"z\":59.7131},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"ca65f6\":{\"lock\":false,\"pos\":{\"x\":37.0105,\"y\":1.4951,\"z\":80.2371},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"cc7da8\":{\"lock\":false,\"pos\":{\"x\":33.8726,\"y\":1.4951,\"z\":62.0027},\"rot\":{\"x\":0,\"y\":270.0016,\"z\":0}},\"ce3ec1\":{\"lock\":false,\"pos\":{\"x\":27.6679,\"y\":1.4951,\"z\":77.9768},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"cfcbaa\":{\"lock\":false,\"pos\":{\"x\":27.663,\"y\":1.4951,\"z\":82.4968},\"rot\":{\"x\":0,\"y\":270.0002,\"z\":0}},\"d55de7\":{\"lock\":false,\"pos\":{\"x\":17.8764,\"y\":1.4951,\"z\":64.469},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"e100c0\":{\"lock\":false,\"pos\":{\"x\":24.501,\"y\":1.4951,\"z\":68.7821},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"e15e0e\":{\"lock\":false,\"pos\":{\"x\":24.5202,\"y\":1.4951,\"z\":73.5118},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"e2b1df\":{\"lock\":false,\"pos\":{\"x\":44.2126,\"y\":1.4951,\"z\":56.4993},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"e5b7d4\":{\"lock\":false,\"pos\":{\"x\":17.8948,\"y\":1.4951,\"z\":68.9383},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"ec1932\":{\"lock\":false,\"pos\":{\"x\":21.4144,\"y\":1.4951,\"z\":59.8501},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"ee3977\":{\"lock\":false,\"pos\":{\"x\":27.6653,\"y\":1.4951,\"z\":75.7366},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"ee66f3\":{\"lock\":false,\"pos\":{\"x\":27.6683,\"y\":1.4951,\"z\":80.2386},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"eeaa00\":{\"lock\":false,\"pos\":{\"x\":24.5232,\"y\":1.4951,\"z\":66.5535},\"rot\":{\"x\":0,\"y\":270.0002,\"z\":0}},\"ef8f1b\":{\"lock\":false,\"pos\":{\"x\":30.7756,\"y\":1.4951,\"z\":80.2204},\"rot\":{\"x\":0,\"y\":270.001,\"z\":0}},\"f318bc\":{\"lock\":false,\"pos\":{\"x\":36.9948,\"y\":1.4951,\"z\":73.4805},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"f80208\":{\"lock\":false,\"pos\":{\"x\":33.8798,\"y\":1.4951,\"z\":64.2552},\"rot\":{\"x\":0,\"y\":270.0007,\"z\":0}},\"f8f0d9\":{\"lock\":false,\"pos\":{\"x\":24.5137,\"y\":1.4951,\"z\":59.8017},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}}}}",
   "XmlUI": "",
   "ContainedObjects": [
@@ -87,7 +87,7 @@
       },
       "Nickname": "Bradley Walker",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB001-m\",\r\r\n  \"type\": \"Minicard\",\n  \"cycle\": \"The Sands of Memphis\"\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB001-m\",\n  \"type\": \"Minicard\",\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -149,7 +149,7 @@
       },
       "Nickname": "Bradley Walker: The First Responder",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB001\",\r\r\n  \"type\": \"Investigator\",\r\n  \"class\": \"Guardian\",\r\n  \"traits\": \"Veteran. Medic.\",\n  \"willpowerIcons\": 3,\n  \"intellectIcons\": 2,\n  \"combatIcons\": 4,\n  \"agilityIcons\": 3,\n  \"cycle\": \"The Sands of Memphis\"\n\r}\r",
+      "GMNotes": "{\n  \"id\": \"MB001\",\n  \"type\": \"Investigator\",\n  \"class\": \"Guardian\",\n  \"traits\": \"Veteran. Medic.\",\n  \"willpowerIcons\": 3,\n  \"intellectIcons\": 2,\n  \"combatIcons\": 4,\n  \"agilityIcons\": 3,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -284,7 +284,7 @@
           },
           "Nickname": "Ashes to Ashes",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MEM008\",\r\n  \"type\": \"Treachery\",\r\r\n  \"traits\": \"Injury.\",\n  \"weakness\": true,\n  \"cycle\": \"The Trials of Memphis\"\r\r\r\n}",
+          "GMNotes": "{\n  \"id\": \"MEM008\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Injury.\",\n  \"weakness\": true,\n  \"cycle\": \"The Trials of Memphis\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -345,7 +345,7 @@
           },
           "Nickname": "No One Left Behind: Whatever It Takes",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MB007\",\r\n  \"type\": \"Asset\",\r\r\n  \"traits\": \"Service.\",\n  \"cost\": 3,\n  \"willpowerIcons\": 1,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Trials of Memphis\"\r\r\r\n}",
+          "GMNotes": "{\n  \"id\": \"MB007\",\n  \"type\": \"Asset\",\n  \"traits\": \"Service.\",\n  \"cost\": 3,\n  \"willpowerIcons\": 1,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Trials of Memphis\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -482,7 +482,7 @@
           },
           "Nickname": "Sans Lingua Franca",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MB010\",\r\n  \"type\": \"Treachery\",\r\r\n  \"traits\": \"Curse.\",\r\n  \"weakness\": true,\r\n  \"cycle\": \"The Sands of Memphis\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"MB010\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Curse.\",\n  \"weakness\": true,\n  \"cycle\": \"The Sands of Memphis\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -543,7 +543,7 @@
           },
           "Nickname": "Rosetta Relief: Worldskein Codex",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MB009\",\r\n  \"type\": \"Asset\",\r\r\n  \"traits\": \"Item. Tome. Relic.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+          "GMNotes": "{\n  \"id\": \"MB009\",\n  \"type\": \"Asset\",\n  \"traits\": \"Item. Tome. Relic.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -607,7 +607,7 @@
       },
       "Nickname": "Nina Sulemani: The Interpreter",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB002\",\r\r\n  \"type\": \"Investigator\",\r\n  \"class\": \"Seeker\",\r\n  \"traits\": \"Agency. Scholar.\",\n  \"willpowerIcons\": 4,\n  \"intellectIcons\": 4,\n  \"combatIcons\": 2,\n  \"agilityIcons\": 2,\n  \"cycle\": \"The Sands of Memphis\"\n\r}\r",
+      "GMNotes": "{\n  \"id\": \"MB002\",\n  \"type\": \"Investigator\",\n  \"class\": \"Seeker\",\n  \"traits\": \"Agency. Scholar.\",\n  \"willpowerIcons\": 4,\n  \"intellectIcons\": 4,\n  \"combatIcons\": 2,\n  \"agilityIcons\": 2,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -669,7 +669,7 @@
       },
       "Nickname": "Nina Sulemani",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB002-m\",\r\r\n  \"type\": \"Minicard\",\n  \"cycle\": \"The Sands of Memphis\"\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB002-m\",\n  \"type\": \"Minicard\",\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -731,7 +731,7 @@
       },
       "Nickname": "Maxwell Blackbriar",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB003-m\",\r\r\n  \"type\": \"Minicard\",\n  \"cycle\": \"The Sands of Memphis\"\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB003-m\",\n  \"type\": \"Minicard\",\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -793,7 +793,7 @@
       },
       "Nickname": "Maxwell Blackbriar: The Hitman",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB003\",\r\r\n  \"type\": \"Investigator\",\r\n  \"class\": \"Rogue\",\r\n  \"traits\": \"Criminal. Syndicate.\",\n  \"willpowerIcons\": 2,\n  \"intellectIcons\": 3,\n  \"combatIcons\": 4,\n  \"agilityIcons\": 3,\n  \"cycle\": \"The Sands of Memphis\"\n\r}\r",
+      "GMNotes": "{\n  \"id\": \"MB003\",\n  \"type\": \"Investigator\",\n  \"class\": \"Rogue\",\n  \"traits\": \"Criminal. Syndicate.\",\n  \"willpowerIcons\": 2,\n  \"intellectIcons\": 3,\n  \"combatIcons\": 4,\n  \"agilityIcons\": 3,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -928,7 +928,7 @@
           },
           "Nickname": "Planned Obsolesence",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MB014\",\r\n  \"type\": \"Treachery\",\r\r\n  \"traits\": \"Flaw.\",\r\n  \"weakness\": true,\r\n  \"cycle\": \"The Sands of Memphis\"\r\n}",
+          "GMNotes": "{\n  \"id\": \"MB014\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Flaw.\",\n  \"weakness\": true,\n  \"cycle\": \"The Sands of Memphis\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -989,7 +989,7 @@
           },
           "Nickname": "Burn Notice",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MB013\",\r\n  \"type\": \"Treachery\",\r\r\n  \"traits\": \"Trap.\",\r\n  \"weakness\": true,\r\n  \"cycle\": \"The Sands of Memphis\"\r\n}",
+          "GMNotes": "{\n  \"id\": \"MB013\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Trap.\",\n  \"weakness\": true,\n  \"cycle\": \"The Sands of Memphis\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -1050,7 +1050,7 @@
           },
           "Nickname": "On-Site Procurement: Tricks of the Trade",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MB012\",\r\n  \"type\": \"Asset\",\n  \"cost\": 2,\r\r\n  \"traits\": \"Talent. Supply.\",\n  \"intellectIcons\": 1,\n  \"combatIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+          "GMNotes": "{\n  \"id\": \"MB012\",\n  \"type\": \"Asset\",\n  \"cost\": 2,\n  \"traits\": \"Talent. Supply.\",\n  \"intellectIcons\": 1,\n  \"combatIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -1112,7 +1112,7 @@
           },
           "Nickname": "Kill Confirmed: Business or Pleasure?",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MB011\",\r\n  \"type\": \"Asset\",\r\n  \"traits\": \"Task. Illicit.\",\r\n  \"permanent\": true,\r\n  \"startsInPlay\": true,\r\n  \"cycle\": \"The Sands of Memphis\"\r\n}",
+          "GMNotes": "{\n  \"id\": \"MB011\",\n  \"type\": \"Asset\",\n  \"traits\": \"Task. Illicit.\",\n  \"permanent\": true,\n  \"startsInPlay\": true,\n  \"cycle\": \"The Sands of Memphis\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -1249,7 +1249,7 @@
           },
           "Nickname": "Cassandra Complex",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MB016\",\r\n  \"type\": \"Treachery\",\r\r\n  \"traits\": \"Curse.\",\r\n  \"weakness\": true,\r\n  \"cycle\": \"The Sands of Memphis\"\r\n}",
+          "GMNotes": "{\n  \"id\": \"MB016\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Curse.\",\n  \"weakness\": true,\n  \"cycle\": \"The Sands of Memphis\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -1310,7 +1310,7 @@
           },
           "Nickname": "The Fractal Arbiter: An Endless Odyssey",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MB015\",\n  \"class\": \"Neutral\",\r\n  \"type\": \"Asset\",\n  \"cost\": 3,\r\r\n  \"traits\": \"Item. Relic. Occult.\",\n  \"willpowerIcons\": 1,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+          "GMNotes": "{\n  \"id\": \"MB015\",\n  \"class\": \"Neutral\",\n  \"type\": \"Asset\",\n  \"cost\": 3,\n  \"traits\": \"Item. Relic. Occult.\",\n  \"willpowerIcons\": 1,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -1374,7 +1374,7 @@
       },
       "Nickname": "Aida Zakaria: The Oracle",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB004\",\r\r\n  \"type\": \"Investigator\",\r\n  \"class\": \"Mystic\",\r\n  \"traits\": \"Performer. Socialite.\",\n  \"willpowerIcons\": 4,\n  \"intellectIcons\": 5,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 2,\n  \"cycle\": \"The Sands of Memphis\"\n\r}\r",
+      "GMNotes": "{\n  \"id\": \"MB004\",\n  \"type\": \"Investigator\",\n  \"class\": \"Mystic\",\n  \"traits\": \"Performer. Socialite.\",\n  \"willpowerIcons\": 4,\n  \"intellectIcons\": 5,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 2,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -1436,7 +1436,7 @@
       },
       "Nickname": "Aida Zakaria",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB004-m\",\r\r\n  \"type\": \"Minicard\",\n  \"cycle\": \"The Sands of Memphis\"\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB004-m\",\n  \"type\": \"Minicard\",\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -1498,7 +1498,7 @@
       },
       "Nickname": "Edward Gallagher",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB005-m\",\r\r\n  \"type\": \"Minicard\",\n  \"cycle\": \"The Sands of Memphis\"\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB005-m\",\n  \"type\": \"Minicard\",\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -1560,7 +1560,7 @@
       },
       "Nickname": "Edward Gallagher: The Prospector",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB005\",\r\r\n  \"type\": \"Investigator\",\r\n  \"class\": \"Survivor\",\r\n  \"traits\": \"Drifter. Wayfarer.\",\n  \"willpowerIcons\": 2,\n  \"intellectIcons\": 4,\n  \"combatIcons\": 4,\n  \"agilityIcons\": 2,\n  \"cycle\": \"The Sands of Memphis\"\n\r}\r",
+      "GMNotes": "{\n  \"id\": \"MB005\",\n  \"type\": \"Investigator\",\n  \"class\": \"Survivor\",\n  \"traits\": \"Drifter. Wayfarer.\",\n  \"willpowerIcons\": 2,\n  \"intellectIcons\": 4,\n  \"combatIcons\": 4,\n  \"agilityIcons\": 2,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -1768,7 +1768,7 @@
               },
               "Nickname": "Fool's Gold",
               "Description": "",
-              "GMNotes": "{\r\n  \"id\": \"MB022\",\r\n  \"type\": \"Treachery\",\r\r\n  \"traits\": \"Blunder.\",\r\n  \"weakness\": true,\r\n  \"cycle\": \"The Sands of Memphis\"\r\n}",
+              "GMNotes": "{\n  \"id\": \"MB022\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Blunder.\",\n  \"weakness\": true,\n  \"cycle\": \"The Sands of Memphis\"\n}",
               "AltLookAngle": {
                 "x": 0.0,
                 "y": 0.0,
@@ -1829,7 +1829,7 @@
               },
               "Nickname": "Fool's Gold",
               "Description": "",
-              "GMNotes": "{\r\n  \"id\": \"MB021\",\r\n  \"type\": \"Treachery\",\r\r\n  \"traits\": \"Blunder.\",\r\n  \"weakness\": true,\r\n  \"cycle\": \"The Sands of Memphis\"\r\n}",
+              "GMNotes": "{\n  \"id\": \"MB021\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Blunder.\",\n  \"weakness\": true,\n  \"cycle\": \"The Sands of Memphis\"\n}",
               "AltLookAngle": {
                 "x": 0.0,
                 "y": 0.0,
@@ -1975,7 +1975,7 @@
               },
               "Nickname": "Fool's Gold",
               "Description": "",
-              "GMNotes": "{\r\n  \"id\": \"MB020\",\r\n  \"type\": \"Treachery\",\r\r\n  \"traits\": \"Blunder.\",\r\n  \"weakness\": true,\r\n  \"cycle\": \"The Sands of Memphis\"\r\n}",
+              "GMNotes": "{\n  \"id\": \"MB020\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Blunder.\",\n  \"weakness\": true,\n  \"cycle\": \"The Sands of Memphis\"\n}",
               "AltLookAngle": {
                 "x": 0.0,
                 "y": 0.0,
@@ -2036,7 +2036,7 @@
               },
               "Nickname": "Fool's Gold",
               "Description": "",
-              "GMNotes": "{\r\n  \"id\": \"MB019\",\r\n  \"type\": \"Treachery\",\r\r\n  \"traits\": \"Blunder.\",\r\n  \"weakness\": true,\r\n  \"cycle\": \"The Sands of Memphis\"\r\n}",
+              "GMNotes": "{\n  \"id\": \"MB019\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Blunder.\",\n  \"weakness\": true,\n  \"cycle\": \"The Sands of Memphis\"\n}",
               "AltLookAngle": {
                 "x": 0.0,
                 "y": 0.0,
@@ -2097,7 +2097,7 @@
               },
               "Nickname": "Fool's Gold",
               "Description": "",
-              "GMNotes": "{\r\n  \"id\": \"MB018\",\r\n  \"type\": \"Treachery\",\r\r\n  \"traits\": \"Blunder.\",\r\n  \"weakness\": true,\r\n  \"cycle\": \"The Sands of Memphis\"\r\n}",
+              "GMNotes": "{\n  \"id\": \"MB018\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Blunder.\",\n  \"weakness\": true,\n  \"cycle\": \"The Sands of Memphis\"\n}",
               "AltLookAngle": {
                 "x": 0.0,
                 "y": 0.0,
@@ -2160,7 +2160,7 @@
           },
           "Nickname": "The Motherlode",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MB017\",\n  \"class\": \"Neutral\",\r\n  \"type\": \"Event\",\r\r\n  \"traits\": \"Fortune.\",\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+          "GMNotes": "{\n  \"id\": \"MB017\",\n  \"class\": \"Neutral\",\n  \"type\": \"Event\",\n  \"traits\": \"Fortune.\",\n  \"cycle\": \"The Sands of Memphis\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -2296,7 +2296,7 @@
           },
           "Nickname": "Alexandria in Flames",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MB025\",\r\n  \"type\": \"Treachery\",\r\r\n  \"traits\": \"Memory.\",\r\n  \"weakness\": true,\r\n  \"cycle\": \"The Sands of Memphis\"\r\n}",
+          "GMNotes": "{\n  \"id\": \"MB025\",\n  \"type\": \"Treachery\",\n  \"traits\": \"Memory.\",\n  \"weakness\": true,\n  \"cycle\": \"The Sands of Memphis\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -2357,7 +2357,7 @@
           },
           "Nickname": "Burning Inquiry: Mercury Rising",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"MB024\",\r\n  \"type\": \"Asset\",\n  \"cost\": 3,\r\r\n  \"traits\": \"Spirit.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+          "GMNotes": "{\n  \"id\": \"MB024\",\n  \"type\": \"Asset\",\n  \"cost\": 3,\n  \"traits\": \"Spirit.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -2419,7 +2419,7 @@
           },
           "Nickname": "The Fire Inside",
           "Description": "Only Ashes",
-          "GMNotes": "{\r\n  \"id\": \"MB023\",\r\n  \"type\": \"Asset\",\r\r\n  \"traits\": \"Curse.\",\n  \"permanent\": true,\n  \"startsInPlay\": true,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+          "GMNotes": "{\n  \"id\": \"MB023\",\n  \"type\": \"Asset\",\n  \"traits\": \"Curse.\",\n  \"permanent\": true,\n  \"startsInPlay\": true,\n  \"cycle\": \"The Sands of Memphis\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -2483,7 +2483,7 @@
       },
       "Nickname": "Carmen Carlyle: The Firebrand",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB006\",\r\r\n  \"type\": \"Investigator\",\r\n  \"class\": \"Survivor\",\r\n  \"traits\": \"Drifter. Possessed.\",\n  \"willpowerIcons\": 2,\n  \"intellectIcons\": 3,\n  \"combatIcons\": 4,\n  \"agilityIcons\": 3,\n  \"cycle\": \"The Sands of Memphis\"\n\r}\r",
+      "GMNotes": "{\n  \"id\": \"MB006\",\n  \"type\": \"Investigator\",\n  \"class\": \"Survivor\",\n  \"traits\": \"Drifter. Possessed.\",\n  \"willpowerIcons\": 2,\n  \"intellectIcons\": 3,\n  \"combatIcons\": 4,\n  \"agilityIcons\": 3,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -2545,7 +2545,7 @@
       },
       "Nickname": "Carmen Carlyle",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB006-m\",\r\r\n  \"type\": \"Minicard\",\n  \"cycle\": \"The Sands of Memphis\"\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB006-m\",\n  \"type\": \"Minicard\",\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -2607,7 +2607,7 @@
       },
       "Nickname": "\"Corporal\" Wojtek: Battle Bjorn",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB026\",\n  \"class\": \"Guardian\",\r\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"cost\": 5,\r\r\n  \"traits\": \"Ally. Creature. Veteran.\",\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB026\",\n  \"class\": \"Guardian\",\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"cost\": 5,\n  \"traits\": \"Ally. Creature. Veteran.\",\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -2669,7 +2669,7 @@
       },
       "Nickname": "Diadem of Deliverance",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB027\",\n  \"class\": \"Guardian\",\r\n  \"type\": \"Asset\",\n  \"level\": 0,\r\r\n  \"traits\": \"Item. Charm. Blessed.\",\n  \"cost\": 1,\n  \"willpowerIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB027\",\n  \"class\": \"Guardian\",\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"traits\": \"Item. Charm. Blessed.\",\n  \"cost\": 1,\n  \"willpowerIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -2731,7 +2731,7 @@
       },
       "Nickname": "Floodlights",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB028\",\n  \"class\": \"Guardian\",\r\n  \"type\": \"Event\",\n  \"level\": 0,\r\r\n  \"traits\": \"Tool. Mechnanical.\",\n  \"cost\": 2,\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB028\",\n  \"class\": \"Guardian\",\n  \"type\": \"Event\",\n  \"level\": 0,\n  \"traits\": \"Tool. Mechnanical.\",\n  \"cost\": 2,\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -2792,7 +2792,7 @@
       },
       "Nickname": "Justice • XI: Live Not By Lies",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB029\",\n  \"class\": \"Guardian\",\r\n  \"type\": \"Asset\",\n  \"level\": 0,\r\r\n  \"traits\": \"Tarot.\",\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB029\",\n  \"class\": \"Guardian\",\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"traits\": \"Tarot.\",\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -2854,7 +2854,7 @@
       },
       "Nickname": "Rest in Peace",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB030\",\n  \"class\": \"Guardian\",\r\n  \"type\": \"Event\",\n  \"level\": 0,\n  \"cost\": 1,\r\r\n  \"traits\": \"Blessed.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB030\",\n  \"class\": \"Guardian\",\n  \"type\": \"Event\",\n  \"level\": 0,\n  \"cost\": 1,\n  \"traits\": \"Blessed.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -2915,7 +2915,7 @@
       },
       "Nickname": "Voice of Horus",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB031\",\n  \"class\": \"Guardian\",\r\n  \"type\": \"Event\",\n  \"level\": 0,\r\r\n  \"traits\": \"Spell. Blessed.\",\n  \"willpowerIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB031\",\n  \"class\": \"Guardian\",\n  \"type\": \"Event\",\n  \"level\": 0,\n  \"traits\": \"Spell. Blessed.\",\n  \"willpowerIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -2976,7 +2976,7 @@
       },
       "Nickname": "Recusant Armistice",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB062\",\n  \"class\": \"Guardian\",\r\n  \"type\": \"Event\",\n  \"level\": 1,\r\r\n  \"traits\": \"Tactic. Diplomacy.\",\n  \"cost\": 0,\n  \"combatIcons\": 1,\n  \"intellectIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB062\",\n  \"class\": \"Guardian\",\n  \"type\": \"Event\",\n  \"level\": 1,\n  \"traits\": \"Tactic. Diplomacy.\",\n  \"cost\": 0,\n  \"combatIcons\": 1,\n  \"intellectIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -3037,7 +3037,7 @@
       },
       "Nickname": "Combat Boots",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB063\",\n  \"class\": \"Guardian\",\r\n  \"type\": \"Asset\",\n  \"level\": 2,\r\r\n  \"traits\": \"Item. Clothing. Footwear.\",\n  \"cost\": 3,\n  \"agilityIcons\": 1,\n  \"combatIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB063\",\n  \"class\": \"Guardian\",\n  \"type\": \"Asset\",\n  \"level\": 2,\n  \"traits\": \"Item. Clothing. Footwear.\",\n  \"cost\": 3,\n  \"agilityIcons\": 1,\n  \"combatIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -3099,7 +3099,7 @@
       },
       "Nickname": "Holy Roller: Grim Benediction",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB064\",\n  \"class\": \"Guardian\",\r\n  \"type\": \"Asset\",\n  \"level\": 3,\r\r\n  \"traits\": \"Item. Relic. Weapon. Ranged. Blessed.\",\n  \"cost\": 4,\n  \"willpowerIcons\": 1,\n  \"combatIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB064\",\n  \"class\": \"Guardian\",\n  \"type\": \"Asset\",\n  \"level\": 3,\n  \"traits\": \"Item. Relic. Weapon. Ranged. Blessed.\",\n  \"cost\": 4,\n  \"willpowerIcons\": 1,\n  \"combatIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -3161,7 +3161,7 @@
       },
       "Nickname": "Scales of Pitiless Justice: Supreme Verdict",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB065\",\n  \"class\": \"Guardian\",\r\n  \"type\": \"Asset\",\n  \"level\": 4,\r\r\n  \"traits\": \"Item. Relic. Blessed.\",\n  \"willpowerIcons\": 1,\n  \"combatIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB065\",\n  \"class\": \"Guardian\",\n  \"type\": \"Asset\",\n  \"level\": 4,\n  \"traits\": \"Item. Relic. Blessed.\",\n  \"willpowerIcons\": 1,\n  \"combatIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -3223,7 +3223,7 @@
       },
       "Nickname": "Divine Intervention",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB066\",\n  \"class\": \"Guardian\",\r\n  \"type\": \"Event\",\n  \"level\": 5,\r\r\n  \"traits\": \"Miracle. Blessed.\",\n  \"cost\": 0,\n  \"wildIcons\": 4,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB066\",\n  \"class\": \"Guardian\",\n  \"type\": \"Event\",\n  \"level\": 5,\n  \"traits\": \"Miracle. Blessed.\",\n  \"cost\": 0,\n  \"wildIcons\": 4,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -3284,7 +3284,7 @@
       },
       "Nickname": "Integral Epiphany",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB071\",\n  \"class\": \"Seeker\",\r\n  \"type\": \"Event\",\n  \"level\": 5,\n  \"cost\": 0,\r\r\n  \"traits\": \"Miracle. Insight.\",\n  \"wildIcons\": 4,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB071\",\n  \"class\": \"Seeker\",\n  \"type\": \"Event\",\n  \"level\": 5,\n  \"cost\": 0,\n  \"traits\": \"Miracle. Insight.\",\n  \"wildIcons\": 4,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -3345,7 +3345,7 @@
       },
       "Nickname": "Bablyon's Fall",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB070\",\n  \"class\": \"Seeker\",\r\n  \"type\": \"Event\",\n  \"level\": 4,\n  \"cost\": 1,\r\r\n  \"traits\": \"Insight. Paradox.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB070\",\n  \"class\": \"Seeker\",\n  \"type\": \"Event\",\n  \"level\": 4,\n  \"cost\": 1,\n  \"traits\": \"Insight. Paradox.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -3406,7 +3406,7 @@
       },
       "Nickname": "Ecumenical Excess",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB069\",\n  \"class\": \"Seeker\",\r\n  \"type\": \"Event\",\n  \"level\": 3,\n  \"cost\": 0,\r\r\n  \"traits\": \"Insight. Cursed\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB069\",\n  \"class\": \"Seeker\",\n  \"type\": \"Event\",\n  \"level\": 3,\n  \"cost\": 0,\n  \"traits\": \"Insight. Cursed\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -3467,7 +3467,7 @@
       },
       "Nickname": "Heretical Thesis",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB068\",\n  \"class\": \"Seeker\",\r\n  \"type\": \"Event\",\n  \"level\": 2,\n  \"cost\": 0,\r\r\n  \"traits\": \"Insight. Blessed. Cursed.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB068\",\n  \"class\": \"Seeker\",\n  \"type\": \"Event\",\n  \"level\": 2,\n  \"cost\": 0,\n  \"traits\": \"Insight. Blessed. Cursed.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -3528,7 +3528,7 @@
       },
       "Nickname": "Sodden Candelabra: The Scepter of Hydra",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB067\",\n  \"class\": \"Seeker\",\r\n  \"type\": \"Asset\",\n  \"level\": 1,\n  \"cost\": 3,\r\r\n  \"traits\": \"Item. Relic. Occult. Cursed.\",\n  \"intellectIcons\": 1,\n  \"willpowerIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB067\",\n  \"class\": \"Seeker\",\n  \"type\": \"Asset\",\n  \"level\": 1,\n  \"cost\": 3,\n  \"traits\": \"Item. Relic. Occult. Cursed.\",\n  \"intellectIcons\": 1,\n  \"willpowerIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -3590,7 +3590,7 @@
       },
       "Nickname": "Voice of Wadjet",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB037\",\n  \"class\": \"Seeker\",\r\n  \"type\": \"Event\",\n  \"level\": 0,\n  \"cost\": 1,\r\r\n  \"traits\": \"Spell. Cursed.\",\n  \"willpowerIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB037\",\n  \"class\": \"Seeker\",\n  \"type\": \"Event\",\n  \"level\": 0,\n  \"cost\": 1,\n  \"traits\": \"Spell. Cursed.\",\n  \"willpowerIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -3651,7 +3651,7 @@
       },
       "Nickname": "The Price of Progress",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB036\",\n  \"class\": \"Seeker\",\r\n  \"type\": \"Skill\",\n  \"level\": 0,\r\r\n  \"traits\": \"Practiced.\",\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB036\",\n  \"class\": \"Seeker\",\n  \"type\": \"Skill\",\n  \"level\": 0,\n  \"traits\": \"Practiced.\",\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -3712,7 +3712,7 @@
       },
       "Nickname": "The High Priestess • II: Change the Future",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB035\",\n  \"class\": \"Seeker\",\r\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"cost\": 2,\r\r\n  \"traits\": \"Tarot.\",\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB035\",\n  \"class\": \"Seeker\",\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"cost\": 2,\n  \"traits\": \"Tarot.\",\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -3774,7 +3774,7 @@
       },
       "Nickname": "Rite of Containment",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB034\",\n  \"class\": \"Seeker\",\r\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"cost\": 2,\r\r\n  \"traits\": \"Ritual.\",\n  \"intellectIcons\": 1,\n  \"willpowerIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB034\",\n  \"class\": \"Seeker\",\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"cost\": 2,\n  \"traits\": \"Ritual.\",\n  \"intellectIcons\": 1,\n  \"willpowerIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -3836,7 +3836,7 @@
       },
       "Nickname": "Mercurial Clepsydra: The Hourglass of Ozymandias",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB033\",\n  \"class\": \"Seeker\",\r\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"cost\": 0,\r\r\n  \"traits\": \"Item. Relic. Occult.\",\n  \"intellectIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB033\",\n  \"class\": \"Seeker\",\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"cost\": 0,\n  \"traits\": \"Item. Relic. Occult.\",\n  \"intellectIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -3898,7 +3898,7 @@
       },
       "Nickname": "Janet Willoughby: Paranormal Paralegal",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB032\",\n  \"class\": \"Seeker\",\r\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"cost\": 3,\r\r\n  \"traits\": \"Ally. Miskatonic. Witch.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB032\",\n  \"class\": \"Seeker\",\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"cost\": 3,\n  \"traits\": \"Ally. Miskatonic. Witch.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -3960,7 +3960,7 @@
       },
       "Nickname": "Judgement • XX: Paying Your Debts",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB038\",\n  \"class\": \"Rogue\",\r\n  \"type\": \"Asset\",\n  \"level\": 0,\r\r\n  \"traits\": \"Tarot.\",\n  \"cost\": 2,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB038\",\n  \"class\": \"Rogue\",\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"traits\": \"Tarot.\",\n  \"cost\": 2,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -4022,7 +4022,7 @@
       },
       "Nickname": "On the Take",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB039\",\n  \"class\": \"Rogue\",\r\n  \"type\": \"Asset\",\n  \"level\": 0,\r\r\n  \"traits\": \"Connection. Illicit.\",\n  \"cost\": 0,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB039\",\n  \"class\": \"Rogue\",\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"traits\": \"Connection. Illicit.\",\n  \"cost\": 0,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -4084,7 +4084,7 @@
       },
       "Nickname": "Rite of Calamity",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB040\",\n  \"class\": \"Rogue\",\r\n  \"type\": \"Asset\",\n  \"level\": 0,\r\r\n  \"traits\": \"Ritual. Cursed.\",\n  \"willpowerIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB040\",\n  \"class\": \"Rogue\",\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"traits\": \"Ritual. Cursed.\",\n  \"willpowerIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -4146,7 +4146,7 @@
       },
       "Nickname": "Scheherazade: Teller of Tall Tales",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB041\",\r\n  \"class\": \"Rogue\",\r\n  \"type\": \"Asset\",\r\n  \"level\": 0,\r\n  \"traits\": \"Ally. Scholar. Performer.\",\r\n  \"cost\": 3,\r\n  \"agilityIcons\": 1,\r\n  \"intellectIcons\": 1,\r\n  \"cycle\": \"The Sands of Memphis\"\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB041\",\n  \"class\": \"Rogue\",\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"traits\": \"Ally. Scholar. Performer.\",\n  \"cost\": 3,\n  \"agilityIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -4208,7 +4208,7 @@
       },
       "Nickname": "Split Second",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB042\",\n  \"class\": \"Rogue\",\r\n  \"type\": \"Event\",\n  \"level\": 0,\r\r\n  \"traits\": \"Fated. Morpho.\",\n  \"cost\": 0,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB042\",\n  \"class\": \"Rogue\",\n  \"type\": \"Event\",\n  \"level\": 0,\n  \"traits\": \"Fated. Morpho.\",\n  \"cost\": 0,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -4269,7 +4269,7 @@
       },
       "Nickname": "Voice of Sobek",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB043\",\n  \"class\": \"Rogue\",\r\n  \"type\": \"Event\",\n  \"level\": 0,\r\r\n  \"traits\": \"Spell.\",\n  \"cost\": 0,\n  \"willpowerIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB043\",\n  \"class\": \"Rogue\",\n  \"type\": \"Event\",\n  \"level\": 0,\n  \"traits\": \"Spell.\",\n  \"cost\": 0,\n  \"willpowerIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -4330,7 +4330,7 @@
       },
       "Nickname": "Inside Job",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB072\",\n  \"class\": \"Rogue\",\r\n  \"type\": \"Event\",\n  \"level\": 1,\n  \"cost\": 0,\r\r\n  \"traits\": \"Trick. Diplomacy.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB072\",\n  \"class\": \"Rogue\",\n  \"type\": \"Event\",\n  \"level\": 1,\n  \"cost\": 0,\n  \"traits\": \"Trick. Diplomacy.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -4391,7 +4391,7 @@
       },
       "Nickname": "Penumbral Gloom: Mantle of the Black Pharaoh",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB073\",\n  \"class\": \"Rogue\",\r\n  \"type\": \"Asset\",\n  \"level\": 2,\r\r\n  \"traits\": \"Armor. Symbiote. Cursed.\",\n  \"cost\": 3,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB073\",\n  \"class\": \"Rogue\",\n  \"type\": \"Asset\",\n  \"level\": 2,\n  \"traits\": \"Armor. Symbiote. Cursed.\",\n  \"cost\": 3,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -4453,7 +4453,7 @@
       },
       "Nickname": "Ticket to Tarnation: Apollyon's Conductor",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB074\",\n  \"class\": \"Rogue\",\r\n  \"type\": \"Asset\",\n  \"level\": 3,\r\r\n  \"traits\": \"Item. Relic. Weapon. Ranged. Cursed.\",\n  \"cost\": 4,\n  \"willpowerIcons\": 1,\n  \"combatIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB074\",\n  \"class\": \"Rogue\",\n  \"type\": \"Asset\",\n  \"level\": 3,\n  \"traits\": \"Item. Relic. Weapon. Ranged. Cursed.\",\n  \"cost\": 4,\n  \"willpowerIcons\": 1,\n  \"combatIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -4515,7 +4515,7 @@
       },
       "Nickname": "Jailbreak!: One Last Job",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB075\",\n  \"class\": \"Rogue\",\r\n  \"type\": \"Asset\",\n  \"level\": 4,\r\r\n  \"traits\": \"Connection. Favor.\",\n  \"permanent\": true,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB075\",\n  \"class\": \"Rogue\",\n  \"type\": \"Asset\",\n  \"level\": 4,\n  \"traits\": \"Connection. Favor.\",\n  \"permanent\": true,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -4577,7 +4577,7 @@
       },
       "Nickname": "Tequila Sunrise",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB076\",\n  \"class\": \"Rogue\",\r\n  \"type\": \"Event\",\n  \"level\": 5,\n  \"cost\": 0,\r\r\n  \"traits\": \"Miracle. Paradox.\",\n  \"wildIcons\": 4,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB076\",\n  \"class\": \"Rogue\",\n  \"type\": \"Event\",\n  \"level\": 5,\n  \"cost\": 0,\n  \"traits\": \"Miracle. Paradox.\",\n  \"wildIcons\": 4,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -4638,7 +4638,7 @@
       },
       "Nickname": "Unfathomable Designs",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB081\",\n  \"class\": \"Mystic\",\r\n  \"type\": \"Event\",\n  \"level\": 5,\n  \"cost\": 0,\r\r\n  \"traits\": \"Miracle. Boon.\",\n  \"wildIcons\": 4,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB081\",\n  \"class\": \"Mystic\",\n  \"type\": \"Event\",\n  \"level\": 5,\n  \"cost\": 0,\n  \"traits\": \"Miracle. Boon.\",\n  \"wildIcons\": 4,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -4699,7 +4699,7 @@
       },
       "Nickname": "Rite of Harmony",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB080\",\n  \"class\": \"Mystic\",\r\n  \"type\": \"Asset\",\n  \"level\": 4,\r\r\n  \"traits\": \"Ritual. Blessed. Cursed.\",\n  \"cost\": 2,\n  \"wildIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB080\",\n  \"class\": \"Mystic\",\n  \"type\": \"Asset\",\n  \"level\": 4,\n  \"traits\": \"Ritual. Blessed. Cursed.\",\n  \"cost\": 2,\n  \"wildIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -4761,7 +4761,7 @@
       },
       "Nickname": "Empyrean Alignment",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB079\",\n  \"class\": \"Mystic\",\r\n  \"type\": \"Event\",\n  \"level\": 3,\n  \"cost\": 2,\r\r\n  \"traits\": \"Fortune. Tandem.\",\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB079\",\n  \"class\": \"Mystic\",\n  \"type\": \"Event\",\n  \"level\": 3,\n  \"cost\": 2,\n  \"traits\": \"Fortune. Tandem.\",\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -4822,7 +4822,7 @@
       },
       "Nickname": "Ancient Phylactery: The Lich's Curse",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB078\",\n  \"class\": \"Mystic\",\r\n  \"type\": \"Asset\",\n  \"level\": 2,\r\r\n  \"traits\": \"Item. Relic. Occult.\",\n  \"cost\": 2,\n  \"willpowerIcons\": 2,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB078\",\n  \"class\": \"Mystic\",\n  \"type\": \"Asset\",\n  \"level\": 2,\n  \"traits\": \"Item. Relic. Occult.\",\n  \"cost\": 2,\n  \"willpowerIcons\": 2,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -4884,7 +4884,7 @@
       },
       "Nickname": "Transcendent Purpose",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB077\",\n  \"class\": \"Mystic\",\r\n  \"type\": \"Event\",\n  \"level\": 1,\n  \"cost\": 0,\r\r\n  \"traits\": \"Spirit. Diplomacy.\",\n  \"willpowerIcons\": 1,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB077\",\n  \"class\": \"Mystic\",\n  \"type\": \"Event\",\n  \"level\": 1,\n  \"cost\": 0,\n  \"traits\": \"Spirit. Diplomacy.\",\n  \"willpowerIcons\": 1,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -4945,7 +4945,7 @@
       },
       "Nickname": "The Magician • I: The Power Within",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB049\",\r\n  \"class\": \"Mystic\",\r\n  \"type\": \"Asset\",\r\n  \"level\": 0,\r\n  \"traits\": \"Tarot.\",\r\n  \"cost\": 2,\r\r\n  \"uses\": [\r\n      {\r\n         \"count\": 2,\r\n         \"type\": \"Charge\",\r\n         \"token\": \"resource\"\r\n      }\r\n   ],\r\n  \"cycle\": \"The Sands of Memphis\"\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB049\",\n  \"class\": \"Mystic\",\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"traits\": \"Tarot.\",\n  \"cost\": 2,\n  \"uses\": [\n      {\n         \"count\": 2,\n         \"type\": \"Charge\",\n         \"token\": \"resource\"\n      }\n   ],\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -5007,7 +5007,7 @@
       },
       "Nickname": "Soul Asylum",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB048\",\n  \"class\": \"Mystic\",\r\n  \"type\": \"Event\",\n  \"level\": 0,\r\r\n  \"traits\": \"Spell. Occult.\",\n  \"cost\": 2,\n  \"willpowerIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB048\",\n  \"class\": \"Mystic\",\n  \"type\": \"Event\",\n  \"level\": 0,\n  \"traits\": \"Spell. Occult.\",\n  \"cost\": 2,\n  \"willpowerIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -5068,7 +5068,7 @@
       },
       "Nickname": "Medium Board",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB047\",\n  \"class\": \"Mystic\",\r\n  \"type\": \"Asset\",\n  \"level\": 0,\r\r\n  \"traits\": \"Item. Tool. Occult.\",\n  \"cost\": 3,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB047\",\n  \"class\": \"Mystic\",\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"traits\": \"Item. Tool. Occult.\",\n  \"cost\": 3,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -5130,7 +5130,7 @@
       },
       "Nickname": "Ghost Stories",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB046\",\n  \"class\": \"Mystic\",\r\n  \"type\": \"Skill\",\n  \"level\": 0,\r\r\n  \"traits\": \"Augury. Practiced.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB046\",\n  \"class\": \"Mystic\",\n  \"type\": \"Skill\",\n  \"level\": 0,\n  \"traits\": \"Augury. Practiced.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -5191,7 +5191,7 @@
       },
       "Nickname": "Emissary of Sehkmet",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB045\",\n  \"class\": \"Mystic\",\r\n  \"type\": \"Asset\",\n  \"level\": 0,\r\r\n  \"traits\": \"Ally. Creature. Summon.\",\n  \"cost\": 2,\n  \"willpowerIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB045\",\n  \"class\": \"Mystic\",\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"traits\": \"Ally. Creature. Summon.\",\n  \"cost\": 2,\n  \"willpowerIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -5253,7 +5253,7 @@
       },
       "Nickname": "Dead Memories",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB044\",\n  \"class\": \"Mystic\",\r\n  \"type\": \"Event\",\n  \"level\": 0,\r\r\n  \"traits\": \"Spell.\",\n  \"cost\": 1,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB044\",\n  \"class\": \"Mystic\",\n  \"type\": \"Event\",\n  \"level\": 0,\n  \"traits\": \"Spell.\",\n  \"cost\": 1,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -5314,7 +5314,7 @@
       },
       "Nickname": "Molotov Cocktail",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB050\",\r\n  \"class\": \"Survivor\",\r\n  \"type\": \"Asset\",\r\n  \"level\": 0,\r\n  \"traits\": \"Item. Weapon. Ranged. Illicit.\",\r\n  \"cost\": 2,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\r\r\n  \"uses\": [\r\n      {\r\n         \"count\": 3,\r\n         \"type\": \"Supply\",\r\n         \"token\": \"resource\"\r\n      }\r\n   ],\r\n  \"cycle\": \"The Sands of Memphis\"\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB050\",\n  \"class\": \"Survivor\",\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"traits\": \"Item. Weapon. Ranged. Illicit.\",\n  \"cost\": 2,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"uses\": [\n      {\n         \"count\": 3,\n         \"type\": \"Supply\",\n         \"token\": \"resource\"\n      }\n   ],\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -5376,7 +5376,7 @@
       },
       "Nickname": "'Aquila' del Rey: Surly Scavenger",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB056\",\r\n  \"class\": \"Neutral\",\r\n  \"type\": \"Asset\",\r\n  \"level\": 0,\r\n  \"traits\": \"Ally. Drifter. Mercenary.\",\r\n  \"cost\": 3,\r\n  \"wildIcons\": 1,\r\r\n  \"cycle\": \"The Sands of Memphis\"\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB056\",\n  \"class\": \"Neutral\",\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"traits\": \"Ally. Drifter. Mercenary.\",\n  \"cost\": 3,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -5438,7 +5438,7 @@
       },
       "Nickname": "Natalya Maldonado: Expert Survivalist",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB051\",\n  \"class\": \"Survivor\",\r\n  \"type\": \"Asset\",\n  \"level\": 0,\r\r\n  \"traits\": \"Ally. Wayfarer. Mercenary.\",\n  \"cost\": 2,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB051\",\n  \"class\": \"Survivor\",\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"traits\": \"Ally. Wayfarer. Mercenary.\",\n  \"cost\": 2,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -5500,7 +5500,7 @@
       },
       "Nickname": "No Truce With the Furies",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB052\",\n  \"class\": \"Survivor\",\r\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"cost\": 2,\r\r\n  \"traits\": \"Condition.\",\n  \"willpowerIcons\": 1,\n  \"combatIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB052\",\n  \"class\": \"Survivor\",\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"cost\": 2,\n  \"traits\": \"Condition.\",\n  \"willpowerIcons\": 1,\n  \"combatIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -5562,7 +5562,7 @@
       },
       "Nickname": "Rite of Defiance",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB053\",\n  \"class\": \"Survivor\",\r\n  \"type\": \"Asset\",\n  \"level\": 0,\r\r\n  \"traits\": \"Ritual. Spirit.\",\n  \"cost\": 2,\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB053\",\n  \"class\": \"Survivor\",\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"traits\": \"Ritual. Spirit.\",\n  \"cost\": 2,\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -5624,7 +5624,7 @@
       },
       "Nickname": "The Hanged Man • XII: Prisoner or Prophet?",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB054\",\n  \"class\": \"Survivor\",\r\n  \"type\": \"Asset\",\n  \"level\": 0,\r\r\n  \"traits\": \"Tarot.\",\n  \"cost\": 2,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB054\",\n  \"class\": \"Survivor\",\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"traits\": \"Tarot.\",\n  \"cost\": 2,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -5686,7 +5686,7 @@
       },
       "Nickname": "Voice of Kerberos",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB055\",\n  \"class\": \"Survivor\",\r\n  \"type\": \"Event\",\n  \"level\": 0,\r\r\n  \"traits\": \"Spell\",\n  \"cost\": 0,\n  \"willpowerIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB055\",\n  \"class\": \"Survivor\",\n  \"type\": \"Event\",\n  \"level\": 0,\n  \"traits\": \"Spell\",\n  \"cost\": 0,\n  \"willpowerIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -5747,7 +5747,7 @@
       },
       "Nickname": "Dissension in the Ranks",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB082\",\n  \"class\": \"Survivor\",\r\n  \"type\": \"Event\",\n  \"level\": 1,\n  \"cost\": 0,\r\r\n  \"traits\": \"Spirit. Diplomacy.\",\n  \"willpowerIcons\": 1,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB082\",\n  \"class\": \"Survivor\",\n  \"type\": \"Event\",\n  \"level\": 1,\n  \"cost\": 0,\n  \"traits\": \"Spirit. Diplomacy.\",\n  \"willpowerIcons\": 1,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -5808,7 +5808,7 @@
       },
       "Nickname": "Gambol: Cobra Queen",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB083\",\n  \"class\": \"Survivor\",\r\n  \"type\": \"Asset\",\n  \"level\": 2,\r\r\n  \"traits\": \"Ally. Creature.\",\n  \"cost\": 3,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB083\",\n  \"class\": \"Survivor\",\n  \"type\": \"Asset\",\n  \"level\": 2,\n  \"traits\": \"Ally. Creature.\",\n  \"cost\": 3,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -5870,7 +5870,7 @@
       },
       "Nickname": "Hula Chakram",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB084\",\n  \"class\": \"Survivor\",\r\n  \"type\": \"Asset\",\n  \"level\": 3,\r\r\n  \"traits\": \"Item. Weapon. Melee.\",\n  \"cost\": 3,\n  \"combatIcons\": 2,\n  \"agilityIcons\": 2,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB084\",\n  \"class\": \"Survivor\",\n  \"type\": \"Asset\",\n  \"level\": 3,\n  \"traits\": \"Item. Weapon. Melee.\",\n  \"cost\": 3,\n  \"combatIcons\": 2,\n  \"agilityIcons\": 2,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -5932,7 +5932,7 @@
       },
       "Nickname": "Inland Empire",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB085\",\n  \"class\": \"Survivor\",\r\n  \"type\": \"Event\",\n  \"level\": 4,\n  \"cost\": 1,\r\r\n  \"traits\": \"Insight. Paradox.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB085\",\n  \"class\": \"Survivor\",\n  \"type\": \"Event\",\n  \"level\": 4,\n  \"cost\": 1,\n  \"traits\": \"Insight. Paradox.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -5993,7 +5993,7 @@
       },
       "Nickname": "As the Tables Turn",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB086\",\n  \"class\": \"Survivor\",\r\n  \"type\": \"Event\",\n  \"level\": 5,\n  \"cost\": 0,\r\r\n  \"traits\": \"Miracle. Fortune.\",\n  \"wildIcons\": 4,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB086\",\n  \"class\": \"Survivor\",\n  \"type\": \"Event\",\n  \"level\": 5,\n  \"cost\": 0,\n  \"traits\": \"Miracle. Fortune.\",\n  \"wildIcons\": 4,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -6054,7 +6054,7 @@
       },
       "Nickname": "Machinations of Osiris",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB091\",\n  \"class\": \"Neutral\",\r\n  \"type\": \"Event\",\n  \"level\": 5,\n  \"cost\": 0,\r\r\n  \"traits\": \"Miracle. Favor.\",\n  \"wildIcons\": 4,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB091\",\n  \"class\": \"Neutral\",\n  \"type\": \"Event\",\n  \"level\": 5,\n  \"cost\": 0,\n  \"traits\": \"Miracle. Favor.\",\n  \"wildIcons\": 4,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -6115,7 +6115,7 @@
       },
       "Nickname": "Don't Fear the Reaper: From the Cradle to the Grave",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB057\",\n  \"class\": \"Neutral\",\r\n  \"type\": \"Asset\",\n  \"level\": 0,\r\r\n  \"traits\": \"Condition.\",\n  \"permanent\": true,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB057\",\n  \"class\": \"Neutral\",\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"traits\": \"Condition.\",\n  \"permanent\": true,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -6177,7 +6177,7 @@
       },
       "Nickname": "Make It Hot By Striking",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB058\",\n  \"class\": \"Neutral\",\r\n  \"type\": \"Skill\",\n  \"level\": 0,\r\r\n  \"traits\": \"Practiced.\",  \n  \"intellectIcons\": 1,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB058\",\n  \"class\": \"Neutral\",\n  \"type\": \"Skill\",\n  \"level\": 0,\n  \"traits\": \"Practiced.\",  \n  \"intellectIcons\": 1,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -6238,7 +6238,7 @@
       },
       "Nickname": "Signals Intelligence",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB059\",\n  \"class\": \"Neutral\",\r\n  \"type\": \"Event\",\n  \"level\": 0,\r\r\n  \"traits\": \"Insight.\",\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB059\",\n  \"class\": \"Neutral\",\n  \"type\": \"Event\",\n  \"level\": 0,\n  \"traits\": \"Insight.\",\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -6299,7 +6299,7 @@
       },
       "Nickname": "Tabula Rasa",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB060\",\n  \"class\": \"Neutral\",\r\n  \"type\": \"Event\",\n  \"level\": 0,\r\r\n  \"traits\": \"Spirit.\",\n  \"willpowerIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB060\",\n  \"class\": \"Neutral\",\n  \"type\": \"Event\",\n  \"level\": 0,\n  \"traits\": \"Spirit.\",\n  \"willpowerIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -6360,7 +6360,7 @@
       },
       "Nickname": "Temperance • XIV: Mastering Yourself",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB061\",\n  \"class\": \"Neutral\",\r\n  \"type\": \"Asset\",\n  \"level\": 0,\r\r\n  \"traits\": \"Tarot.\",\n  \"cost\": 2,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB061\",\n  \"class\": \"Neutral\",\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"traits\": \"Tarot.\",\n  \"cost\": 2,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -6422,7 +6422,7 @@
       },
       "Nickname": "Nuru of the Second Sun: Ptolemaic Omencaller",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB087\",\n  \"class\": \"Neutral\",\r\n  \"type\": \"Asset\",\n  \"level\": 1,\r\r\n  \"traits\": \"Ally. Clairvoyant. Morpho.\",\n  \"cost\": 2,\n  \"wilpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB087\",\n  \"class\": \"Neutral\",\n  \"type\": \"Asset\",\n  \"level\": 1,\n  \"traits\": \"Ally. Clairvoyant. Morpho.\",\n  \"cost\": 2,\n  \"wilpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -6484,7 +6484,7 @@
       },
       "Nickname": "Riot Shield",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB088\",\n  \"class\": \"Neutral\",\r\n  \"type\": \"Asset\",\n  \"level\": 2,\r\r\n  \"traits\": \"Item. Armor.\",\n  \"cost\": 2,\n  \"agilityIcons\": 1,\n  \"combatIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB088\",\n  \"class\": \"Neutral\",\n  \"type\": \"Asset\",\n  \"level\": 2,\n  \"traits\": \"Item. Armor.\",\n  \"cost\": 2,\n  \"agilityIcons\": 1,\n  \"combatIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -6546,7 +6546,7 @@
       },
       "Nickname": "Lost Legacy",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB089\",\n  \"class\": \"Neutral\",\r\n  \"type\": \"Event\",\n  \"level\": 3,\r\r\n  \"traits\": \"Fortune.\",\n  \"cost\": 0,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB089\",\n  \"class\": \"Neutral\",\n  \"type\": \"Event\",\n  \"level\": 3,\n  \"traits\": \"Fortune.\",\n  \"cost\": 0,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -6607,7 +6607,7 @@
       },
       "Nickname": "Charon's Harvester: Reaper of Souls",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB090\",\n  \"class\": \"Neutral\",\r\n  \"type\": \"Asset\",\n  \"level\": 4,\r\r\n  \"traits\": \"Item. Relic. Weapon. Melee. Occult.\",\n  \"cost\": 4,\n  \"wilpowerIcons\": 2,\n  \"combatIcons\": 2,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB090\",\n  \"class\": \"Neutral\",\n  \"type\": \"Asset\",\n  \"level\": 4,\n  \"traits\": \"Item. Relic. Weapon. Melee. Occult.\",\n  \"cost\": 4,\n  \"wilpowerIcons\": 2,\n  \"combatIcons\": 2,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -6669,7 +6669,7 @@
       },
       "Nickname": "Cat's Cradle",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB093\",\n  \"class\": \"Mystic|Survivor\",\r\n  \"type\": \"Asset\",\n  \"level\": 0,\r\r\n  \"traits\": \"Pact. Spirit.\",\n  \"cost\": 2,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB093\",\n  \"class\": \"Mystic|Survivor\",\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"traits\": \"Pact. Spirit.\",\n  \"cost\": 2,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -6731,7 +6731,7 @@
       },
       "Nickname": "Mine Sweeper",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB093\",\n  \"class\": \"Guardian|Seeker|Rogue\",\r\n  \"type\": \"Asset\",\n  \"level\": 0,\r\r\n  \"traits\": \"Item. Tool. Science.\",\n  \"cost\": 3,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB093\",\n  \"class\": \"Guardian|Seeker|Rogue\",\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"traits\": \"Item. Tool. Science.\",\n  \"cost\": 3,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -6793,7 +6793,7 @@
       },
       "Nickname": "Nikola's Oscillator: Electric Dreams",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB094\",\n  \"class\": \"Seeker|Survivor\",\r\n  \"type\": \"Asset\",\n  \"level\": 0,\r\r\n  \"traits\": \"Item. Science.\",\n  \"cost\": 1,\n  \"intellectIcons\": 1,\n  \"willpowerIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB094\",\n  \"class\": \"Seeker|Survivor\",\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"traits\": \"Item. Science.\",\n  \"cost\": 1,\n  \"intellectIcons\": 1,\n  \"willpowerIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -6855,7 +6855,7 @@
       },
       "Nickname": "Tomb Raider",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB095\",\n  \"class\": \"Rogue|Survivor\",\r\n  \"type\": \"Asset\",\n  \"level\": 0,\r\r\n  \"traits\": \"Ally. Criminal.\",\n  \"cost\": 2,\n  \"intellectIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB095\",\n  \"class\": \"Rogue|Survivor\",\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"traits\": \"Ally. Criminal.\",\n  \"cost\": 2,\n  \"intellectIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -6917,7 +6917,7 @@
       },
       "Nickname": "Weathered Prybar",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB096\",\n  \"class\": \"Guardian|Survivor\",\r\n  \"type\": \"Asset\",\n  \"level\": 0,\r\r\n  \"traits\": \"Item. Tool. Weapon. Melee.\",\n  \"cost\": 3,\n  \"intellectIcons\": 1,\n  \"combatIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB096\",\n  \"class\": \"Guardian|Survivor\",\n  \"type\": \"Asset\",\n  \"level\": 0,\n  \"traits\": \"Item. Tool. Weapon. Melee.\",\n  \"cost\": 3,\n  \"intellectIcons\": 1,\n  \"combatIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -6979,7 +6979,7 @@
       },
       "Nickname": "Tactical Vest",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB097\",\n  \"class\": \"Guardian|Rogue\",\r\n  \"type\": \"Asset\",\n  \"level\": 1,\r\r\n  \"traits\": \"Item. Armor. Supply.\",\n  \"cost\": 3,\n  \"intellectIcons\": 1,\n  \"agilityicons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB097\",\n  \"class\": \"Guardian|Rogue\",\n  \"type\": \"Asset\",\n  \"level\": 1,\n  \"traits\": \"Item. Armor. Supply.\",\n  \"cost\": 3,\n  \"intellectIcons\": 1,\n  \"agilityicons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -7041,7 +7041,7 @@
       },
       "Nickname": "Modus Operandi",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB098\",\n  \"class\": \"Guardian|Seeker\",\r\n  \"type\": \"Asset\",\n  \"level\": 2,\r\r\n  \"traits\": \"Connection. Agency.\",\n  \"cost\": 2,\n  \"intellectIcons\": 1,\n  \"combatIcons\": 2,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB098\",\n  \"class\": \"Guardian|Seeker\",\n  \"type\": \"Asset\",\n  \"level\": 2,\n  \"traits\": \"Connection. Agency.\",\n  \"cost\": 2,\n  \"intellectIcons\": 1,\n  \"combatIcons\": 2,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -7103,7 +7103,7 @@
       },
       "Nickname": "Infernal Patronage",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB099\",\n  \"class\": \"Seeker|Rogue|Mystic\",\r\n  \"type\": \"Event\",\n  \"level\": 3,\r\r\n  \"traits\": \"Pact. Cursed.\",\n  \"cost\": 0,\n  \"willpowerIcons\": 1,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB099\",\n  \"class\": \"Seeker|Rogue|Mystic\",\n  \"type\": \"Event\",\n  \"level\": 3,\n  \"traits\": \"Pact. Cursed.\",\n  \"cost\": 0,\n  \"willpowerIcons\": 1,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -7164,7 +7164,7 @@
       },
       "Nickname": "Sacred Geometry",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"MB100\",\n  \"class\": \"Guardian|Seeker|Rogue\",\r\n  \"type\": \"Event\",\n  \"level\": 5,\r\r\n  \"traits\": \"Insight. Blessed.\",\n  \"cost\": 3,\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\r\r\r\n}",
+      "GMNotes": "{\n  \"id\": \"MB100\",\n  \"class\": \"Guardian|Seeker|Rogue\",\n  \"type\": \"Event\",\n  \"level\": 5,\n  \"traits\": \"Insight. Blessed.\",\n  \"cost\": 3,\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Sands of Memphis\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
