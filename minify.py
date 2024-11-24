@@ -1,13 +1,23 @@
 import json
 from pathlib import Path
 
-def minify_json_files(directory):
-    directory_path = Path(directory)
+# Configuration
+INPUT_DIR = "./"
+EXCLUDE_DIRS = ["./decomposed"]
+
+
+def minify_json_files(directory, exclude_dirs=None):
+    exclude_dirs = set(Path(exclude).resolve() for exclude in (exclude_dirs or []))
+    directory_path = Path(directory).resolve()
+
     if not directory_path.exists():
         print(f"Directory does not exist: {directory}")
         return
 
-    for json_file in directory_path.rglob("*.json"):  # Recursively find all JSON files
+    for json_file in directory_path.rglob("*.json"):
+        if any(exclude in json_file.parents for exclude in exclude_dirs):
+            continue
+
         try:
             with open(json_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -19,5 +29,6 @@ def minify_json_files(directory):
         except Exception as e:
             print(f"Error processing {json_file}: {e}")
 
+
 if __name__ == "__main__":
-    minify_json_files("./")
+    minify_json_files(INPUT_DIR, EXCLUDE_DIRS)
