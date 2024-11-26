@@ -2,12 +2,12 @@
   "GUID": "27e0c6",
   "Name": "Custom_Model_Bag",
   "Transform": {
-    "posX": 35,
-    "posY": 1.48,
-    "posZ": 0,
-    "rotX": 0,
-    "rotY": 270,
-    "rotZ": 0,
+    "posX": 45.3685379,
+    "posY": 1.48149908,
+    "posZ": 2.13795,
+    "rotX": -1.504023E-07,
+    "rotY": 269.9561,
+    "rotZ": 4.08372145E-08,
     "scaleX": 2.21,
     "scaleY": 0.46,
     "scaleZ": 2.42
@@ -64,7 +64,7 @@
   "Bag": {
     "Order": 0
   },
-  "LuaScript": "-- Utility memory bag by Directsun\n-- Version 2.5.2\n-- Fork of Memory Bag 2.0 by MrStump\n\nfunction updateSave()\n    local data_to_save = {[\"ml\"]=memoryList}\n    saved_data = JSON.encode(data_to_save)\n    self.script_state = saved_data\nend\n\nfunction combineMemoryFromBagsWithin()\n  local bagObjList = self.getObjects()\n  for _, bagObj in ipairs(bagObjList) do\n    local data = bagObj.lua_script_state\n      if data ~= nil then\n        local j = JSON.decode(data)\n        if j ~= nil and j.ml ~= nil then\n          for guid, entry in pairs(j.ml) do\n            memoryList[guid] = entry\n          end\n        end\n      end\n    end\nend\n\nfunction updateMemoryWithMoves()\n    memoryList = memoryListBackup\n    --get the first transposed object's coordinates\n    local obj = getObjectFromGUID(moveGuid)\n\n    -- p1 is where needs to go, p2 is where it was\n    local refObjPos = memoryList[moveGuid].pos\n    local deltaPos = findOffsetDistance(obj.getPosition(), refObjPos, nil)\n    local movedRotation = obj.getRotation()\n    for guid, entry in pairs(memoryList) do\n        memoryList[guid].pos.x = entry.pos.x - deltaPos.x\n        memoryList[guid].pos.y = entry.pos.y - deltaPos.y\n        memoryList[guid].pos.z = entry.pos.z - deltaPos.z\n        -- memoryList[guid].rot.x = movedRotation.x\n        -- memoryList[guid].rot.y = movedRotation.y\n        -- memoryList[guid].rot.z = movedRotation.z\n    end\n\n    --theList[obj.getGUID()] = {\n    --    pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\n    --    rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\n    --    lock=obj.getLock()\n    --}\n    moveList = {}\nend\n\nfunction onload(saved_data)\n    fresh = true\n    if saved_data ~= \"\" then\n        local loaded_data = JSON.decode(saved_data)\n        --Set up information off of loaded_data\n        memoryList = loaded_data.ml\n    else\n        --Set up information for if there is no saved saved data\n        memoryList = {}\n    end\n\n    moveList = {}\n    moveGuid = nil\n\n    if next(memoryList) == nil then\n        createSetupButton()\n    else\n        fresh = false\n        createMemoryActionButtons()\n    end\nend\n\n\n--Beginning Setup\n\n\n--Make setup button\nfunction createSetupButton()\n    self.createButton({\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\n        position={0,0.1,-2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\nend\n\n--Triggered by Transpose button\nfunction buttonClick_transpose()\n    moveGuid = nil\n    broadcastToAll(\"Select one object and move it- all objects will move relative to the new location\", {0.75, 0.75, 1})\n    memoryListBackup = duplicateTable(memoryList)\n    memoryList = {}\n    moveList = {}\n    self.clearButtons()\n    createButtonsOnAllObjects(true)\n    createSetupActionButtons(true)\nend\n\n--Triggered by setup button,\nfunction buttonClick_setup()\n    memoryListBackup = duplicateTable(memoryList)\n    memoryList = {}\n    self.clearButtons()\n    createButtonsOnAllObjects(false)\n    createSetupActionButtons(false)\nend\n\nfunction getAllObjectsInMemory()\n  local objTable = {}\n  local curObj = {}\n\n  for guid in pairs(memoryListBackup) do\n    curObj = getObjectFromGUID(guid)\n    table.insert(objTable, curObj)\n  end\n\n  return objTable\n  -- return getAllObjects()\nend\n\n--Creates selection buttons on objects\nfunction createButtonsOnAllObjects(move)\n    local howManyButtons = 0\n\n    local objsToHaveButtons = {}\n    if move == true then\n      objsToHaveButtons = getAllObjectsInMemory()\n    else\n      objsToHaveButtons = getAllObjects()\n    end\n\n    for _, obj in ipairs(objsToHaveButtons) do\n        if obj ~= self then\n            local dummyIndex = howManyButtons\n            --On a normal bag, the button positions aren't the same size as the bag.\n            globalScaleFactor = 1 * 1/self.getScale().x\n            --Super sweet math to set button positions\n            local selfPos = self.getPosition()\n            local objPos = obj.getPosition()\n            local deltaPos = findOffsetDistance(selfPos, objPos, obj)\n            local objPos = rotateLocalCoordinates(deltaPos, self)\n            objPos.x = -objPos.x * globalScaleFactor\n            objPos.y = objPos.y * globalScaleFactor + 2\n            objPos.z = objPos.z * globalScaleFactor * 0.9\n            --Offset rotation of bag\n            local rot = self.getRotation()\n            rot.y = -rot.y + 180\n            --Create function\n            local funcName = \"selectButton_\" .. howManyButtons\n            local func = function() buttonClick_selection(dummyIndex, obj, move) end\n            local color = {0.75,0.25,0.25,0.6}\n            local colorMove = {0,0,1,0.6}\n            if move == true then\n              color = colorMove\n            end\n            self.setVar(funcName, func)\n            self.createButton({\n                click_function=funcName, function_owner=self,\n                position=objPos, rotation=rot, height=500, width=500,\n                color=color,\n            })\n            howManyButtons = howManyButtons + 1\n        end\n    end\nend\n\n--Creates submit and cancel buttons\nfunction createSetupActionButtons(move)\n    self.createButton({\n        label=\"Cancel\", click_function=\"buttonClick_cancel\", function_owner=self,\n      position={-0.6,0.1,-2.1}, rotation={0,0,0}, height=220, width=550,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n\n    self.createButton({\n        label=\"Submit\", click_function=\"buttonClick_submit\", function_owner=self,\n        position={-0.6,0.3,-2.5}, rotation={0,0,0}, height=220, width=550,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n\n    if move == false then\n      self.createButton({\n          label=\"Add\", click_function=\"buttonClick_add\", function_owner=self,\n          position={0.6,0.3,-2.1}, rotation={0,0,0}, height=220, width=550,\n          font_size=130, color={0,0,0}, font_color={0.25,1,0.25}\n      })\n\n        if fresh == false then\n            self.createButton({\n                label=\"Set New\", click_function=\"buttonClick_setNew\", function_owner=self,\n                position={0.6,0.3,-2.9}, rotation={0,0,0}, height=220, width=550,\n                font_size=130, color={0,0,0}, font_color={0.75,0.75,1}\n            })\n            self.createButton({\n                label=\"Remove\", click_function=\"buttonClick_remove\", function_owner=self,\n                position={0.6,0.3,-2.5}, rotation={0,0,0}, height=220, width=550,\n                font_size=130, color={0,0,0}, font_color={1,0.25,0.25}\n            })\n        end\n    end\n\n    self.createButton({\n        label=\"Reset\", click_function=\"buttonClick_reset\", function_owner=self,\n        position={-0.6,0.3,-2.9}, rotation={0,0,0}, height=220, width=550,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\nend\n\n\n--During Setup\n\n\n--Checks or unchecks buttons\nfunction buttonClick_selection(index, obj, move)\n    local colorMove = {0,0,1,0.6}\n    local color = {0,1,0,0.6}\n\n    previousGuid = selectedGuid\n    selectedGuid = obj.getGUID()\n\n    theList = memoryList\n    if move == true then\n       theList = moveList\n       if previousGuid ~= nil and previousGuid ~= selectedGuid then\n         local prevObj = getObjectFromGUID(previousGuid)\n         prevObj.highlightOff()\n         self.editButton({index=previousIndex, color=colorMove})\n         theList[previousGuid] = nil\n       end\n       previousIndex = index\n    end\n\n    if theList[selectedGuid] == nil then\n        self.editButton({index=index, color=color})\n        --Adding pos/rot to memory table\n        local pos, rot = obj.getPosition(), obj.getRotation()\n        --I need to add it like this or it won't save due to indexing issue\n        theList[obj.getGUID()] = {\n            pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\n            rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\n            lock=obj.getLock()\n        }\n        obj.highlightOn({0,1,0})\n    else\n      color = {0.75,0.25,0.25,0.6}\n      if move == true then\n        color = colorMove\n      end\n        self.editButton({index=index, color=color})\n        theList[obj.getGUID()] = nil\n        obj.highlightOff()\n    end\nend\n\n--Cancels selection process\nfunction buttonClick_cancel()\n    memoryList = memoryListBackup\n    moveList = {}\n    self.clearButtons()\n    if next(memoryList) == nil then\n        createSetupButton()\n    else\n        createMemoryActionButtons()\n    end\n    removeAllHighlights()\n    broadcastToAll(\"Selection Canceled\", {1,1,1})\n    moveGuid = nil\nend\n\n--Saves selections\nfunction buttonClick_submit()\n    fresh = false\n    if next(moveList) ~= nil then\n        for guid in pairs(moveList) do\n            moveGuid = guid\n        end\n        if memoryListBackup[moveGuid] == nil then\n            broadcastToAll(\"Item selected for moving is not already in memory\", {1, 0.25, 0.25})\n        else\n            broadcastToAll(\"Moving all items in memory relative to new objects position!\", {0.75, 0.75, 1})\n            self.clearButtons()\n            createMemoryActionButtons()\n            local count = 0\n            for guid in pairs(moveList) do\n                moveGuid = guid\n                count = count + 1\n                local obj = getObjectFromGUID(guid)\n                if obj ~= nil then obj.highlightOff() end\n            end\n            updateMemoryWithMoves()\n            updateSave()\n            buttonClick_place()\n        end\n    elseif next(memoryList) == nil and moveGuid == nil then\n      memoryList = memoryListBackup\n      broadcastToAll(\"No selections made.\", {0.75, 0.25, 0.25})\n    end\n    combineMemoryFromBagsWithin()\n    self.clearButtons()\n    createMemoryActionButtons()\n    local count = 0\n    for guid in pairs(memoryList) do\n        count = count + 1\n        local obj = getObjectFromGUID(guid)\n        if obj ~= nil then obj.highlightOff() end\n    end\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\n    updateSave()\n    moveGuid = nil\nend\n\nfunction combineTables(first_table, second_table)\n  for k,v in pairs(second_table) do first_table[k] = v end\nend\n\nfunction buttonClick_add()\n    fresh = false\n    combineTables(memoryList, memoryListBackup)\n    broadcastToAll(\"Adding internal bags and selections to existing memory\", {0.25, 0.75, 0.25})\n    combineMemoryFromBagsWithin()\n    self.clearButtons()\n    createMemoryActionButtons()\n    local count = 0\n    for guid in pairs(memoryList) do\n        count = count + 1\n        local obj = getObjectFromGUID(guid)\n        if obj ~= nil then obj.highlightOff() end\n    end\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\n    updateSave()\nend\n\nfunction buttonClick_remove()\n        broadcastToAll(\"Removing Selected Entries From Memory\", {1.0, 0.25, 0.25})\n        self.clearButtons()\n        createMemoryActionButtons()\n        local count = 0\n        for guid in pairs(memoryList) do\n            count = count + 1\n            memoryListBackup[guid] = nil\n            local obj = getObjectFromGUID(guid)\n            if obj ~= nil then obj.highlightOff() end\n        end\n        broadcastToAll(count..\" Objects Removed\", {1,1,1})\n        memoryList = memoryListBackup\n        updateSave()\nend\n\nfunction buttonClick_setNew()\n    broadcastToAll(\"Setting new position relative to items in memory\", {0.75, 0.75, 1})\n    self.clearButtons()\n    createMemoryActionButtons()\n    local count = 0\n    for _, obj in ipairs(getAllObjects()) do\n        guid = obj.guid\n        if memoryListBackup[guid] ~= nil then\n            count = count + 1\n            memoryListBackup[guid].pos = obj.getPosition()\n            memoryListBackup[guid].rot = obj.getRotation()\n            memoryListBackup[guid].lock = obj.getLock()\n        end\n    end\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\n    memoryList = memoryListBackup\n    updateSave()\nend\n\n--Resets bag to starting status\nfunction buttonClick_reset()\n    fresh = true\n    memoryList = {}\n    self.clearButtons()\n    createSetupButton()\n    removeAllHighlights()\n    broadcastToAll(\"Tool Reset\", {1,1,1})\n    updateSave()\nend\n\n\n--After Setup\n\n\n--Creates recall and place buttons\nfunction createMemoryActionButtons()\n    self.createButton({\n        label=\"Place\", click_function=\"buttonClick_place\", function_owner=self,\n        position={0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n    self.createButton({\n        label=\"Recall\", click_function=\"buttonClick_recall\", function_owner=self,\n        position={-0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n    self.createButton({\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\n        position={0,0.1,-2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n---    self.createButton({\n---      label=\"Move\", click_function=\"buttonClick_transpose\", function_owner=self,\n---      position={-2.8,0.3,0}, rotation={0,0,0}, height=350, width=800,\n---      font_size=250, color={0,0,0}, font_color={0.75,0.75,1}\n---    })\nend\n\n--Sends objects from bag/table to their saved position/rotation\nfunction buttonClick_place()\n    local bagObjList = self.getObjects()\n    for guid, entry in pairs(memoryList) do\n        local obj = getObjectFromGUID(guid)\n        --If obj is out on the table, move it to the saved pos/rot\n        if obj ~= nil then\n            obj.setPositionSmooth(entry.pos)\n            obj.setRotationSmooth(entry.rot)\n            obj.setLock(entry.lock)\n        else\n            --If obj is inside of the bag\n            for _, bagObj in ipairs(bagObjList) do\n                if bagObj.guid == guid then\n                    local item = self.takeObject({\n                        guid=guid, position=entry.pos, rotation=entry.rot, smooth=false\n                    })\n                    item.setLock(entry.lock)\n                    break\n                end\n            end\n        end\n    end\n    broadcastToAll(\"Objects Placed\", {1,1,1})\nend\n\n--Recalls objects to bag from table\nfunction buttonClick_recall()\n    for guid, entry in pairs(memoryList) do\n        local obj = getObjectFromGUID(guid)\n        if obj ~= nil then self.putObject(obj) end\n    end\n    broadcastToAll(\"Objects Recalled\", {1,1,1})\nend\n\n\n--Utility functions\n\n\n--Find delta (difference) between 2 x/y/z coordinates\nfunction findOffsetDistance(p1, p2, obj)\n    local yOffset = 0\n    if obj ~= nil then\n        local bounds = obj.getBounds()\n        yOffset = (bounds.size.y - bounds.offset.y)\n    end\n    local deltaPos = {}\n    deltaPos.x = (p2.x-p1.x)\n    deltaPos.y = (p2.y-p1.y) + yOffset\n    deltaPos.z = (p2.z-p1.z)\n    return deltaPos\nend\n\n--Used to rotate a set of coordinates by an angle\nfunction rotateLocalCoordinates(desiredPos, obj)\n\tlocal objPos, objRot = obj.getPosition(), obj.getRotation()\n    local angle = math.rad(objRot.y)\n\tlocal x = desiredPos.x * math.cos(angle) - desiredPos.z * math.sin(angle)\n\tlocal z = desiredPos.x * math.sin(angle) + desiredPos.z * math.cos(angle)\n\t--return {x=objPos.x+x, y=objPos.y+desiredPos.y, z=objPos.z+z}\n    return {x=x, y=desiredPos.y, z=z}\nend\n\nfunction rotateMyCoordinates(desiredPos, obj)\n\tlocal angle = math.rad(obj.getRotation().y)\n  local x = desiredPos.x * math.sin(angle)\n\tlocal z = desiredPos.z * math.cos(angle)\n    return {x=x, y=desiredPos.y, z=z}\nend\n\n--Coroutine delay, in seconds\nfunction wait(time)\n    local start = os.time()\n    repeat coroutine.yield(0) until os.time() > start + time\nend\n\n--Duplicates a table (needed to prevent it making reference to the same objects)\nfunction duplicateTable(oldTable)\n    local newTable = {}\n    for k, v in pairs(oldTable) do\n        newTable[k] = v\n    end\n    return newTable\nend\n\n--Moves scripted highlight from all objects\nfunction removeAllHighlights()\n    for _, obj in ipairs(getAllObjects()) do\n        obj.highlightOff()\n    end\nend\n\n--Round number (num) to the Nth decimal (dec)\nfunction round(num, dec)\n  local mult = 10^(dec or 0)\n  return math.floor(num * mult + 0.5) / mult\nend",
+  "LuaScript": "-- Utility memory bag by Directsun\r\n-- Version 2.5.2\r\n-- Fork of Memory Bag 2.0 by MrStump\r\n\r\nfunction updateSave()\r\n    local data_to_save = {[\"ml\"]=memoryList}\r\n    saved_data = JSON.encode(data_to_save)\r\n    self.script_state = saved_data\r\nend\r\n\r\nfunction combineMemoryFromBagsWithin()\r\n  local bagObjList = self.getObjects()\r\n  for _, bagObj in ipairs(bagObjList) do\r\n    local data = bagObj.lua_script_state\r\n      if data ~= nil then\r\n        local j = JSON.decode(data)\r\n        if j ~= nil and j.ml ~= nil then\r\n          for guid, entry in pairs(j.ml) do\r\n            memoryList[guid] = entry\r\n          end\r\n        end\r\n      end\r\n    end\r\nend\r\n\r\nfunction updateMemoryWithMoves()\r\n    memoryList = memoryListBackup\r\n    --get the first transposed object's coordinates\r\n    local obj = getObjectFromGUID(moveGuid)\r\n\r\n    -- p1 is where needs to go, p2 is where it was\r\n    local refObjPos = memoryList[moveGuid].pos\r\n    local deltaPos = findOffsetDistance(obj.getPosition(), refObjPos, nil)\r\n    local movedRotation = obj.getRotation()\r\n    for guid, entry in pairs(memoryList) do\r\n        memoryList[guid].pos.x = entry.pos.x - deltaPos.x\r\n        memoryList[guid].pos.y = entry.pos.y - deltaPos.y\r\n        memoryList[guid].pos.z = entry.pos.z - deltaPos.z\r\n        -- memoryList[guid].rot.x = movedRotation.x\r\n        -- memoryList[guid].rot.y = movedRotation.y\r\n        -- memoryList[guid].rot.z = movedRotation.z\r\n    end\r\n\r\n    --theList[obj.getGUID()] = {\r\n    --    pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\r\n    --    rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\r\n    --    lock=obj.getLock()\r\n    --}\r\n    moveList = {}\r\nend\r\n\r\nfunction onload(saved_data)\r\n    fresh = true\r\n    if saved_data ~= \"\" then\r\n        local loaded_data = JSON.decode(saved_data)\r\n        --Set up information off of loaded_data\r\n        memoryList = loaded_data.ml\r\n    else\r\n        --Set up information for if there is no saved saved data\r\n        memoryList = {}\r\n    end\r\n\r\n    moveList = {}\r\n    moveGuid = nil\r\n\r\n    if next(memoryList) == nil then\r\n        createSetupButton()\r\n    else\r\n        fresh = false\r\n        createMemoryActionButtons()\r\n    end\r\nend\r\n\r\n\r\n--Beginning Setup\r\n\r\n\r\n--Make setup button\r\nfunction createSetupButton()\r\n    self.createButton({\r\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\r\n        position={0,0.1,-2.1}, rotation={0,0,0}, height=220, width=500,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\nend\r\n\r\n--Triggered by Transpose button\r\nfunction buttonClick_transpose()\r\n    moveGuid = nil\r\n    broadcastToAll(\"Select one object and move it- all objects will move relative to the new location\", {0.75, 0.75, 1})\r\n    memoryListBackup = duplicateTable(memoryList)\r\n    memoryList = {}\r\n    moveList = {}\r\n    self.clearButtons()\r\n    createButtonsOnAllObjects(true)\r\n    createSetupActionButtons(true)\r\nend\r\n\r\n--Triggered by setup button,\r\nfunction buttonClick_setup()\r\n    memoryListBackup = duplicateTable(memoryList)\r\n    memoryList = {}\r\n    self.clearButtons()\r\n    createButtonsOnAllObjects(false)\r\n    createSetupActionButtons(false)\r\nend\r\n\r\nfunction getAllObjectsInMemory()\r\n  local objTable = {}\r\n  local curObj = {}\r\n\r\n  for guid in pairs(memoryListBackup) do\r\n    curObj = getObjectFromGUID(guid)\r\n    table.insert(objTable, curObj)\r\n  end\r\n\r\n  return objTable\r\n  -- return getAllObjects()\r\nend\r\n\r\n--Creates selection buttons on objects\r\nfunction createButtonsOnAllObjects(move)\r\n    local howManyButtons = 0\r\n\r\n    local objsToHaveButtons = {}\r\n    if move == true then\r\n      objsToHaveButtons = getAllObjectsInMemory()\r\n    else\r\n      objsToHaveButtons = getAllObjects()\r\n    end\r\n\r\n    for _, obj in ipairs(objsToHaveButtons) do\r\n        if obj ~= self then\r\n            local dummyIndex = howManyButtons\r\n            --On a normal bag, the button positions aren't the same size as the bag.\r\n            globalScaleFactor = 1 * 1/self.getScale().x\r\n            --Super sweet math to set button positions\r\n            local selfPos = self.getPosition()\r\n            local objPos = obj.getPosition()\r\n            local deltaPos = findOffsetDistance(selfPos, objPos, obj)\r\n            local objPos = rotateLocalCoordinates(deltaPos, self)\r\n            objPos.x = -objPos.x * globalScaleFactor\r\n            objPos.y = objPos.y * globalScaleFactor + 2\r\n            objPos.z = objPos.z * globalScaleFactor * 0.9\r\n            --Offset rotation of bag\r\n            local rot = self.getRotation()\r\n            rot.y = -rot.y + 180\r\n            --Create function\r\n            local funcName = \"selectButton_\" .. howManyButtons\r\n            local func = function() buttonClick_selection(dummyIndex, obj, move) end\r\n            local color = {0.75,0.25,0.25,0.6}\r\n            local colorMove = {0,0,1,0.6}\r\n            if move == true then\r\n              color = colorMove\r\n            end\r\n            self.setVar(funcName, func)\r\n            self.createButton({\r\n                click_function=funcName, function_owner=self,\r\n                position=objPos, rotation=rot, height=500, width=500,\r\n                color=color,\r\n            })\r\n            howManyButtons = howManyButtons + 1\r\n        end\r\n    end\r\nend\r\n\r\n--Creates submit and cancel buttons\r\nfunction createSetupActionButtons(move)\r\n    self.createButton({\r\n        label=\"Cancel\", click_function=\"buttonClick_cancel\", function_owner=self,\r\n      position={-0.6,0.1,-2.1}, rotation={0,0,0}, height=220, width=550,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n\r\n    self.createButton({\r\n        label=\"Submit\", click_function=\"buttonClick_submit\", function_owner=self,\r\n        position={-0.6,0.3,-2.5}, rotation={0,0,0}, height=220, width=550,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n\r\n    if move == false then\r\n      self.createButton({\r\n          label=\"Add\", click_function=\"buttonClick_add\", function_owner=self,\r\n          position={0.6,0.3,-2.1}, rotation={0,0,0}, height=220, width=550,\r\n          font_size=130, color={0,0,0}, font_color={0.25,1,0.25}\r\n      })\r\n\r\n        if fresh == false then\r\n            self.createButton({\r\n                label=\"Set New\", click_function=\"buttonClick_setNew\", function_owner=self,\r\n                position={0.6,0.3,-2.9}, rotation={0,0,0}, height=220, width=550,\r\n                font_size=130, color={0,0,0}, font_color={0.75,0.75,1}\r\n            })\r\n            self.createButton({\r\n                label=\"Remove\", click_function=\"buttonClick_remove\", function_owner=self,\r\n                position={0.6,0.3,-2.5}, rotation={0,0,0}, height=220, width=550,\r\n                font_size=130, color={0,0,0}, font_color={1,0.25,0.25}\r\n            })\r\n        end\r\n    end\r\n\r\n    self.createButton({\r\n        label=\"Reset\", click_function=\"buttonClick_reset\", function_owner=self,\r\n        position={-0.6,0.3,-2.9}, rotation={0,0,0}, height=220, width=550,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\nend\r\n\r\n\r\n--During Setup\r\n\r\n\r\n--Checks or unchecks buttons\r\nfunction buttonClick_selection(index, obj, move)\r\n    local colorMove = {0,0,1,0.6}\r\n    local color = {0,1,0,0.6}\r\n\r\n    previousGuid = selectedGuid\r\n    selectedGuid = obj.getGUID()\r\n\r\n    theList = memoryList\r\n    if move == true then\r\n       theList = moveList\r\n       if previousGuid ~= nil and previousGuid ~= selectedGuid then\r\n         local prevObj = getObjectFromGUID(previousGuid)\r\n         prevObj.highlightOff()\r\n         self.editButton({index=previousIndex, color=colorMove})\r\n         theList[previousGuid] = nil\r\n       end\r\n       previousIndex = index\r\n    end\r\n\r\n    if theList[selectedGuid] == nil then\r\n        self.editButton({index=index, color=color})\r\n        --Adding pos/rot to memory table\r\n        local pos, rot = obj.getPosition(), obj.getRotation()\r\n        --I need to add it like this or it won't save due to indexing issue\r\n        theList[obj.getGUID()] = {\r\n            pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\r\n            rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\r\n            lock=obj.getLock()\r\n        }\r\n        obj.highlightOn({0,1,0})\r\n    else\r\n      color = {0.75,0.25,0.25,0.6}\r\n      if move == true then\r\n        color = colorMove\r\n      end\r\n        self.editButton({index=index, color=color})\r\n        theList[obj.getGUID()] = nil\r\n        obj.highlightOff()\r\n    end\r\nend\r\n\r\n--Cancels selection process\r\nfunction buttonClick_cancel()\r\n    memoryList = memoryListBackup\r\n    moveList = {}\r\n    self.clearButtons()\r\n    if next(memoryList) == nil then\r\n        createSetupButton()\r\n    else\r\n        createMemoryActionButtons()\r\n    end\r\n    removeAllHighlights()\r\n    broadcastToAll(\"Selection Canceled\", {1,1,1})\r\n    moveGuid = nil\r\nend\r\n\r\n--Saves selections\r\nfunction buttonClick_submit()\r\n    fresh = false\r\n    if next(moveList) ~= nil then\r\n        for guid in pairs(moveList) do\r\n            moveGuid = guid\r\n        end\r\n        if memoryListBackup[moveGuid] == nil then\r\n            broadcastToAll(\"Item selected for moving is not already in memory\", {1, 0.25, 0.25})\r\n        else\r\n            broadcastToAll(\"Moving all items in memory relative to new objects position!\", {0.75, 0.75, 1})\r\n            self.clearButtons()\r\n            createMemoryActionButtons()\r\n            local count = 0\r\n            for guid in pairs(moveList) do\r\n                moveGuid = guid\r\n                count = count + 1\r\n                local obj = getObjectFromGUID(guid)\r\n                if obj ~= nil then obj.highlightOff() end\r\n            end\r\n            updateMemoryWithMoves()\r\n            updateSave()\r\n            buttonClick_place()\r\n        end\r\n    elseif next(memoryList) == nil and moveGuid == nil then\r\n      memoryList = memoryListBackup\r\n      broadcastToAll(\"No selections made.\", {0.75, 0.25, 0.25})\r\n    end\r\n    combineMemoryFromBagsWithin()\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for guid in pairs(memoryList) do\r\n        count = count + 1\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then obj.highlightOff() end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    updateSave()\r\n    moveGuid = nil\r\nend\r\n\r\nfunction combineTables(first_table, second_table)\r\n  for k,v in pairs(second_table) do first_table[k] = v end\r\nend\r\n\r\nfunction buttonClick_add()\r\n    fresh = false\r\n    combineTables(memoryList, memoryListBackup)\r\n    broadcastToAll(\"Adding internal bags and selections to existing memory\", {0.25, 0.75, 0.25})\r\n    combineMemoryFromBagsWithin()\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for guid in pairs(memoryList) do\r\n        count = count + 1\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then obj.highlightOff() end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    updateSave()\r\nend\r\n\r\nfunction buttonClick_remove()\r\n        broadcastToAll(\"Removing Selected Entries From Memory\", {1.0, 0.25, 0.25})\r\n        self.clearButtons()\r\n        createMemoryActionButtons()\r\n        local count = 0\r\n        for guid in pairs(memoryList) do\r\n            count = count + 1\r\n            memoryListBackup[guid] = nil\r\n            local obj = getObjectFromGUID(guid)\r\n            if obj ~= nil then obj.highlightOff() end\r\n        end\r\n        broadcastToAll(count..\" Objects Removed\", {1,1,1})\r\n        memoryList = memoryListBackup\r\n        updateSave()\r\nend\r\n\r\nfunction buttonClick_setNew()\r\n    broadcastToAll(\"Setting new position relative to items in memory\", {0.75, 0.75, 1})\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for _, obj in ipairs(getAllObjects()) do\r\n        guid = obj.guid\r\n        if memoryListBackup[guid] ~= nil then\r\n            count = count + 1\r\n            memoryListBackup[guid].pos = obj.getPosition()\r\n            memoryListBackup[guid].rot = obj.getRotation()\r\n            memoryListBackup[guid].lock = obj.getLock()\r\n        end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    memoryList = memoryListBackup\r\n    updateSave()\r\nend\r\n\r\n--Resets bag to starting status\r\nfunction buttonClick_reset()\r\n    fresh = true\r\n    memoryList = {}\r\n    self.clearButtons()\r\n    createSetupButton()\r\n    removeAllHighlights()\r\n    broadcastToAll(\"Tool Reset\", {1,1,1})\r\n    updateSave()\r\nend\r\n\r\n\r\n--After Setup\r\n\r\n\r\n--Creates recall and place buttons\r\nfunction createMemoryActionButtons()\r\n    self.createButton({\r\n        label=\"Place\", click_function=\"buttonClick_place\", function_owner=self,\r\n        position={0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n    self.createButton({\r\n        label=\"Recall\", click_function=\"buttonClick_recall\", function_owner=self,\r\n        position={-0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n    self.createButton({\r\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\r\n        position={0,0.1,-2.1}, rotation={0,0,0}, height=220, width=500,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n---    self.createButton({\r\n---      label=\"Move\", click_function=\"buttonClick_transpose\", function_owner=self,\r\n---      position={-2.8,0.3,0}, rotation={0,0,0}, height=350, width=800,\r\n---      font_size=250, color={0,0,0}, font_color={0.75,0.75,1}\r\n---    })\r\nend\r\n\r\n--Sends objects from bag/table to their saved position/rotation\r\nfunction buttonClick_place()\r\n    local bagObjList = self.getObjects()\r\n    for guid, entry in pairs(memoryList) do\r\n        local obj = getObjectFromGUID(guid)\r\n        --If obj is out on the table, move it to the saved pos/rot\r\n        if obj ~= nil then\r\n            obj.setPositionSmooth(entry.pos)\r\n            obj.setRotationSmooth(entry.rot)\r\n            obj.setLock(entry.lock)\r\n        else\r\n            --If obj is inside of the bag\r\n            for _, bagObj in ipairs(bagObjList) do\r\n                if bagObj.guid == guid then\r\n                    local item = self.takeObject({\r\n                        guid=guid, position=entry.pos, rotation=entry.rot, smooth=false\r\n                    })\r\n                    item.setLock(entry.lock)\r\n                    break\r\n                end\r\n            end\r\n        end\r\n    end\r\n    broadcastToAll(\"Objects Placed\", {1,1,1})\r\nend\r\n\r\n--Recalls objects to bag from table\r\nfunction buttonClick_recall()\r\n    for guid, entry in pairs(memoryList) do\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then self.putObject(obj) end\r\n    end\r\n    broadcastToAll(\"Objects Recalled\", {1,1,1})\r\nend\r\n\r\n\r\n--Utility functions\r\n\r\n\r\n--Find delta (difference) between 2 x/y/z coordinates\r\nfunction findOffsetDistance(p1, p2, obj)\r\n    local yOffset = 0\r\n    if obj ~= nil then\r\n        local bounds = obj.getBounds()\r\n        yOffset = (bounds.size.y - bounds.offset.y)\r\n    end\r\n    local deltaPos = {}\r\n    deltaPos.x = (p2.x-p1.x)\r\n    deltaPos.y = (p2.y-p1.y) + yOffset\r\n    deltaPos.z = (p2.z-p1.z)\r\n    return deltaPos\r\nend\r\n\r\n--Used to rotate a set of coordinates by an angle\r\nfunction rotateLocalCoordinates(desiredPos, obj)\r\n\tlocal objPos, objRot = obj.getPosition(), obj.getRotation()\r\n    local angle = math.rad(objRot.y)\r\n\tlocal x = desiredPos.x * math.cos(angle) - desiredPos.z * math.sin(angle)\r\n\tlocal z = desiredPos.x * math.sin(angle) + desiredPos.z * math.cos(angle)\r\n\t--return {x=objPos.x+x, y=objPos.y+desiredPos.y, z=objPos.z+z}\r\n    return {x=x, y=desiredPos.y, z=z}\r\nend\r\n\r\nfunction rotateMyCoordinates(desiredPos, obj)\r\n\tlocal angle = math.rad(obj.getRotation().y)\r\n  local x = desiredPos.x * math.sin(angle)\r\n\tlocal z = desiredPos.z * math.cos(angle)\r\n    return {x=x, y=desiredPos.y, z=z}\r\nend\r\n\r\n--Coroutine delay, in seconds\r\nfunction wait(time)\r\n    local start = os.time()\r\n    repeat coroutine.yield(0) until os.time() > start + time\r\nend\r\n\r\n--Duplicates a table (needed to prevent it making reference to the same objects)\r\nfunction duplicateTable(oldTable)\r\n    local newTable = {}\r\n    for k, v in pairs(oldTable) do\r\n        newTable[k] = v\r\n    end\r\n    return newTable\r\nend\r\n\r\n--Moves scripted highlight from all objects\r\nfunction removeAllHighlights()\r\n    for _, obj in ipairs(getAllObjects()) do\r\n        obj.highlightOff()\r\n    end\r\nend\r\n\r\n--Round number (num) to the Nth decimal (dec)\r\nfunction round(num, dec)\r\n  local mult = 10^(dec or 0)\r\n  return math.floor(num * mult + 0.5) / mult\r\nend",
   "LuaScriptState": "{\"ml\":{\"363492\":{\"lock\":false,\"pos\":{\"x\":-2.9401,\"y\":1.6328,\"z\":0.393},\"rot\":{\"x\":0,\"y\":270.028,\"z\":0}},\"46dcd1\":{\"lock\":false,\"pos\":{\"x\":-2.94,\"y\":1.6136,\"z\":-5.1041},\"rot\":{\"x\":0,\"y\":270.0015,\"z\":0}},\"628cd1\":{\"lock\":false,\"pos\":{\"x\":-9.4422,\"y\":1.5698,\"z\":5.6208},\"rot\":{\"x\":0,\"y\":270.0328,\"z\":180}},\"7a167a\":{\"lock\":false,\"pos\":{\"x\":1.694,\"y\":1.558,\"z\":14.2415},\"rot\":{\"x\":0,\"y\":225,\"z\":0}},\"bbb70a\":{\"lock\":false,\"pos\":{\"x\":-3.8258,\"y\":1.583,\"z\":-15.1507},\"rot\":{\"x\":0,\"y\":270.0205,\"z\":0}},\"e00001\":{\"lock\":false,\"pos\":{\"x\":-3.85,\"y\":1.5966,\"z\":-10.3882},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"e00002\":{\"lock\":false,\"pos\":{\"x\":-50.9812,\"y\":1.5636,\"z\":10.2486},\"rot\":{\"x\":0,\"y\":269.9987,\"z\":180}},\"e00003\":{\"lock\":false,\"pos\":{\"x\":-50.9802,\"y\":1.5636,\"z\":-24.8752},\"rot\":{\"x\":0,\"y\":269.9985,\"z\":180}},\"e00004\":{\"lock\":false,\"pos\":{\"x\":-24.4987,\"y\":1.5636,\"z\":-22.5813},\"rot\":{\"x\":0,\"y\":180,\"z\":180}},\"e00005\":{\"lock\":false,\"pos\":{\"x\":-36.2013,\"y\":1.5636,\"z\":22.5813},\"rot\":{\"x\":0,\"y\":0,\"z\":180}},\"e00013\":{\"lock\":false,\"pos\":{\"x\":-17.0396,\"y\":1.5336,\"z\":0},\"rot\":{\"x\":-0.0001,\"y\":270.0023,\"z\":179.9994}},\"e00014\":{\"lock\":false,\"pos\":{\"x\":-15.2171,\"y\":1.5543,\"z\":-1.4157},\"rot\":{\"x\":359.9887,\"y\":269.998,\"z\":181.0708}},\"e00015\":{\"lock\":false,\"pos\":{\"x\":-17.0396,\"y\":1.5336,\"z\":-7.6503},\"rot\":{\"x\":0,\"y\":270.0025,\"z\":180}},\"e00018\":{\"lock\":false,\"pos\":{\"x\":-23.64,\"y\":1.5336,\"z\":7.6503},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":180}},\"e00019\":{\"lock\":false,\"pos\":{\"x\":-17.04,\"y\":1.5336,\"z\":7.6503},\"rot\":{\"x\":0,\"y\":269.9999,\"z\":180}},\"e0001a\":{\"lock\":false,\"pos\":{\"x\":-23.6399,\"y\":1.5336,\"z\":0},\"rot\":{\"x\":0,\"y\":270,\"z\":180}},\"e0001b\":{\"lock\":false,\"pos\":{\"x\":-30.24,\"y\":1.5336,\"z\":0},\"rot\":{\"x\":0,\"y\":269.9991,\"z\":180}},\"e0001c\":{\"lock\":false,\"pos\":{\"x\":-32.1344,\"y\":1.5507,\"z\":-1.7281},\"rot\":{\"x\":0,\"y\":270.0024,\"z\":180.897}},\"e0001d\":{\"lock\":false,\"pos\":{\"x\":-30.24,\"y\":1.5336,\"z\":7.6503},\"rot\":{\"x\":0,\"y\":270.0208,\"z\":180}},\"e0004e\":{\"lock\":false,\"pos\":{\"x\":-3.9285,\"y\":1.758,\"z\":5.7193},\"rot\":{\"x\":0,\"y\":270.001,\"z\":180}},\"fcd84d\":{\"lock\":false,\"pos\":{\"x\":-2.3991,\"y\":1.4815,\"z\":-24.2617},\"rot\":{\"x\":0,\"y\":270,\"z\":0}}}}",
   "XmlUI": "",
   "ContainedObjects": [
@@ -178,8 +178,8 @@
       ],
       "CustomDeck": {
         "1011": {
-          "FaceURL": "https://i.imgur.com/jOhnxhe.jpeg",
-          "BackURL": "https://i.imgur.com/F5u4QAR.jpeg",
+          "FaceURL": "https://i.imgur.com/bx998U8.jpeg",
+          "BackURL": "https://i.imgur.com/IbEr3z7.jpeg",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -187,8 +187,8 @@
           "Type": 0
         },
         "1005": {
-          "FaceURL": "https://i.imgur.com/69BFDxx.jpeg",
-          "BackURL": "https://i.imgur.com/b0Lvt4O.jpeg",
+          "FaceURL": "https://i.imgur.com/NhIgKUP.jpeg",
+          "BackURL": "https://i.imgur.com/8pLSnyn.jpeg",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -196,8 +196,8 @@
           "Type": 0
         },
         "1009": {
-          "FaceURL": "https://i.imgur.com/uFypUmx.jpeg",
-          "BackURL": "https://i.imgur.com/Hg73hT9.jpeg",
+          "FaceURL": "https://i.imgur.com/OCm6G9r.jpeg",
+          "BackURL": "https://i.imgur.com/BHUC8kS.jpeg",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -205,8 +205,8 @@
           "Type": 0
         },
         "1006": {
-          "FaceURL": "https://i.imgur.com/gA8AaDg.jpeg",
-          "BackURL": "https://i.imgur.com/xnE8gqn.jpeg",
+          "FaceURL": "https://i.imgur.com/ed7e2eA.jpeg",
+          "BackURL": "https://i.imgur.com/r7b7PaI.jpeg",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -214,8 +214,8 @@
           "Type": 0
         },
         "1012": {
-          "FaceURL": "https://i.imgur.com/qBzNGP4.jpeg",
-          "BackURL": "https://i.imgur.com/7xjoouQ.jpeg",
+          "FaceURL": "https://i.imgur.com/jDejWh7.jpeg",
+          "BackURL": "https://i.imgur.com/8f8g4CC.jpeg",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -223,8 +223,8 @@
           "Type": 0
         },
         "1007": {
-          "FaceURL": "https://i.imgur.com/EJaHd6O.jpeg",
-          "BackURL": "https://i.imgur.com/Efz8gcv.jpeg",
+          "FaceURL": "https://i.imgur.com/ieWuWKd.jpeg",
+          "BackURL": "https://i.imgur.com/Zx27eux.jpeg",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -284,8 +284,8 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1011": {
-              "FaceURL": "https://i.imgur.com/jOhnxhe.jpeg",
-              "BackURL": "https://i.imgur.com/F5u4QAR.jpeg",
+              "FaceURL": "https://i.imgur.com/bx998U8.jpeg",
+              "BackURL": "https://i.imgur.com/IbEr3z7.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -345,8 +345,8 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1005": {
-              "FaceURL": "https://i.imgur.com/69BFDxx.jpeg",
-              "BackURL": "https://i.imgur.com/b0Lvt4O.jpeg",
+              "FaceURL": "https://i.imgur.com/NhIgKUP.jpeg",
+              "BackURL": "https://i.imgur.com/8pLSnyn.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -406,8 +406,8 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1009": {
-              "FaceURL": "https://i.imgur.com/uFypUmx.jpeg",
-              "BackURL": "https://i.imgur.com/Hg73hT9.jpeg",
+              "FaceURL": "https://i.imgur.com/OCm6G9r.jpeg",
+              "BackURL": "https://i.imgur.com/BHUC8kS.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -467,8 +467,8 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1006": {
-              "FaceURL": "https://i.imgur.com/gA8AaDg.jpeg",
-              "BackURL": "https://i.imgur.com/xnE8gqn.jpeg",
+              "FaceURL": "https://i.imgur.com/ed7e2eA.jpeg",
+              "BackURL": "https://i.imgur.com/r7b7PaI.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -528,8 +528,8 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1012": {
-              "FaceURL": "https://i.imgur.com/qBzNGP4.jpeg",
-              "BackURL": "https://i.imgur.com/7xjoouQ.jpeg",
+              "FaceURL": "https://i.imgur.com/jDejWh7.jpeg",
+              "BackURL": "https://i.imgur.com/8f8g4CC.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -589,8 +589,8 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1007": {
-              "FaceURL": "https://i.imgur.com/EJaHd6O.jpeg",
-              "BackURL": "https://i.imgur.com/Efz8gcv.jpeg",
+              "FaceURL": "https://i.imgur.com/ieWuWKd.jpeg",
+              "BackURL": "https://i.imgur.com/Zx27eux.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -655,8 +655,8 @@
       ],
       "CustomDeck": {
         "1008": {
-          "FaceURL": "https://i.imgur.com/vXVmW7M.jpeg",
-          "BackURL": "https://i.imgur.com/jj3zDdf.jpeg",
+          "FaceURL": "https://i.imgur.com/woedPdM.jpeg",
+          "BackURL": "https://i.imgur.com/NOeQSSN.jpeg",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -664,8 +664,8 @@
           "Type": 0
         },
         "1010": {
-          "FaceURL": "https://i.imgur.com/ZfxZGeB.jpeg",
-          "BackURL": "https://i.imgur.com/tBS2F8Q.jpeg",
+          "FaceURL": "https://i.imgur.com/vLe9WZQ.jpeg",
+          "BackURL": "https://i.imgur.com/q5ZShnr.jpeg",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -725,8 +725,8 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1008": {
-              "FaceURL": "https://i.imgur.com/vXVmW7M.jpeg",
-              "BackURL": "https://i.imgur.com/jj3zDdf.jpeg",
+              "FaceURL": "https://i.imgur.com/woedPdM.jpeg",
+              "BackURL": "https://i.imgur.com/NOeQSSN.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -786,8 +786,8 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1010": {
-              "FaceURL": "https://i.imgur.com/ZfxZGeB.jpeg",
-              "BackURL": "https://i.imgur.com/tBS2F8Q.jpeg",
+              "FaceURL": "https://i.imgur.com/vLe9WZQ.jpeg",
+              "BackURL": "https://i.imgur.com/q5ZShnr.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -857,8 +857,8 @@
       ],
       "CustomDeck": {
         "1013": {
-          "FaceURL": "https://i.imgur.com/o4jEcpG.jpeg",
-          "BackURL": "https://i.imgur.com/EKntSHk.jpeg",
+          "FaceURL": "https://i.imgur.com/ao8oAA3.jpeg",
+          "BackURL": "https://i.imgur.com/Zj13Fj0.jpeg",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -866,8 +866,8 @@
           "Type": 0
         },
         "1019": {
-          "FaceURL": "https://i.imgur.com/AQWpSr6.jpeg",
-          "BackURL": "https://i.imgur.com/HgGUbtn.jpeg",
+          "FaceURL": "https://i.imgur.com/FDUIlr4.jpeg",
+          "BackURL": "https://i.imgur.com/0bBlvIb.jpeg",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -875,8 +875,8 @@
           "Type": 0
         },
         "1026": {
-          "FaceURL": "https://i.imgur.com/HCmoM4Z.jpeg",
-          "BackURL": "https://i.imgur.com/f5xIpzc.jpeg",
+          "FaceURL": "https://i.imgur.com/0hmjQsP.jpeg",
+          "BackURL": "https://i.imgur.com/ekrY3pL.jpeg",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -884,8 +884,8 @@
           "Type": 0
         },
         "1027": {
-          "FaceURL": "https://i.imgur.com/fzg27Rm.jpeg",
-          "BackURL": "https://i.imgur.com/y8Abhie.jpeg",
+          "FaceURL": "https://i.imgur.com/I3woBjw.jpeg",
+          "BackURL": "https://i.imgur.com/ANtorbU.jpeg",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -893,8 +893,8 @@
           "Type": 0
         },
         "1018": {
-          "FaceURL": "https://i.imgur.com/8RKx0OT.jpeg",
-          "BackURL": "https://i.imgur.com/gQRxJE2.jpeg",
+          "FaceURL": "https://i.imgur.com/vDwzzV8.jpeg",
+          "BackURL": "https://i.imgur.com/UNgtshe.jpeg",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -902,8 +902,8 @@
           "Type": 0
         },
         "1014": {
-          "FaceURL": "https://i.imgur.com/JgVV2FH.jpeg",
-          "BackURL": "https://i.imgur.com/172r7Cd.jpeg",
+          "FaceURL": "https://i.imgur.com/RJHR5yd.jpeg",
+          "BackURL": "https://i.imgur.com/VScNkKb.jpeg",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -964,8 +964,8 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1013": {
-              "FaceURL": "https://i.imgur.com/o4jEcpG.jpeg",
-              "BackURL": "https://i.imgur.com/EKntSHk.jpeg",
+              "FaceURL": "https://i.imgur.com/ao8oAA3.jpeg",
+              "BackURL": "https://i.imgur.com/Zj13Fj0.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -1026,8 +1026,8 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1019": {
-              "FaceURL": "https://i.imgur.com/AQWpSr6.jpeg",
-              "BackURL": "https://i.imgur.com/HgGUbtn.jpeg",
+              "FaceURL": "https://i.imgur.com/FDUIlr4.jpeg",
+              "BackURL": "https://i.imgur.com/0bBlvIb.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -1088,8 +1088,8 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1026": {
-              "FaceURL": "https://i.imgur.com/HCmoM4Z.jpeg",
-              "BackURL": "https://i.imgur.com/f5xIpzc.jpeg",
+              "FaceURL": "https://i.imgur.com/0hmjQsP.jpeg",
+              "BackURL": "https://i.imgur.com/ekrY3pL.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -1150,8 +1150,8 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1027": {
-              "FaceURL": "https://i.imgur.com/fzg27Rm.jpeg",
-              "BackURL": "https://i.imgur.com/y8Abhie.jpeg",
+              "FaceURL": "https://i.imgur.com/I3woBjw.jpeg",
+              "BackURL": "https://i.imgur.com/ANtorbU.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -1212,8 +1212,8 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1018": {
-              "FaceURL": "https://i.imgur.com/8RKx0OT.jpeg",
-              "BackURL": "https://i.imgur.com/gQRxJE2.jpeg",
+              "FaceURL": "https://i.imgur.com/vDwzzV8.jpeg",
+              "BackURL": "https://i.imgur.com/UNgtshe.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -1274,8 +1274,8 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1014": {
-              "FaceURL": "https://i.imgur.com/JgVV2FH.jpeg",
-              "BackURL": "https://i.imgur.com/172r7Cd.jpeg",
+              "FaceURL": "https://i.imgur.com/RJHR5yd.jpeg",
+              "BackURL": "https://i.imgur.com/VScNkKb.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -1416,7 +1416,7 @@
           ],
           "CustomDeck": {
             "1047": {
-              "FaceURL": "https://i.imgur.com/K5xN2NM.jpeg",
+              "FaceURL": "https://i.imgur.com/jmKwBbC.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -1425,7 +1425,7 @@
               "Type": 0
             },
             "1048": {
-              "FaceURL": "https://i.imgur.com/K5xN2NM.jpeg",
+              "FaceURL": "https://i.imgur.com/jmKwBbC.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -1434,7 +1434,7 @@
               "Type": 0
             },
             "1049": {
-              "FaceURL": "https://i.imgur.com/K5xN2NM.jpeg",
+              "FaceURL": "https://i.imgur.com/jmKwBbC.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -1443,7 +1443,7 @@
               "Type": 0
             },
             "1050": {
-              "FaceURL": "https://i.imgur.com/K5xN2NM.jpeg",
+              "FaceURL": "https://i.imgur.com/jmKwBbC.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -1505,7 +1505,7 @@
               "SidewaysCard": false,
               "CustomDeck": {
                 "1047": {
-                  "FaceURL": "https://i.imgur.com/K5xN2NM.jpeg",
+                  "FaceURL": "https://i.imgur.com/jmKwBbC.jpeg",
                   "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
                   "NumWidth": 1,
                   "NumHeight": 1,
@@ -1567,7 +1567,7 @@
               "SidewaysCard": false,
               "CustomDeck": {
                 "1048": {
-                  "FaceURL": "https://i.imgur.com/K5xN2NM.jpeg",
+                  "FaceURL": "https://i.imgur.com/jmKwBbC.jpeg",
                   "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
                   "NumWidth": 1,
                   "NumHeight": 1,
@@ -1629,7 +1629,7 @@
               "SidewaysCard": false,
               "CustomDeck": {
                 "1049": {
-                  "FaceURL": "https://i.imgur.com/K5xN2NM.jpeg",
+                  "FaceURL": "https://i.imgur.com/jmKwBbC.jpeg",
                   "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
                   "NumWidth": 1,
                   "NumHeight": 1,
@@ -1691,7 +1691,7 @@
               "SidewaysCard": false,
               "CustomDeck": {
                 "1050": {
-                  "FaceURL": "https://i.imgur.com/K5xN2NM.jpeg",
+                  "FaceURL": "https://i.imgur.com/jmKwBbC.jpeg",
                   "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
                   "NumWidth": 1,
                   "NumHeight": 1,
@@ -1754,7 +1754,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1062": {
-              "FaceURL": "https://i.imgur.com/xvRfphp.jpeg",
+              "FaceURL": "https://i.imgur.com/kNP1UPN.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -1815,7 +1815,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1051": {
-              "FaceURL": "https://i.imgur.com/Fswzx8C.jpeg",
+              "FaceURL": "https://i.imgur.com/jFkx2NS.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -1876,7 +1876,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1063": {
-              "FaceURL": "https://i.imgur.com/GHKsJ3o.jpeg",
+              "FaceURL": "https://i.imgur.com/1kyvlio.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -1937,7 +1937,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1034": {
-              "FaceURL": "https://i.imgur.com/xOdAxGp.jpeg",
+              "FaceURL": "https://i.imgur.com/8pb1tzN.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -1999,7 +1999,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1030": {
-              "FaceURL": "https://i.imgur.com/ILHWz1R.jpeg",
+              "FaceURL": "https://i.imgur.com/cCcelSf.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -2063,7 +2063,7 @@
           ],
           "CustomDeck": {
             "1046": {
-              "FaceURL": "https://i.imgur.com/bPHSyAw.jpeg",
+              "FaceURL": "https://i.imgur.com/yeI2hCl.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -2072,7 +2072,7 @@
               "Type": 0
             },
             "1045": {
-              "FaceURL": "https://i.imgur.com/bPHSyAw.jpeg",
+              "FaceURL": "https://i.imgur.com/yeI2hCl.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -2133,7 +2133,7 @@
               "SidewaysCard": false,
               "CustomDeck": {
                 "1046": {
-                  "FaceURL": "https://i.imgur.com/bPHSyAw.jpeg",
+                  "FaceURL": "https://i.imgur.com/yeI2hCl.jpeg",
                   "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
                   "NumWidth": 1,
                   "NumHeight": 1,
@@ -2194,7 +2194,7 @@
               "SidewaysCard": false,
               "CustomDeck": {
                 "1045": {
-                  "FaceURL": "https://i.imgur.com/bPHSyAw.jpeg",
+                  "FaceURL": "https://i.imgur.com/yeI2hCl.jpeg",
                   "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
                   "NumWidth": 1,
                   "NumHeight": 1,
@@ -2257,7 +2257,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1066": {
-              "FaceURL": "https://i.imgur.com/eec9wgP.jpeg",
+              "FaceURL": "https://i.imgur.com/DwepJXu.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -2331,8 +2331,8 @@
           ],
           "CustomDeck": {
             "1078": {
-              "FaceURL": "https://i.imgur.com/v8DbjYB.jpeg",
-              "BackURL": "https://i.imgur.com/WlKAAYY.jpeg",
+              "FaceURL": "https://i.imgur.com/pc5b9NZ.jpeg",
+              "BackURL": "https://i.imgur.com/pe8f834.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -2340,8 +2340,8 @@
               "Type": 0
             },
             "1079": {
-              "FaceURL": "https://i.imgur.com/2aqIzTG.jpeg",
-              "BackURL": "https://i.imgur.com/bol8xci.jpeg",
+              "FaceURL": "https://i.imgur.com/rkWmgP4.jpeg",
+              "BackURL": "https://i.imgur.com/WJswWED.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -2349,8 +2349,8 @@
               "Type": 0
             },
             "1080": {
-              "FaceURL": "https://i.imgur.com/DU8AYjI.jpeg",
-              "BackURL": "https://i.imgur.com/eImSb9h.jpeg",
+              "FaceURL": "https://i.imgur.com/dwOQ55F.jpeg",
+              "BackURL": "https://i.imgur.com/2xDp06u.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -2358,8 +2358,8 @@
               "Type": 0
             },
             "1081": {
-              "FaceURL": "https://i.imgur.com/oeJP15c.jpeg",
-              "BackURL": "https://i.imgur.com/lWWUVsF.jpeg",
+              "FaceURL": "https://i.imgur.com/hCWX8tO.jpeg",
+              "BackURL": "https://i.imgur.com/qvX70DD.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -2367,8 +2367,8 @@
               "Type": 0
             },
             "1082": {
-              "FaceURL": "https://i.imgur.com/JBX5ezR.jpeg",
-              "BackURL": "https://i.imgur.com/JBfU76n.jpeg",
+              "FaceURL": "https://i.imgur.com/2t3exgh.jpeg",
+              "BackURL": "https://i.imgur.com/6IyyThl.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -2376,8 +2376,8 @@
               "Type": 0
             },
             "1083": {
-              "FaceURL": "https://i.imgur.com/hUGjnUE.jpeg",
-              "BackURL": "https://i.imgur.com/fe81Jzl.jpeg",
+              "FaceURL": "https://i.imgur.com/RURI6kj.jpeg",
+              "BackURL": "https://i.imgur.com/cYtA9DK.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -2385,8 +2385,8 @@
               "Type": 0
             },
             "1084": {
-              "FaceURL": "https://i.imgur.com/pOJVviB.jpeg",
-              "BackURL": "https://i.imgur.com/FXCwxnr.jpeg",
+              "FaceURL": "https://i.imgur.com/w3Pb5ZP.jpeg",
+              "BackURL": "https://i.imgur.com/AJ1a2W8.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -2394,8 +2394,8 @@
               "Type": 0
             },
             "1085": {
-              "FaceURL": "https://i.imgur.com/ZWGIv6J.jpeg",
-              "BackURL": "https://i.imgur.com/ePa0P29.jpeg",
+              "FaceURL": "https://i.imgur.com/iROIPPX.jpeg",
+              "BackURL": "https://i.imgur.com/WzEDM7f.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -2403,8 +2403,8 @@
               "Type": 0
             },
             "1086": {
-              "FaceURL": "https://i.imgur.com/wbiT1Q2.jpeg",
-              "BackURL": "https://i.imgur.com/agOkWc6.jpeg",
+              "FaceURL": "https://i.imgur.com/NdRr5Iq.jpeg",
+              "BackURL": "https://i.imgur.com/57vHMvc.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -2412,8 +2412,8 @@
               "Type": 0
             },
             "1087": {
-              "FaceURL": "https://i.imgur.com/zwg5D2o.jpeg",
-              "BackURL": "https://i.imgur.com/BUwzIA3.jpeg",
+              "FaceURL": "https://i.imgur.com/Vc64ZmF.jpeg",
+              "BackURL": "https://i.imgur.com/Apzg9Kp.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -2421,8 +2421,8 @@
               "Type": 0
             },
             "1088": {
-              "FaceURL": "https://i.imgur.com/M1xNlB4.jpeg",
-              "BackURL": "https://i.imgur.com/VOdnVJb.jpeg",
+              "FaceURL": "https://i.imgur.com/E1IsT0Q.jpeg",
+              "BackURL": "https://i.imgur.com/DjaKYPX.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -2430,8 +2430,8 @@
               "Type": 0
             },
             "1089": {
-              "FaceURL": "https://i.imgur.com/zzXvNFy.jpeg",
-              "BackURL": "https://i.imgur.com/nEsg600.jpeg",
+              "FaceURL": "https://i.imgur.com/F09pHfT.jpeg",
+              "BackURL": "https://i.imgur.com/PnJmzRx.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -2439,8 +2439,8 @@
               "Type": 0
             },
             "1090": {
-              "FaceURL": "https://i.imgur.com/r7B18oP.jpeg",
-              "BackURL": "https://i.imgur.com/DMuUkEe.jpeg",
+              "FaceURL": "https://i.imgur.com/1dUxKAs.jpeg",
+              "BackURL": "https://i.imgur.com/75GOsiQ.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -2448,8 +2448,8 @@
               "Type": 0
             },
             "1091": {
-              "FaceURL": "https://i.imgur.com/lbujXfv.jpeg",
-              "BackURL": "https://i.imgur.com/U0LKWAX.jpeg",
+              "FaceURL": "https://i.imgur.com/k52ndcP.jpeg",
+              "BackURL": "https://i.imgur.com/GBjlV9P.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -2457,8 +2457,8 @@
               "Type": 0
             },
             "1092": {
-              "FaceURL": "https://i.imgur.com/hfAKdnb.jpeg",
-              "BackURL": "https://i.imgur.com/ogxyOlp.jpeg",
+              "FaceURL": "https://i.imgur.com/Otzsj9a.jpeg",
+              "BackURL": "https://i.imgur.com/OI7EcKC.jpeg",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -2513,8 +2513,8 @@
               "SidewaysCard": false,
               "CustomDeck": {
                 "1078": {
-                  "FaceURL": "https://i.imgur.com/v8DbjYB.jpeg",
-                  "BackURL": "https://i.imgur.com/WlKAAYY.jpeg",
+                  "FaceURL": "https://i.imgur.com/pc5b9NZ.jpeg",
+                  "BackURL": "https://i.imgur.com/pe8f834.jpeg",
                   "NumWidth": 1,
                   "NumHeight": 1,
                   "BackIsHidden": true,
@@ -2569,8 +2569,8 @@
               "SidewaysCard": false,
               "CustomDeck": {
                 "1079": {
-                  "FaceURL": "https://i.imgur.com/2aqIzTG.jpeg",
-                  "BackURL": "https://i.imgur.com/bol8xci.jpeg",
+                  "FaceURL": "https://i.imgur.com/rkWmgP4.jpeg",
+                  "BackURL": "https://i.imgur.com/WJswWED.jpeg",
                   "NumWidth": 1,
                   "NumHeight": 1,
                   "BackIsHidden": true,
@@ -2625,8 +2625,8 @@
               "SidewaysCard": false,
               "CustomDeck": {
                 "1080": {
-                  "FaceURL": "https://i.imgur.com/DU8AYjI.jpeg",
-                  "BackURL": "https://i.imgur.com/eImSb9h.jpeg",
+                  "FaceURL": "https://i.imgur.com/dwOQ55F.jpeg",
+                  "BackURL": "https://i.imgur.com/2xDp06u.jpeg",
                   "NumWidth": 1,
                   "NumHeight": 1,
                   "BackIsHidden": true,
@@ -2681,8 +2681,8 @@
               "SidewaysCard": false,
               "CustomDeck": {
                 "1081": {
-                  "FaceURL": "https://i.imgur.com/oeJP15c.jpeg",
-                  "BackURL": "https://i.imgur.com/lWWUVsF.jpeg",
+                  "FaceURL": "https://i.imgur.com/hCWX8tO.jpeg",
+                  "BackURL": "https://i.imgur.com/qvX70DD.jpeg",
                   "NumWidth": 1,
                   "NumHeight": 1,
                   "BackIsHidden": true,
@@ -2737,8 +2737,8 @@
               "SidewaysCard": false,
               "CustomDeck": {
                 "1082": {
-                  "FaceURL": "https://i.imgur.com/JBX5ezR.jpeg",
-                  "BackURL": "https://i.imgur.com/JBfU76n.jpeg",
+                  "FaceURL": "https://i.imgur.com/2t3exgh.jpeg",
+                  "BackURL": "https://i.imgur.com/6IyyThl.jpeg",
                   "NumWidth": 1,
                   "NumHeight": 1,
                   "BackIsHidden": true,
@@ -2793,8 +2793,8 @@
               "SidewaysCard": false,
               "CustomDeck": {
                 "1083": {
-                  "FaceURL": "https://i.imgur.com/hUGjnUE.jpeg",
-                  "BackURL": "https://i.imgur.com/fe81Jzl.jpeg",
+                  "FaceURL": "https://i.imgur.com/RURI6kj.jpeg",
+                  "BackURL": "https://i.imgur.com/cYtA9DK.jpeg",
                   "NumWidth": 1,
                   "NumHeight": 1,
                   "BackIsHidden": true,
@@ -2849,8 +2849,8 @@
               "SidewaysCard": false,
               "CustomDeck": {
                 "1084": {
-                  "FaceURL": "https://i.imgur.com/pOJVviB.jpeg",
-                  "BackURL": "https://i.imgur.com/FXCwxnr.jpeg",
+                  "FaceURL": "https://i.imgur.com/w3Pb5ZP.jpeg",
+                  "BackURL": "https://i.imgur.com/AJ1a2W8.jpeg",
                   "NumWidth": 1,
                   "NumHeight": 1,
                   "BackIsHidden": true,
@@ -2905,8 +2905,8 @@
               "SidewaysCard": false,
               "CustomDeck": {
                 "1085": {
-                  "FaceURL": "https://i.imgur.com/ZWGIv6J.jpeg",
-                  "BackURL": "https://i.imgur.com/ePa0P29.jpeg",
+                  "FaceURL": "https://i.imgur.com/iROIPPX.jpeg",
+                  "BackURL": "https://i.imgur.com/WzEDM7f.jpeg",
                   "NumWidth": 1,
                   "NumHeight": 1,
                   "BackIsHidden": true,
@@ -2961,8 +2961,8 @@
               "SidewaysCard": false,
               "CustomDeck": {
                 "1086": {
-                  "FaceURL": "https://i.imgur.com/wbiT1Q2.jpeg",
-                  "BackURL": "https://i.imgur.com/agOkWc6.jpeg",
+                  "FaceURL": "https://i.imgur.com/NdRr5Iq.jpeg",
+                  "BackURL": "https://i.imgur.com/57vHMvc.jpeg",
                   "NumWidth": 1,
                   "NumHeight": 1,
                   "BackIsHidden": true,
@@ -3017,8 +3017,8 @@
               "SidewaysCard": false,
               "CustomDeck": {
                 "1087": {
-                  "FaceURL": "https://i.imgur.com/zwg5D2o.jpeg",
-                  "BackURL": "https://i.imgur.com/BUwzIA3.jpeg",
+                  "FaceURL": "https://i.imgur.com/Vc64ZmF.jpeg",
+                  "BackURL": "https://i.imgur.com/Apzg9Kp.jpeg",
                   "NumWidth": 1,
                   "NumHeight": 1,
                   "BackIsHidden": true,
@@ -3073,8 +3073,8 @@
               "SidewaysCard": false,
               "CustomDeck": {
                 "1088": {
-                  "FaceURL": "https://i.imgur.com/M1xNlB4.jpeg",
-                  "BackURL": "https://i.imgur.com/VOdnVJb.jpeg",
+                  "FaceURL": "https://i.imgur.com/E1IsT0Q.jpeg",
+                  "BackURL": "https://i.imgur.com/DjaKYPX.jpeg",
                   "NumWidth": 1,
                   "NumHeight": 1,
                   "BackIsHidden": true,
@@ -3129,8 +3129,8 @@
               "SidewaysCard": false,
               "CustomDeck": {
                 "1089": {
-                  "FaceURL": "https://i.imgur.com/zzXvNFy.jpeg",
-                  "BackURL": "https://i.imgur.com/nEsg600.jpeg",
+                  "FaceURL": "https://i.imgur.com/F09pHfT.jpeg",
+                  "BackURL": "https://i.imgur.com/PnJmzRx.jpeg",
                   "NumWidth": 1,
                   "NumHeight": 1,
                   "BackIsHidden": true,
@@ -3185,8 +3185,8 @@
               "SidewaysCard": false,
               "CustomDeck": {
                 "1090": {
-                  "FaceURL": "https://i.imgur.com/r7B18oP.jpeg",
-                  "BackURL": "https://i.imgur.com/DMuUkEe.jpeg",
+                  "FaceURL": "https://i.imgur.com/1dUxKAs.jpeg",
+                  "BackURL": "https://i.imgur.com/75GOsiQ.jpeg",
                   "NumWidth": 1,
                   "NumHeight": 1,
                   "BackIsHidden": true,
@@ -3241,8 +3241,8 @@
               "SidewaysCard": false,
               "CustomDeck": {
                 "1091": {
-                  "FaceURL": "https://i.imgur.com/lbujXfv.jpeg",
-                  "BackURL": "https://i.imgur.com/U0LKWAX.jpeg",
+                  "FaceURL": "https://i.imgur.com/k52ndcP.jpeg",
+                  "BackURL": "https://i.imgur.com/GBjlV9P.jpeg",
                   "NumWidth": 1,
                   "NumHeight": 1,
                   "BackIsHidden": true,
@@ -3297,8 +3297,8 @@
               "SidewaysCard": false,
               "CustomDeck": {
                 "1092": {
-                  "FaceURL": "https://i.imgur.com/hfAKdnb.jpeg",
-                  "BackURL": "https://i.imgur.com/ogxyOlp.jpeg",
+                  "FaceURL": "https://i.imgur.com/Otzsj9a.jpeg",
+                  "BackURL": "https://i.imgur.com/OI7EcKC.jpeg",
                   "NumWidth": 1,
                   "NumHeight": 1,
                   "BackIsHidden": true,
@@ -3364,7 +3364,7 @@
           ],
           "CustomDeck": {
             "1072": {
-              "FaceURL": "https://i.imgur.com/JW6TRSj.jpeg",
+              "FaceURL": "https://i.imgur.com/3UbYZxF.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -3373,7 +3373,7 @@
               "Type": 0
             },
             "1073": {
-              "FaceURL": "https://i.imgur.com/8XUfKrT.jpeg",
+              "FaceURL": "https://i.imgur.com/qYhZBP3.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -3382,7 +3382,7 @@
               "Type": 0
             },
             "1074": {
-              "FaceURL": "https://i.imgur.com/qWDbwIi.jpeg",
+              "FaceURL": "https://i.imgur.com/Uuy8liI.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -3391,7 +3391,7 @@
               "Type": 0
             },
             "1075": {
-              "FaceURL": "https://i.imgur.com/EERsMP1.jpeg",
+              "FaceURL": "https://i.imgur.com/aolgUam.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -3400,7 +3400,7 @@
               "Type": 0
             },
             "1076": {
-              "FaceURL": "https://i.imgur.com/Uic0gsj.jpeg",
+              "FaceURL": "https://i.imgur.com/kLzF2yl.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -3409,7 +3409,7 @@
               "Type": 0
             },
             "1077": {
-              "FaceURL": "https://i.imgur.com/HlsOsV4.jpeg",
+              "FaceURL": "https://i.imgur.com/wvh1cxa.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -3465,7 +3465,7 @@
               "SidewaysCard": false,
               "CustomDeck": {
                 "1072": {
-                  "FaceURL": "https://i.imgur.com/JW6TRSj.jpeg",
+                  "FaceURL": "https://i.imgur.com/3UbYZxF.jpeg",
                   "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
                   "NumWidth": 1,
                   "NumHeight": 1,
@@ -3521,7 +3521,7 @@
               "SidewaysCard": false,
               "CustomDeck": {
                 "1073": {
-                  "FaceURL": "https://i.imgur.com/8XUfKrT.jpeg",
+                  "FaceURL": "https://i.imgur.com/qYhZBP3.jpeg",
                   "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
                   "NumWidth": 1,
                   "NumHeight": 1,
@@ -3577,7 +3577,7 @@
               "SidewaysCard": false,
               "CustomDeck": {
                 "1074": {
-                  "FaceURL": "https://i.imgur.com/qWDbwIi.jpeg",
+                  "FaceURL": "https://i.imgur.com/Uuy8liI.jpeg",
                   "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
                   "NumWidth": 1,
                   "NumHeight": 1,
@@ -3633,7 +3633,7 @@
               "SidewaysCard": false,
               "CustomDeck": {
                 "1075": {
-                  "FaceURL": "https://i.imgur.com/EERsMP1.jpeg",
+                  "FaceURL": "https://i.imgur.com/aolgUam.jpeg",
                   "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
                   "NumWidth": 1,
                   "NumHeight": 1,
@@ -3689,7 +3689,7 @@
               "SidewaysCard": false,
               "CustomDeck": {
                 "1076": {
-                  "FaceURL": "https://i.imgur.com/Uic0gsj.jpeg",
+                  "FaceURL": "https://i.imgur.com/kLzF2yl.jpeg",
                   "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
                   "NumWidth": 1,
                   "NumHeight": 1,
@@ -3745,7 +3745,7 @@
               "SidewaysCard": false,
               "CustomDeck": {
                 "1077": {
-                  "FaceURL": "https://i.imgur.com/HlsOsV4.jpeg",
+                  "FaceURL": "https://i.imgur.com/wvh1cxa.jpeg",
                   "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
                   "NumWidth": 1,
                   "NumHeight": 1,
@@ -3815,7 +3815,7 @@
           "Stretch": true
         }
       },
-      "LuaScript": "name = 'Excelsior'\n\nfunction onLoad()\n    Global.call('createSetupButtons', {object=self, key=name})\nend\n\nfunction easyClick()\n    Global.call('fillContainer', {object=self, key=name, mode='easy'})\nend\n\nfunction normalClick()\n    Global.call('fillContainer', {object=self, key=name, mode='normal'})\nend\n\nfunction hardClick()\n    Global.call('fillContainer', {object=self, key=name, mode='hard'})\nend\n\nfunction expertClick()\n    Global.call('fillContainer', {object=self, key=name, mode='expert'})\nend\n\nfunction standaloneClick()\n    Global.call('fillContainer', {object=self, key=name, mode='standalone'})\nend\n",
+      "LuaScript": "name = 'Excelsior'\r\n\r\nfunction onLoad()\r\n    Global.call('createSetupButtons', {object=self, key=name})\r\nend\r\n\r\nfunction easyClick()\r\n    Global.call('fillContainer', {object=self, key=name, mode='easy'})\r\nend\r\n\r\nfunction normalClick()\r\n    Global.call('fillContainer', {object=self, key=name, mode='normal'})\r\nend\r\n\r\nfunction hardClick()\r\n    Global.call('fillContainer', {object=self, key=name, mode='hard'})\r\nend\r\n\r\nfunction expertClick()\r\n    Global.call('fillContainer', {object=self, key=name, mode='expert'})\r\nend\r\n\r\nfunction standaloneClick()\r\n    Global.call('fillContainer', {object=self, key=name, mode='standalone'})\r\nend\r\n",
       "LuaScriptState": "",
       "XmlUI": ""
     },
@@ -3867,8 +3867,8 @@
       "SidewaysCard": false,
       "CustomDeck": {
         "1000": {
-          "FaceURL": "https://i.imgur.com/fmpyIqA.jpeg",
-          "BackURL": "https://i.imgur.com/bWeHx7E.jpeg",
+          "FaceURL": "https://i.imgur.com/z0mADyH.jpeg",
+          "BackURL": "https://i.imgur.com/LzxWR1i.jpeg",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -3929,8 +3929,8 @@
       "SidewaysCard": false,
       "CustomDeck": {
         "1001": {
-          "FaceURL": "https://i.imgur.com/0uc8KIH.jpeg",
-          "BackURL": "https://i.imgur.com/yLXTuO3.jpeg",
+          "FaceURL": "https://i.imgur.com/FhbtLRv.jpeg",
+          "BackURL": "https://i.imgur.com/3J0D83p.jpeg",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -3991,8 +3991,8 @@
       "SidewaysCard": false,
       "CustomDeck": {
         "1002": {
-          "FaceURL": "https://i.imgur.com/0uc8KIH.jpeg",
-          "BackURL": "https://i.imgur.com/yLXTuO3.jpeg",
+          "FaceURL": "https://i.imgur.com/FhbtLRv.jpeg",
+          "BackURL": "https://i.imgur.com/3J0D83p.jpeg",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -4053,8 +4053,8 @@
       "SidewaysCard": false,
       "CustomDeck": {
         "1003": {
-          "FaceURL": "https://i.imgur.com/0uc8KIH.jpeg",
-          "BackURL": "https://i.imgur.com/yLXTuO3.jpeg",
+          "FaceURL": "https://i.imgur.com/FhbtLRv.jpeg",
+          "BackURL": "https://i.imgur.com/3J0D83p.jpeg",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -4115,8 +4115,8 @@
       "SidewaysCard": false,
       "CustomDeck": {
         "1004": {
-          "FaceURL": "https://i.imgur.com/0uc8KIH.jpeg",
-          "BackURL": "https://i.imgur.com/yLXTuO3.jpeg",
+          "FaceURL": "https://i.imgur.com/FhbtLRv.jpeg",
+          "BackURL": "https://i.imgur.com/3J0D83p.jpeg",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -4177,8 +4177,8 @@
       "SidewaysCard": false,
       "CustomDeck": {
         "1015": {
-          "FaceURL": "https://i.imgur.com/HZ8tfUv.jpeg",
-          "BackURL": "https://i.imgur.com/tFiwCJ9.jpeg",
+          "FaceURL": "https://i.imgur.com/TgM0cB1.jpeg",
+          "BackURL": "https://i.imgur.com/KvIPtbA.jpeg",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -4239,8 +4239,8 @@
       "SidewaysCard": false,
       "CustomDeck": {
         "1016": {
-          "FaceURL": "https://i.imgur.com/PBzGSzm.jpeg",
-          "BackURL": "https://i.imgur.com/G010pfk.jpeg",
+          "FaceURL": "https://i.imgur.com/qQMGuwb.jpeg",
+          "BackURL": "https://i.imgur.com/68aUmvr.jpeg",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -4301,8 +4301,8 @@
       "SidewaysCard": false,
       "CustomDeck": {
         "1017": {
-          "FaceURL": "https://i.imgur.com/pZfjsa6.jpeg",
-          "BackURL": "https://i.imgur.com/1T8XsdX.jpeg",
+          "FaceURL": "https://i.imgur.com/HISnaKp.jpeg",
+          "BackURL": "https://i.imgur.com/Pv534Uy.jpeg",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -4363,8 +4363,8 @@
       "SidewaysCard": false,
       "CustomDeck": {
         "1020": {
-          "FaceURL": "https://i.imgur.com/zqdvEoN.jpeg",
-          "BackURL": "https://i.imgur.com/oIY2N0H.jpeg",
+          "FaceURL": "https://i.imgur.com/jr7S3kH.jpeg",
+          "BackURL": "https://i.imgur.com/7Oi5oql.jpeg",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -4425,8 +4425,8 @@
       "SidewaysCard": false,
       "CustomDeck": {
         "1021": {
-          "FaceURL": "https://i.imgur.com/YMWxfKZ.jpeg",
-          "BackURL": "https://i.imgur.com/BoSVuEL.jpeg",
+          "FaceURL": "https://i.imgur.com/NKJJQtT.jpeg",
+          "BackURL": "https://i.imgur.com/7e3Accf.jpeg",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -4487,8 +4487,8 @@
       "SidewaysCard": false,
       "CustomDeck": {
         "1022": {
-          "FaceURL": "https://i.imgur.com/enTgIhU.jpeg",
-          "BackURL": "https://i.imgur.com/lEHqwhD.jpeg",
+          "FaceURL": "https://i.imgur.com/DJnWq5z.jpeg",
+          "BackURL": "https://i.imgur.com/rszx0IR.jpeg",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -4549,8 +4549,8 @@
       "SidewaysCard": false,
       "CustomDeck": {
         "1023": {
-          "FaceURL": "https://i.imgur.com/SgZ2ifG.jpeg",
-          "BackURL": "https://i.imgur.com/452v2RU.jpeg",
+          "FaceURL": "https://i.imgur.com/uU0BbIC.jpeg",
+          "BackURL": "https://i.imgur.com/TIN1MOY.jpeg",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -4611,8 +4611,8 @@
       "SidewaysCard": false,
       "CustomDeck": {
         "1024": {
-          "FaceURL": "https://i.imgur.com/9yJQ2sT.jpeg",
-          "BackURL": "https://i.imgur.com/to5UaYj.jpeg",
+          "FaceURL": "https://i.imgur.com/JhkrJI5.jpeg",
+          "BackURL": "https://i.imgur.com/Dy3L9qD.jpeg",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -4673,8 +4673,8 @@
       "SidewaysCard": false,
       "CustomDeck": {
         "1025": {
-          "FaceURL": "https://i.imgur.com/GVFvGEx.jpeg",
-          "BackURL": "https://i.imgur.com/V2hztkZ.jpeg",
+          "FaceURL": "https://i.imgur.com/tfMpC5G.jpeg",
+          "BackURL": "https://i.imgur.com/VuHA7AK.jpeg",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -4764,7 +4764,7 @@
       ],
       "CustomDeck": {
         "1028": {
-          "FaceURL": "https://i.imgur.com/z6YKTPk.jpeg",
+          "FaceURL": "https://i.imgur.com/E9eTeWm.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -4773,7 +4773,7 @@
           "Type": 0
         },
         "1029": {
-          "FaceURL": "https://i.imgur.com/z6YKTPk.jpeg",
+          "FaceURL": "https://i.imgur.com/E9eTeWm.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -4782,7 +4782,7 @@
           "Type": 0
         },
         "1031": {
-          "FaceURL": "https://i.imgur.com/65EuuwX.jpeg",
+          "FaceURL": "https://i.imgur.com/GwpiJs1.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -4791,7 +4791,7 @@
           "Type": 0
         },
         "1032": {
-          "FaceURL": "https://i.imgur.com/65EuuwX.jpeg",
+          "FaceURL": "https://i.imgur.com/GwpiJs1.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -4800,7 +4800,7 @@
           "Type": 0
         },
         "1033": {
-          "FaceURL": "https://i.imgur.com/65EuuwX.jpeg",
+          "FaceURL": "https://i.imgur.com/GwpiJs1.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -4809,7 +4809,7 @@
           "Type": 0
         },
         "1035": {
-          "FaceURL": "https://i.imgur.com/jiDs4Wd.jpeg",
+          "FaceURL": "https://i.imgur.com/VRiXrKy.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -4818,7 +4818,7 @@
           "Type": 0
         },
         "1036": {
-          "FaceURL": "https://i.imgur.com/jiDs4Wd.jpeg",
+          "FaceURL": "https://i.imgur.com/VRiXrKy.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -4827,7 +4827,7 @@
           "Type": 0
         },
         "1037": {
-          "FaceURL": "https://i.imgur.com/Uk0i5Oi.jpeg",
+          "FaceURL": "https://i.imgur.com/u8mfafS.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -4836,7 +4836,7 @@
           "Type": 0
         },
         "1038": {
-          "FaceURL": "https://i.imgur.com/Uk0i5Oi.jpeg",
+          "FaceURL": "https://i.imgur.com/u8mfafS.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -4845,7 +4845,7 @@
           "Type": 0
         },
         "1039": {
-          "FaceURL": "https://i.imgur.com/NvEaPpl.jpeg",
+          "FaceURL": "https://i.imgur.com/AWq3kqi.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -4854,7 +4854,7 @@
           "Type": 0
         },
         "1040": {
-          "FaceURL": "https://i.imgur.com/NvEaPpl.jpeg",
+          "FaceURL": "https://i.imgur.com/AWq3kqi.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -4863,7 +4863,7 @@
           "Type": 0
         },
         "1041": {
-          "FaceURL": "https://i.imgur.com/l0Ast1t.jpeg",
+          "FaceURL": "https://i.imgur.com/r6gCn4O.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -4872,7 +4872,7 @@
           "Type": 0
         },
         "1042": {
-          "FaceURL": "https://i.imgur.com/l0Ast1t.jpeg",
+          "FaceURL": "https://i.imgur.com/r6gCn4O.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -4881,7 +4881,7 @@
           "Type": 0
         },
         "1043": {
-          "FaceURL": "https://i.imgur.com/ZeXWLxJ.jpeg",
+          "FaceURL": "https://i.imgur.com/mineNe6.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -4890,7 +4890,7 @@
           "Type": 0
         },
         "1044": {
-          "FaceURL": "https://i.imgur.com/ZeXWLxJ.jpeg",
+          "FaceURL": "https://i.imgur.com/mineNe6.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -4899,7 +4899,7 @@
           "Type": 0
         },
         "1052": {
-          "FaceURL": "https://i.imgur.com/f8zCMHa.jpeg",
+          "FaceURL": "https://i.imgur.com/JHQUuMc.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -4908,7 +4908,7 @@
           "Type": 0
         },
         "1053": {
-          "FaceURL": "https://i.imgur.com/f8zCMHa.jpeg",
+          "FaceURL": "https://i.imgur.com/JHQUuMc.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -4917,7 +4917,7 @@
           "Type": 0
         },
         "1054": {
-          "FaceURL": "https://i.imgur.com/fkL9TuG.jpeg",
+          "FaceURL": "https://i.imgur.com/ENR8zoO.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -4926,7 +4926,7 @@
           "Type": 0
         },
         "1055": {
-          "FaceURL": "https://i.imgur.com/fkL9TuG.jpeg",
+          "FaceURL": "https://i.imgur.com/ENR8zoO.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -4935,7 +4935,7 @@
           "Type": 0
         },
         "1056": {
-          "FaceURL": "https://i.imgur.com/SMa4pYY.jpeg",
+          "FaceURL": "https://i.imgur.com/FHcHgcq.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -4944,7 +4944,7 @@
           "Type": 0
         },
         "1057": {
-          "FaceURL": "https://i.imgur.com/SMa4pYY.jpeg",
+          "FaceURL": "https://i.imgur.com/FHcHgcq.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -4953,7 +4953,7 @@
           "Type": 0
         },
         "1058": {
-          "FaceURL": "https://i.imgur.com/KnZQSZp.jpeg",
+          "FaceURL": "https://i.imgur.com/E89uSKR.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -4962,7 +4962,7 @@
           "Type": 0
         },
         "1059": {
-          "FaceURL": "https://i.imgur.com/KnZQSZp.jpeg",
+          "FaceURL": "https://i.imgur.com/E89uSKR.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -4971,7 +4971,7 @@
           "Type": 0
         },
         "1060": {
-          "FaceURL": "https://i.imgur.com/csSYdGm.jpeg",
+          "FaceURL": "https://i.imgur.com/alQ9nMp.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -4980,7 +4980,7 @@
           "Type": 0
         },
         "1061": {
-          "FaceURL": "https://i.imgur.com/csSYdGm.jpeg",
+          "FaceURL": "https://i.imgur.com/alQ9nMp.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -4989,7 +4989,7 @@
           "Type": 0
         },
         "1064": {
-          "FaceURL": "https://i.imgur.com/YeVXaLe.jpeg",
+          "FaceURL": "https://i.imgur.com/arzRi7w.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -4998,7 +4998,7 @@
           "Type": 0
         },
         "1065": {
-          "FaceURL": "https://i.imgur.com/YeVXaLe.jpeg",
+          "FaceURL": "https://i.imgur.com/arzRi7w.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -5007,7 +5007,7 @@
           "Type": 0
         },
         "1067": {
-          "FaceURL": "https://i.imgur.com/FLvR4xH.jpeg",
+          "FaceURL": "https://i.imgur.com/sFWiaWS.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -5016,7 +5016,7 @@
           "Type": 0
         },
         "1068": {
-          "FaceURL": "https://i.imgur.com/FLvR4xH.jpeg",
+          "FaceURL": "https://i.imgur.com/sFWiaWS.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -5025,7 +5025,7 @@
           "Type": 0
         },
         "1069": {
-          "FaceURL": "https://i.imgur.com/oX0hJbv.jpeg",
+          "FaceURL": "https://i.imgur.com/vekOmFD.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -5034,7 +5034,7 @@
           "Type": 0
         },
         "1070": {
-          "FaceURL": "https://i.imgur.com/oX0hJbv.jpeg",
+          "FaceURL": "https://i.imgur.com/vekOmFD.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -5043,7 +5043,7 @@
           "Type": 0
         },
         "1071": {
-          "FaceURL": "https://i.imgur.com/KmtQTdm.jpeg",
+          "FaceURL": "https://i.imgur.com/kAuIQ1l.jpeg",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -5099,7 +5099,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1028": {
-              "FaceURL": "https://i.imgur.com/z6YKTPk.jpeg",
+              "FaceURL": "https://i.imgur.com/E9eTeWm.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -5155,7 +5155,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1029": {
-              "FaceURL": "https://i.imgur.com/z6YKTPk.jpeg",
+              "FaceURL": "https://i.imgur.com/E9eTeWm.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -5211,7 +5211,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1031": {
-              "FaceURL": "https://i.imgur.com/65EuuwX.jpeg",
+              "FaceURL": "https://i.imgur.com/GwpiJs1.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -5267,7 +5267,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1032": {
-              "FaceURL": "https://i.imgur.com/65EuuwX.jpeg",
+              "FaceURL": "https://i.imgur.com/GwpiJs1.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -5323,7 +5323,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1033": {
-              "FaceURL": "https://i.imgur.com/65EuuwX.jpeg",
+              "FaceURL": "https://i.imgur.com/GwpiJs1.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -5379,7 +5379,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1035": {
-              "FaceURL": "https://i.imgur.com/jiDs4Wd.jpeg",
+              "FaceURL": "https://i.imgur.com/VRiXrKy.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -5435,7 +5435,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1036": {
-              "FaceURL": "https://i.imgur.com/jiDs4Wd.jpeg",
+              "FaceURL": "https://i.imgur.com/VRiXrKy.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -5491,7 +5491,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1037": {
-              "FaceURL": "https://i.imgur.com/Uk0i5Oi.jpeg",
+              "FaceURL": "https://i.imgur.com/u8mfafS.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -5547,7 +5547,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1038": {
-              "FaceURL": "https://i.imgur.com/Uk0i5Oi.jpeg",
+              "FaceURL": "https://i.imgur.com/u8mfafS.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -5603,7 +5603,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1039": {
-              "FaceURL": "https://i.imgur.com/NvEaPpl.jpeg",
+              "FaceURL": "https://i.imgur.com/AWq3kqi.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -5659,7 +5659,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1040": {
-              "FaceURL": "https://i.imgur.com/NvEaPpl.jpeg",
+              "FaceURL": "https://i.imgur.com/AWq3kqi.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -5715,7 +5715,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1041": {
-              "FaceURL": "https://i.imgur.com/l0Ast1t.jpeg",
+              "FaceURL": "https://i.imgur.com/r6gCn4O.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -5771,7 +5771,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1042": {
-              "FaceURL": "https://i.imgur.com/l0Ast1t.jpeg",
+              "FaceURL": "https://i.imgur.com/r6gCn4O.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -5827,7 +5827,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1043": {
-              "FaceURL": "https://i.imgur.com/ZeXWLxJ.jpeg",
+              "FaceURL": "https://i.imgur.com/mineNe6.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -5883,7 +5883,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1044": {
-              "FaceURL": "https://i.imgur.com/ZeXWLxJ.jpeg",
+              "FaceURL": "https://i.imgur.com/mineNe6.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -5939,7 +5939,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1052": {
-              "FaceURL": "https://i.imgur.com/f8zCMHa.jpeg",
+              "FaceURL": "https://i.imgur.com/JHQUuMc.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -5995,7 +5995,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1053": {
-              "FaceURL": "https://i.imgur.com/f8zCMHa.jpeg",
+              "FaceURL": "https://i.imgur.com/JHQUuMc.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -6051,7 +6051,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1054": {
-              "FaceURL": "https://i.imgur.com/fkL9TuG.jpeg",
+              "FaceURL": "https://i.imgur.com/ENR8zoO.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -6107,7 +6107,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1055": {
-              "FaceURL": "https://i.imgur.com/fkL9TuG.jpeg",
+              "FaceURL": "https://i.imgur.com/ENR8zoO.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -6163,7 +6163,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1056": {
-              "FaceURL": "https://i.imgur.com/SMa4pYY.jpeg",
+              "FaceURL": "https://i.imgur.com/FHcHgcq.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -6219,7 +6219,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1057": {
-              "FaceURL": "https://i.imgur.com/SMa4pYY.jpeg",
+              "FaceURL": "https://i.imgur.com/FHcHgcq.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -6275,7 +6275,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1058": {
-              "FaceURL": "https://i.imgur.com/KnZQSZp.jpeg",
+              "FaceURL": "https://i.imgur.com/E89uSKR.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -6331,7 +6331,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1059": {
-              "FaceURL": "https://i.imgur.com/KnZQSZp.jpeg",
+              "FaceURL": "https://i.imgur.com/E89uSKR.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -6387,7 +6387,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1060": {
-              "FaceURL": "https://i.imgur.com/csSYdGm.jpeg",
+              "FaceURL": "https://i.imgur.com/alQ9nMp.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -6443,7 +6443,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1061": {
-              "FaceURL": "https://i.imgur.com/csSYdGm.jpeg",
+              "FaceURL": "https://i.imgur.com/alQ9nMp.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -6499,7 +6499,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1064": {
-              "FaceURL": "https://i.imgur.com/YeVXaLe.jpeg",
+              "FaceURL": "https://i.imgur.com/arzRi7w.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -6555,7 +6555,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1065": {
-              "FaceURL": "https://i.imgur.com/YeVXaLe.jpeg",
+              "FaceURL": "https://i.imgur.com/arzRi7w.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -6611,7 +6611,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1067": {
-              "FaceURL": "https://i.imgur.com/FLvR4xH.jpeg",
+              "FaceURL": "https://i.imgur.com/sFWiaWS.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -6667,7 +6667,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1068": {
-              "FaceURL": "https://i.imgur.com/FLvR4xH.jpeg",
+              "FaceURL": "https://i.imgur.com/sFWiaWS.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -6723,7 +6723,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1069": {
-              "FaceURL": "https://i.imgur.com/oX0hJbv.jpeg",
+              "FaceURL": "https://i.imgur.com/vekOmFD.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -6779,7 +6779,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1070": {
-              "FaceURL": "https://i.imgur.com/oX0hJbv.jpeg",
+              "FaceURL": "https://i.imgur.com/vekOmFD.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -6835,7 +6835,7 @@
           "SidewaysCard": false,
           "CustomDeck": {
             "1071": {
-              "FaceURL": "https://i.imgur.com/KmtQTdm.jpeg",
+              "FaceURL": "https://i.imgur.com/kAuIQ1l.jpeg",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
