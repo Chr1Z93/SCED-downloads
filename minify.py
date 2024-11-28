@@ -34,7 +34,7 @@ if __name__ == "__main__":
             print(f"Directory does not exist: {directory}")
             continue
 
-        print(f"Processing directory: {directory}")
+        # print(f"Processing directory: {directory}")
         for json_file in directory_path.rglob("*.json"):
             minify_json_file(json_file)
 
