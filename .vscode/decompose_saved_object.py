@@ -14,15 +14,15 @@ def read_json_value(file_path, key):
         return ""
 
 
-def build_saved_object(input_file):
+def decompose_saved_object(input_file):
     # Get the nickname
     nickname = read_json_value(input_file, "Nickname")
     if not nickname:
         print("Error: Could not read Nickname from file", file=sys.stderr)
         return
 
-    # Construct output path
-    output_file = os.path.join(
+    # Construct the saved object path
+    saved_object = os.path.join(
         os.environ["USERPROFILE"],
         "Documents",
         "My Games",
@@ -32,16 +32,18 @@ def build_saved_object(input_file):
         f"{nickname}.json",
     )
 
+    # Construct the output path
+    output_path = os.path.dirname(input_file)
+
     # Run the go command
     cmd = [
         "go",
         "run",
         "main.go",
         "--moddir=C:\\git\\SCED",
-        "--bonusdir=C:\\git\\SCED-downloads",
-        f"--objin={input_file}",
-        f"--objout={output_file}",
-        "--savedobj",
+        f"--objin={saved_object}",
+        f"--objout={output_path}\\",
+        "--reverse",
     ]
 
     # Execute from the correct directory
@@ -50,7 +52,7 @@ def build_saved_object(input_file):
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        print("Usage: python build_saved_object.py <input_file>", file=sys.stderr)
+        print("Usage: python decompose_saved_object.py <input_file>", file=sys.stderr)
         sys.exit(1)
 
-    build_saved_object(sys.argv[1])
+    decompose_saved_object(sys.argv[1])
