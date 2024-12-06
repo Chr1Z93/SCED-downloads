@@ -64,7 +64,7 @@
   "Bag": {
     "Order": 0
   },
-  "LuaScript": "-- Utility memory bag by Directsun\r\n-- Version 2.5.2\r\n-- Fork of Memory Bag 2.0 by MrStump\r\n\r\nfunction updateSave()\r\n    local data_to_save = {[\"ml\"]=memoryList}\r\n    saved_data = JSON.encode(data_to_save)\r\n    self.script_state = saved_data\r\nend\r\n\r\nfunction combineMemoryFromBagsWithin()\r\n  local bagObjList = self.getObjects()\r\n  for _, bagObj in ipairs(bagObjList) do\r\n    local data = bagObj.lua_script_state\r\n      if data ~= nil then\r\n        local j = JSON.decode(data)\r\n        if j ~= nil and j.ml ~= nil then\r\n          for guid, entry in pairs(j.ml) do\r\n            memoryList[guid] = entry\r\n          end\r\n        end\r\n      end\r\n    end\r\nend\r\n\r\nfunction updateMemoryWithMoves()\r\n    memoryList = memoryListBackup\r\n    --get the first transposed object's coordinates\r\n    local obj = getObjectFromGUID(moveGuid)\r\n\r\n    -- p1 is where needs to go, p2 is where it was\r\n    local refObjPos = memoryList[moveGuid].pos\r\n    local deltaPos = findOffsetDistance(obj.getPosition(), refObjPos, nil)\r\n    local movedRotation = obj.getRotation()\r\n    for guid, entry in pairs(memoryList) do\r\n        memoryList[guid].pos.x = entry.pos.x - deltaPos.x\r\n        memoryList[guid].pos.y = entry.pos.y - deltaPos.y\r\n        memoryList[guid].pos.z = entry.pos.z - deltaPos.z\r\n        -- memoryList[guid].rot.x = movedRotation.x\r\n        -- memoryList[guid].rot.y = movedRotation.y\r\n        -- memoryList[guid].rot.z = movedRotation.z\r\n    end\r\n\r\n    --theList[obj.getGUID()] = {\r\n    --    pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\r\n    --    rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\r\n    --    lock=obj.getLock()\r\n    --}\r\n    moveList = {}\r\nend\r\n\r\nfunction onload(saved_data)\r\n    fresh = true\r\n    if saved_data ~= \"\" then\r\n        local loaded_data = JSON.decode(saved_data)\r\n        --Set up information off of loaded_data\r\n        memoryList = loaded_data.ml\r\n    else\r\n        --Set up information for if there is no saved saved data\r\n        memoryList = {}\r\n    end\r\n\r\n    moveList = {}\r\n    moveGuid = nil\r\n\r\n    if next(memoryList) == nil then\r\n        createSetupButton()\r\n    else\r\n        fresh = false\r\n        createMemoryActionButtons()\r\n    end\r\nend\r\n\r\n\r\n--Beginning Setup\r\n\r\n\r\n--Make setup button\r\nfunction createSetupButton()\r\n    self.createButton({\r\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\r\n        position={0,0.1,-2.1}, rotation={0,0,0}, height=220, width=500,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\nend\r\n\r\n--Triggered by Transpose button\r\nfunction buttonClick_transpose()\r\n    moveGuid = nil\r\n    broadcastToAll(\"Select one object and move it- all objects will move relative to the new location\", {0.75, 0.75, 1})\r\n    memoryListBackup = duplicateTable(memoryList)\r\n    memoryList = {}\r\n    moveList = {}\r\n    self.clearButtons()\r\n    createButtonsOnAllObjects(true)\r\n    createSetupActionButtons(true)\r\nend\r\n\r\n--Triggered by setup button,\r\nfunction buttonClick_setup()\r\n    memoryListBackup = duplicateTable(memoryList)\r\n    memoryList = {}\r\n    self.clearButtons()\r\n    createButtonsOnAllObjects(false)\r\n    createSetupActionButtons(false)\r\nend\r\n\r\nfunction getAllObjectsInMemory()\r\n  local objTable = {}\r\n  local curObj = {}\r\n\r\n  for guid in pairs(memoryListBackup) do\r\n    curObj = getObjectFromGUID(guid)\r\n    table.insert(objTable, curObj)\r\n  end\r\n\r\n  return objTable\r\n  -- return getAllObjects()\r\nend\r\n\r\n--Creates selection buttons on objects\r\nfunction createButtonsOnAllObjects(move)\r\n    local howManyButtons = 0\r\n\r\n    local objsToHaveButtons = {}\r\n    if move == true then\r\n      objsToHaveButtons = getAllObjectsInMemory()\r\n    else\r\n      objsToHaveButtons = getAllObjects()\r\n    end\r\n\r\n    for _, obj in ipairs(objsToHaveButtons) do\r\n        if obj ~= self then\r\n            local dummyIndex = howManyButtons\r\n            --On a normal bag, the button positions aren't the same size as the bag.\r\n            globalScaleFactor = 1 * 1/self.getScale().x\r\n            --Super sweet math to set button positions\r\n            local selfPos = self.getPosition()\r\n            local objPos = obj.getPosition()\r\n            local deltaPos = findOffsetDistance(selfPos, objPos, obj)\r\n            local objPos = rotateLocalCoordinates(deltaPos, self)\r\n            objPos.x = -objPos.x * globalScaleFactor\r\n            objPos.y = objPos.y * globalScaleFactor + 2\r\n            objPos.z = objPos.z * globalScaleFactor * 0.9\r\n            --Offset rotation of bag\r\n            local rot = self.getRotation()\r\n            rot.y = -rot.y + 180\r\n            --Create function\r\n            local funcName = \"selectButton_\" .. howManyButtons\r\n            local func = function() buttonClick_selection(dummyIndex, obj, move) end\r\n            local color = {0.75,0.25,0.25,0.6}\r\n            local colorMove = {0,0,1,0.6}\r\n            if move == true then\r\n              color = colorMove\r\n            end\r\n            self.setVar(funcName, func)\r\n            self.createButton({\r\n                click_function=funcName, function_owner=self,\r\n                position=objPos, rotation=rot, height=500, width=500,\r\n                color=color,\r\n            })\r\n            howManyButtons = howManyButtons + 1\r\n        end\r\n    end\r\nend\r\n\r\n--Creates submit and cancel buttons\r\nfunction createSetupActionButtons(move)\r\n    self.createButton({\r\n        label=\"Cancel\", click_function=\"buttonClick_cancel\", function_owner=self,\r\n      position={-0.6,0.1,-2.1}, rotation={0,0,0}, height=220, width=550,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n\r\n    self.createButton({\r\n        label=\"Submit\", click_function=\"buttonClick_submit\", function_owner=self,\r\n        position={-0.6,0.3,-2.5}, rotation={0,0,0}, height=220, width=550,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n\r\n    if move == false then\r\n      self.createButton({\r\n          label=\"Add\", click_function=\"buttonClick_add\", function_owner=self,\r\n          position={0.6,0.3,-2.1}, rotation={0,0,0}, height=220, width=550,\r\n          font_size=130, color={0,0,0}, font_color={0.25,1,0.25}\r\n      })\r\n\r\n        if fresh == false then\r\n            self.createButton({\r\n                label=\"Set New\", click_function=\"buttonClick_setNew\", function_owner=self,\r\n                position={0.6,0.3,-2.9}, rotation={0,0,0}, height=220, width=550,\r\n                font_size=130, color={0,0,0}, font_color={0.75,0.75,1}\r\n            })\r\n            self.createButton({\r\n                label=\"Remove\", click_function=\"buttonClick_remove\", function_owner=self,\r\n                position={0.6,0.3,-2.5}, rotation={0,0,0}, height=220, width=550,\r\n                font_size=130, color={0,0,0}, font_color={1,0.25,0.25}\r\n            })\r\n        end\r\n    end\r\n\r\n    self.createButton({\r\n        label=\"Reset\", click_function=\"buttonClick_reset\", function_owner=self,\r\n        position={-0.6,0.3,-2.9}, rotation={0,0,0}, height=220, width=550,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\nend\r\n\r\n\r\n--During Setup\r\n\r\n\r\n--Checks or unchecks buttons\r\nfunction buttonClick_selection(index, obj, move)\r\n    local colorMove = {0,0,1,0.6}\r\n    local color = {0,1,0,0.6}\r\n\r\n    previousGuid = selectedGuid\r\n    selectedGuid = obj.getGUID()\r\n\r\n    theList = memoryList\r\n    if move == true then\r\n       theList = moveList\r\n       if previousGuid ~= nil and previousGuid ~= selectedGuid then\r\n         local prevObj = getObjectFromGUID(previousGuid)\r\n         prevObj.highlightOff()\r\n         self.editButton({index=previousIndex, color=colorMove})\r\n         theList[previousGuid] = nil\r\n       end\r\n       previousIndex = index\r\n    end\r\n\r\n    if theList[selectedGuid] == nil then\r\n        self.editButton({index=index, color=color})\r\n        --Adding pos/rot to memory table\r\n        local pos, rot = obj.getPosition(), obj.getRotation()\r\n        --I need to add it like this or it won't save due to indexing issue\r\n        theList[obj.getGUID()] = {\r\n            pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\r\n            rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\r\n            lock=obj.getLock()\r\n        }\r\n        obj.highlightOn({0,1,0})\r\n    else\r\n      color = {0.75,0.25,0.25,0.6}\r\n      if move == true then\r\n        color = colorMove\r\n      end\r\n        self.editButton({index=index, color=color})\r\n        theList[obj.getGUID()] = nil\r\n        obj.highlightOff()\r\n    end\r\nend\r\n\r\n--Cancels selection process\r\nfunction buttonClick_cancel()\r\n    memoryList = memoryListBackup\r\n    moveList = {}\r\n    self.clearButtons()\r\n    if next(memoryList) == nil then\r\n        createSetupButton()\r\n    else\r\n        createMemoryActionButtons()\r\n    end\r\n    removeAllHighlights()\r\n    broadcastToAll(\"Selection Canceled\", {1,1,1})\r\n    moveGuid = nil\r\nend\r\n\r\n--Saves selections\r\nfunction buttonClick_submit()\r\n    fresh = false\r\n    if next(moveList) ~= nil then\r\n        for guid in pairs(moveList) do\r\n            moveGuid = guid\r\n        end\r\n        if memoryListBackup[moveGuid] == nil then\r\n            broadcastToAll(\"Item selected for moving is not already in memory\", {1, 0.25, 0.25})\r\n        else\r\n            broadcastToAll(\"Moving all items in memory relative to new objects position!\", {0.75, 0.75, 1})\r\n            self.clearButtons()\r\n            createMemoryActionButtons()\r\n            local count = 0\r\n            for guid in pairs(moveList) do\r\n                moveGuid = guid\r\n                count = count + 1\r\n                local obj = getObjectFromGUID(guid)\r\n                if obj ~= nil then obj.highlightOff() end\r\n            end\r\n            updateMemoryWithMoves()\r\n            updateSave()\r\n            buttonClick_place()\r\n        end\r\n    elseif next(memoryList) == nil and moveGuid == nil then\r\n      memoryList = memoryListBackup\r\n      broadcastToAll(\"No selections made.\", {0.75, 0.25, 0.25})\r\n    end\r\n    combineMemoryFromBagsWithin()\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for guid in pairs(memoryList) do\r\n        count = count + 1\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then obj.highlightOff() end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    updateSave()\r\n    moveGuid = nil\r\nend\r\n\r\nfunction combineTables(first_table, second_table)\r\n  for k,v in pairs(second_table) do first_table[k] = v end\r\nend\r\n\r\nfunction buttonClick_add()\r\n    fresh = false\r\n    combineTables(memoryList, memoryListBackup)\r\n    broadcastToAll(\"Adding internal bags and selections to existing memory\", {0.25, 0.75, 0.25})\r\n    combineMemoryFromBagsWithin()\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for guid in pairs(memoryList) do\r\n        count = count + 1\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then obj.highlightOff() end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    updateSave()\r\nend\r\n\r\nfunction buttonClick_remove()\r\n        broadcastToAll(\"Removing Selected Entries From Memory\", {1.0, 0.25, 0.25})\r\n        self.clearButtons()\r\n        createMemoryActionButtons()\r\n        local count = 0\r\n        for guid in pairs(memoryList) do\r\n            count = count + 1\r\n            memoryListBackup[guid] = nil\r\n            local obj = getObjectFromGUID(guid)\r\n            if obj ~= nil then obj.highlightOff() end\r\n        end\r\n        broadcastToAll(count..\" Objects Removed\", {1,1,1})\r\n        memoryList = memoryListBackup\r\n        updateSave()\r\nend\r\n\r\nfunction buttonClick_setNew()\r\n    broadcastToAll(\"Setting new position relative to items in memory\", {0.75, 0.75, 1})\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for _, obj in ipairs(getAllObjects()) do\r\n        guid = obj.guid\r\n        if memoryListBackup[guid] ~= nil then\r\n            count = count + 1\r\n            memoryListBackup[guid].pos = obj.getPosition()\r\n            memoryListBackup[guid].rot = obj.getRotation()\r\n            memoryListBackup[guid].lock = obj.getLock()\r\n        end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    memoryList = memoryListBackup\r\n    updateSave()\r\nend\r\n\r\n--Resets bag to starting status\r\nfunction buttonClick_reset()\r\n    fresh = true\r\n    memoryList = {}\r\n    self.clearButtons()\r\n    createSetupButton()\r\n    removeAllHighlights()\r\n    broadcastToAll(\"Tool Reset\", {1,1,1})\r\n    updateSave()\r\nend\r\n\r\n\r\n--After Setup\r\n\r\n\r\n--Creates recall and place buttons\r\nfunction createMemoryActionButtons()\r\n    self.createButton({\r\n        label=\"Place\", click_function=\"buttonClick_place\", function_owner=self,\r\n        position={0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n    self.createButton({\r\n        label=\"Recall\", click_function=\"buttonClick_recall\", function_owner=self,\r\n        position={-0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n    self.createButton({\r\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\r\n        position={0,0.1,-2.1}, rotation={0,0,0}, height=220, width=500,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n---    self.createButton({\r\n---      label=\"Move\", click_function=\"buttonClick_transpose\", function_owner=self,\r\n---      position={-2.8,0.3,0}, rotation={0,0,0}, height=350, width=800,\r\n---      font_size=250, color={0,0,0}, font_color={0.75,0.75,1}\r\n---    })\r\nend\r\n\r\n--Sends objects from bag/table to their saved position/rotation\r\nfunction buttonClick_place()\r\n    local bagObjList = self.getObjects()\r\n    for guid, entry in pairs(memoryList) do\r\n        local obj = getObjectFromGUID(guid)\r\n        --If obj is out on the table, move it to the saved pos/rot\r\n        if obj ~= nil then\r\n            obj.setPositionSmooth(entry.pos)\r\n            obj.setRotationSmooth(entry.rot)\r\n            obj.setLock(entry.lock)\r\n        else\r\n            --If obj is inside of the bag\r\n            for _, bagObj in ipairs(bagObjList) do\r\n                if bagObj.guid == guid then\r\n                    local item = self.takeObject({\r\n                        guid=guid, position=entry.pos, rotation=entry.rot, smooth=false\r\n                    })\r\n                    item.setLock(entry.lock)\r\n                    break\r\n                end\r\n            end\r\n        end\r\n    end\r\n    broadcastToAll(\"Objects Placed\", {1,1,1})\r\nend\r\n\r\n--Recalls objects to bag from table\r\nfunction buttonClick_recall()\r\n    for guid, entry in pairs(memoryList) do\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then self.putObject(obj) end\r\n    end\r\n    broadcastToAll(\"Objects Recalled\", {1,1,1})\r\nend\r\n\r\n\r\n--Utility functions\r\n\r\n\r\n--Find delta (difference) between 2 x/y/z coordinates\r\nfunction findOffsetDistance(p1, p2, obj)\r\n    local yOffset = 0\r\n    if obj ~= nil then\r\n        local bounds = obj.getBounds()\r\n        yOffset = (bounds.size.y - bounds.offset.y)\r\n    end\r\n    local deltaPos = {}\r\n    deltaPos.x = (p2.x-p1.x)\r\n    deltaPos.y = (p2.y-p1.y) + yOffset\r\n    deltaPos.z = (p2.z-p1.z)\r\n    return deltaPos\r\nend\r\n\r\n--Used to rotate a set of coordinates by an angle\r\nfunction rotateLocalCoordinates(desiredPos, obj)\r\n\tlocal objPos, objRot = obj.getPosition(), obj.getRotation()\r\n    local angle = math.rad(objRot.y)\r\n\tlocal x = desiredPos.x * math.cos(angle) - desiredPos.z * math.sin(angle)\r\n\tlocal z = desiredPos.x * math.sin(angle) + desiredPos.z * math.cos(angle)\r\n\t--return {x=objPos.x+x, y=objPos.y+desiredPos.y, z=objPos.z+z}\r\n    return {x=x, y=desiredPos.y, z=z}\r\nend\r\n\r\nfunction rotateMyCoordinates(desiredPos, obj)\r\n\tlocal angle = math.rad(obj.getRotation().y)\r\n  local x = desiredPos.x * math.sin(angle)\r\n\tlocal z = desiredPos.z * math.cos(angle)\r\n    return {x=x, y=desiredPos.y, z=z}\r\nend\r\n\r\n--Coroutine delay, in seconds\r\nfunction wait(time)\r\n    local start = os.time()\r\n    repeat coroutine.yield(0) until os.time() > start + time\r\nend\r\n\r\n--Duplicates a table (needed to prevent it making reference to the same objects)\r\nfunction duplicateTable(oldTable)\r\n    local newTable = {}\r\n    for k, v in pairs(oldTable) do\r\n        newTable[k] = v\r\n    end\r\n    return newTable\r\nend\r\n\r\n--Moves scripted highlight from all objects\r\nfunction removeAllHighlights()\r\n    for _, obj in ipairs(getAllObjects()) do\r\n        obj.highlightOff()\r\n    end\r\nend\r\n\r\n--Round number (num) to the Nth decimal (dec)\r\nfunction round(num, dec)\r\n  local mult = 10^(dec or 0)\r\n  return math.floor(num * mult + 0.5) / mult\r\nend",
+  "LuaScript": "-- Utility memory bag by Directsun\n-- Version 2.5.2\n-- Fork of Memory Bag 2.0 by MrStump\n\nfunction updateSave()\n    local data_to_save = {[\"ml\"]=memoryList}\n    saved_data = JSON.encode(data_to_save)\n    self.script_state = saved_data\nend\n\nfunction combineMemoryFromBagsWithin()\n  local bagObjList = self.getObjects()\n  for _, bagObj in ipairs(bagObjList) do\n    local data = bagObj.lua_script_state\n      if data ~= nil then\n        local j = JSON.decode(data)\n        if j ~= nil and j.ml ~= nil then\n          for guid, entry in pairs(j.ml) do\n            memoryList[guid] = entry\n          end\n        end\n      end\n    end\nend\n\nfunction updateMemoryWithMoves()\n    memoryList = memoryListBackup\n    --get the first transposed object's coordinates\n    local obj = getObjectFromGUID(moveGuid)\n\n    -- p1 is where needs to go, p2 is where it was\n    local refObjPos = memoryList[moveGuid].pos\n    local deltaPos = findOffsetDistance(obj.getPosition(), refObjPos, nil)\n    local movedRotation = obj.getRotation()\n    for guid, entry in pairs(memoryList) do\n        memoryList[guid].pos.x = entry.pos.x - deltaPos.x\n        memoryList[guid].pos.y = entry.pos.y - deltaPos.y\n        memoryList[guid].pos.z = entry.pos.z - deltaPos.z\n        -- memoryList[guid].rot.x = movedRotation.x\n        -- memoryList[guid].rot.y = movedRotation.y\n        -- memoryList[guid].rot.z = movedRotation.z\n    end\n\n    --theList[obj.getGUID()] = {\n    --    pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\n    --    rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\n    --    lock=obj.getLock()\n    --}\n    moveList = {}\nend\n\nfunction onload(saved_data)\n    fresh = true\n    if saved_data ~= \"\" then\n        local loaded_data = JSON.decode(saved_data)\n        --Set up information off of loaded_data\n        memoryList = loaded_data.ml\n    else\n        --Set up information for if there is no saved saved data\n        memoryList = {}\n    end\n\n    moveList = {}\n    moveGuid = nil\n\n    if next(memoryList) == nil then\n        createSetupButton()\n    else\n        fresh = false\n        createMemoryActionButtons()\n    end\nend\n\n\n--Beginning Setup\n\n\n--Make setup button\nfunction createSetupButton()\n    self.createButton({\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\n        position={0,0.1,-2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\nend\n\n--Triggered by Transpose button\nfunction buttonClick_transpose()\n    moveGuid = nil\n    broadcastToAll(\"Select one object and move it- all objects will move relative to the new location\", {0.75, 0.75, 1})\n    memoryListBackup = duplicateTable(memoryList)\n    memoryList = {}\n    moveList = {}\n    self.clearButtons()\n    createButtonsOnAllObjects(true)\n    createSetupActionButtons(true)\nend\n\n--Triggered by setup button,\nfunction buttonClick_setup()\n    memoryListBackup = duplicateTable(memoryList)\n    memoryList = {}\n    self.clearButtons()\n    createButtonsOnAllObjects(false)\n    createSetupActionButtons(false)\nend\n\nfunction getAllObjectsInMemory()\n  local objTable = {}\n  local curObj = {}\n\n  for guid in pairs(memoryListBackup) do\n    curObj = getObjectFromGUID(guid)\n    table.insert(objTable, curObj)\n  end\n\n  return objTable\n  -- return getAllObjects()\nend\n\n--Creates selection buttons on objects\nfunction createButtonsOnAllObjects(move)\n    local howManyButtons = 0\n\n    local objsToHaveButtons = {}\n    if move == true then\n      objsToHaveButtons = getAllObjectsInMemory()\n    else\n      objsToHaveButtons = getAllObjects()\n    end\n\n    for _, obj in ipairs(objsToHaveButtons) do\n        if obj ~= self then\n            local dummyIndex = howManyButtons\n            --On a normal bag, the button positions aren't the same size as the bag.\n            globalScaleFactor = 1 * 1/self.getScale().x\n            --Super sweet math to set button positions\n            local selfPos = self.getPosition()\n            local objPos = obj.getPosition()\n            local deltaPos = findOffsetDistance(selfPos, objPos, obj)\n            local objPos = rotateLocalCoordinates(deltaPos, self)\n            objPos.x = -objPos.x * globalScaleFactor\n            objPos.y = objPos.y * globalScaleFactor + 2\n            objPos.z = objPos.z * globalScaleFactor * 0.9\n            --Offset rotation of bag\n            local rot = self.getRotation()\n            rot.y = -rot.y + 180\n            --Create function\n            local funcName = \"selectButton_\" .. howManyButtons\n            local func = function() buttonClick_selection(dummyIndex, obj, move) end\n            local color = {0.75,0.25,0.25,0.6}\n            local colorMove = {0,0,1,0.6}\n            if move == true then\n              color = colorMove\n            end\n            self.setVar(funcName, func)\n            self.createButton({\n                click_function=funcName, function_owner=self,\n                position=objPos, rotation=rot, height=500, width=500,\n                color=color,\n            })\n            howManyButtons = howManyButtons + 1\n        end\n    end\nend\n\n--Creates submit and cancel buttons\nfunction createSetupActionButtons(move)\n    self.createButton({\n        label=\"Cancel\", click_function=\"buttonClick_cancel\", function_owner=self,\n      position={-0.6,0.1,-2.1}, rotation={0,0,0}, height=220, width=550,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n\n    self.createButton({\n        label=\"Submit\", click_function=\"buttonClick_submit\", function_owner=self,\n        position={-0.6,0.3,-2.5}, rotation={0,0,0}, height=220, width=550,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n\n    if move == false then\n      self.createButton({\n          label=\"Add\", click_function=\"buttonClick_add\", function_owner=self,\n          position={0.6,0.3,-2.1}, rotation={0,0,0}, height=220, width=550,\n          font_size=130, color={0,0,0}, font_color={0.25,1,0.25}\n      })\n\n        if fresh == false then\n            self.createButton({\n                label=\"Set New\", click_function=\"buttonClick_setNew\", function_owner=self,\n                position={0.6,0.3,-2.9}, rotation={0,0,0}, height=220, width=550,\n                font_size=130, color={0,0,0}, font_color={0.75,0.75,1}\n            })\n            self.createButton({\n                label=\"Remove\", click_function=\"buttonClick_remove\", function_owner=self,\n                position={0.6,0.3,-2.5}, rotation={0,0,0}, height=220, width=550,\n                font_size=130, color={0,0,0}, font_color={1,0.25,0.25}\n            })\n        end\n    end\n\n    self.createButton({\n        label=\"Reset\", click_function=\"buttonClick_reset\", function_owner=self,\n        position={-0.6,0.3,-2.9}, rotation={0,0,0}, height=220, width=550,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\nend\n\n\n--During Setup\n\n\n--Checks or unchecks buttons\nfunction buttonClick_selection(index, obj, move)\n    local colorMove = {0,0,1,0.6}\n    local color = {0,1,0,0.6}\n\n    previousGuid = selectedGuid\n    selectedGuid = obj.getGUID()\n\n    theList = memoryList\n    if move == true then\n       theList = moveList\n       if previousGuid ~= nil and previousGuid ~= selectedGuid then\n         local prevObj = getObjectFromGUID(previousGuid)\n         prevObj.highlightOff()\n         self.editButton({index=previousIndex, color=colorMove})\n         theList[previousGuid] = nil\n       end\n       previousIndex = index\n    end\n\n    if theList[selectedGuid] == nil then\n        self.editButton({index=index, color=color})\n        --Adding pos/rot to memory table\n        local pos, rot = obj.getPosition(), obj.getRotation()\n        --I need to add it like this or it won't save due to indexing issue\n        theList[obj.getGUID()] = {\n            pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\n            rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\n            lock=obj.getLock()\n        }\n        obj.highlightOn({0,1,0})\n    else\n      color = {0.75,0.25,0.25,0.6}\n      if move == true then\n        color = colorMove\n      end\n        self.editButton({index=index, color=color})\n        theList[obj.getGUID()] = nil\n        obj.highlightOff()\n    end\nend\n\n--Cancels selection process\nfunction buttonClick_cancel()\n    memoryList = memoryListBackup\n    moveList = {}\n    self.clearButtons()\n    if next(memoryList) == nil then\n        createSetupButton()\n    else\n        createMemoryActionButtons()\n    end\n    removeAllHighlights()\n    broadcastToAll(\"Selection Canceled\", {1,1,1})\n    moveGuid = nil\nend\n\n--Saves selections\nfunction buttonClick_submit()\n    fresh = false\n    if next(moveList) ~= nil then\n        for guid in pairs(moveList) do\n            moveGuid = guid\n        end\n        if memoryListBackup[moveGuid] == nil then\n            broadcastToAll(\"Item selected for moving is not already in memory\", {1, 0.25, 0.25})\n        else\n            broadcastToAll(\"Moving all items in memory relative to new objects position!\", {0.75, 0.75, 1})\n            self.clearButtons()\n            createMemoryActionButtons()\n            local count = 0\n            for guid in pairs(moveList) do\n                moveGuid = guid\n                count = count + 1\n                local obj = getObjectFromGUID(guid)\n                if obj ~= nil then obj.highlightOff() end\n            end\n            updateMemoryWithMoves()\n            updateSave()\n            buttonClick_place()\n        end\n    elseif next(memoryList) == nil and moveGuid == nil then\n      memoryList = memoryListBackup\n      broadcastToAll(\"No selections made.\", {0.75, 0.25, 0.25})\n    end\n    combineMemoryFromBagsWithin()\n    self.clearButtons()\n    createMemoryActionButtons()\n    local count = 0\n    for guid in pairs(memoryList) do\n        count = count + 1\n        local obj = getObjectFromGUID(guid)\n        if obj ~= nil then obj.highlightOff() end\n    end\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\n    updateSave()\n    moveGuid = nil\nend\n\nfunction combineTables(first_table, second_table)\n  for k,v in pairs(second_table) do first_table[k] = v end\nend\n\nfunction buttonClick_add()\n    fresh = false\n    combineTables(memoryList, memoryListBackup)\n    broadcastToAll(\"Adding internal bags and selections to existing memory\", {0.25, 0.75, 0.25})\n    combineMemoryFromBagsWithin()\n    self.clearButtons()\n    createMemoryActionButtons()\n    local count = 0\n    for guid in pairs(memoryList) do\n        count = count + 1\n        local obj = getObjectFromGUID(guid)\n        if obj ~= nil then obj.highlightOff() end\n    end\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\n    updateSave()\nend\n\nfunction buttonClick_remove()\n        broadcastToAll(\"Removing Selected Entries From Memory\", {1.0, 0.25, 0.25})\n        self.clearButtons()\n        createMemoryActionButtons()\n        local count = 0\n        for guid in pairs(memoryList) do\n            count = count + 1\n            memoryListBackup[guid] = nil\n            local obj = getObjectFromGUID(guid)\n            if obj ~= nil then obj.highlightOff() end\n        end\n        broadcastToAll(count..\" Objects Removed\", {1,1,1})\n        memoryList = memoryListBackup\n        updateSave()\nend\n\nfunction buttonClick_setNew()\n    broadcastToAll(\"Setting new position relative to items in memory\", {0.75, 0.75, 1})\n    self.clearButtons()\n    createMemoryActionButtons()\n    local count = 0\n    for _, obj in ipairs(getAllObjects()) do\n        guid = obj.guid\n        if memoryListBackup[guid] ~= nil then\n            count = count + 1\n            memoryListBackup[guid].pos = obj.getPosition()\n            memoryListBackup[guid].rot = obj.getRotation()\n            memoryListBackup[guid].lock = obj.getLock()\n        end\n    end\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\n    memoryList = memoryListBackup\n    updateSave()\nend\n\n--Resets bag to starting status\nfunction buttonClick_reset()\n    fresh = true\n    memoryList = {}\n    self.clearButtons()\n    createSetupButton()\n    removeAllHighlights()\n    broadcastToAll(\"Tool Reset\", {1,1,1})\n    updateSave()\nend\n\n\n--After Setup\n\n\n--Creates recall and place buttons\nfunction createMemoryActionButtons()\n    self.createButton({\n        label=\"Place\", click_function=\"buttonClick_place\", function_owner=self,\n        position={0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n    self.createButton({\n        label=\"Recall\", click_function=\"buttonClick_recall\", function_owner=self,\n        position={-0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n    self.createButton({\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\n        position={0,0.1,-2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n---    self.createButton({\n---      label=\"Move\", click_function=\"buttonClick_transpose\", function_owner=self,\n---      position={-2.8,0.3,0}, rotation={0,0,0}, height=350, width=800,\n---      font_size=250, color={0,0,0}, font_color={0.75,0.75,1}\n---    })\nend\n\n--Sends objects from bag/table to their saved position/rotation\nfunction buttonClick_place()\n    local bagObjList = self.getObjects()\n    for guid, entry in pairs(memoryList) do\n        local obj = getObjectFromGUID(guid)\n        --If obj is out on the table, move it to the saved pos/rot\n        if obj ~= nil then\n            obj.setPositionSmooth(entry.pos)\n            obj.setRotationSmooth(entry.rot)\n            obj.setLock(entry.lock)\n        else\n            --If obj is inside of the bag\n            for _, bagObj in ipairs(bagObjList) do\n                if bagObj.guid == guid then\n                    local item = self.takeObject({\n                        guid=guid, position=entry.pos, rotation=entry.rot, smooth=false\n                    })\n                    item.setLock(entry.lock)\n                    break\n                end\n            end\n        end\n    end\n    broadcastToAll(\"Objects Placed\", {1,1,1})\nend\n\n--Recalls objects to bag from table\nfunction buttonClick_recall()\n    for guid, entry in pairs(memoryList) do\n        local obj = getObjectFromGUID(guid)\n        if obj ~= nil then self.putObject(obj) end\n    end\n    broadcastToAll(\"Objects Recalled\", {1,1,1})\nend\n\n\n--Utility functions\n\n\n--Find delta (difference) between 2 x/y/z coordinates\nfunction findOffsetDistance(p1, p2, obj)\n    local yOffset = 0\n    if obj ~= nil then\n        local bounds = obj.getBounds()\n        yOffset = (bounds.size.y - bounds.offset.y)\n    end\n    local deltaPos = {}\n    deltaPos.x = (p2.x-p1.x)\n    deltaPos.y = (p2.y-p1.y) + yOffset\n    deltaPos.z = (p2.z-p1.z)\n    return deltaPos\nend\n\n--Used to rotate a set of coordinates by an angle\nfunction rotateLocalCoordinates(desiredPos, obj)\n\tlocal objPos, objRot = obj.getPosition(), obj.getRotation()\n    local angle = math.rad(objRot.y)\n\tlocal x = desiredPos.x * math.cos(angle) - desiredPos.z * math.sin(angle)\n\tlocal z = desiredPos.x * math.sin(angle) + desiredPos.z * math.cos(angle)\n\t--return {x=objPos.x+x, y=objPos.y+desiredPos.y, z=objPos.z+z}\n    return {x=x, y=desiredPos.y, z=z}\nend\n\nfunction rotateMyCoordinates(desiredPos, obj)\n\tlocal angle = math.rad(obj.getRotation().y)\n  local x = desiredPos.x * math.sin(angle)\n\tlocal z = desiredPos.z * math.cos(angle)\n    return {x=x, y=desiredPos.y, z=z}\nend\n\n--Coroutine delay, in seconds\nfunction wait(time)\n    local start = os.time()\n    repeat coroutine.yield(0) until os.time() > start + time\nend\n\n--Duplicates a table (needed to prevent it making reference to the same objects)\nfunction duplicateTable(oldTable)\n    local newTable = {}\n    for k, v in pairs(oldTable) do\n        newTable[k] = v\n    end\n    return newTable\nend\n\n--Moves scripted highlight from all objects\nfunction removeAllHighlights()\n    for _, obj in ipairs(getAllObjects()) do\n        obj.highlightOff()\n    end\nend\n\n--Round number (num) to the Nth decimal (dec)\nfunction round(num, dec)\n  local mult = 10^(dec or 0)\n  return math.floor(num * mult + 0.5) / mult\nend",
   "LuaScriptState": "{\"ml\":{\"002a62\":{\"lock\":false,\"pos\":{\"x\":-18.9464511871338,\"y\":2.3325469493866,\"z\":117.642700195313},\"rot\":{\"x\":1.06724173747352E-05,\"y\":269.987640380859,\"z\":9.67039284205384E-08}},\"02da95\":{\"lock\":false,\"pos\":{\"x\":15.0420370101929,\"y\":2.33255076408386,\"z\":117.603401184082},\"rot\":{\"x\":1.31917513499502E-05,\"y\":269.988037109375,\"z\":4.55592453363352E-06}},\"049bf6\":{\"lock\":false,\"pos\":{\"x\":-8.78139781951904,\"y\":2.33254647254944,\"z\":134.529449462891},\"rot\":{\"x\":1.84865948540391E-05,\"y\":270.005828857422,\"z\":1.81327652626351E-06}},\"089552\":{\"lock\":false,\"pos\":{\"x\":-5.35620403289795,\"y\":2.33254790306091,\"z\":120.05549621582},\"rot\":{\"x\":2.15669169847388E-05,\"y\":269.98876953125,\"z\":8.01299506747455E-07}},\"0a2c53\":{\"lock\":false,\"pos\":{\"x\":-8.77441501617432,\"y\":2.33254599571228,\"z\":129.712097167969},\"rot\":{\"x\":1.47192940858076E-05,\"y\":269.972503662109,\"z\":1.18638297408324E-06}},\"121503\":{\"lock\":false,\"pos\":{\"x\":15.03355884552,\"y\":2.33255100250244,\"z\":112.790802001953},\"rot\":{\"x\":1.87508940143744E-05,\"y\":269.990509033203,\"z\":1.84298096428392E-06}},\"12daad\":{\"lock\":false,\"pos\":{\"x\":11.6378507614136,\"y\":2.33255004882813,\"z\":122.434501647949},\"rot\":{\"x\":1.4617238775827E-05,\"y\":269.97216796875,\"z\":8.46675277443865E-07}},\"1973f6\":{\"lock\":false,\"pos\":{\"x\":-5.39290857315063,\"y\":2.33254504203796,\"z\":136.915405273438},\"rot\":{\"x\":1.36464614115539E-05,\"y\":269.990539550781,\"z\":4.49270100943977E-06}},\"1a4b02\":{\"lock\":false,\"pos\":{\"x\":-12.1789321899414,\"y\":2.33254504203796,\"z\":134.505599975586},\"rot\":{\"x\":1.70456078194547E-05,\"y\":269.991271972656,\"z\":4.8676351980248E-06}},\"1a713d\":{\"lock\":false,\"pos\":{\"x\":-18.9634704589844,\"y\":2.33254480361938,\"z\":129.685806274414},\"rot\":{\"x\":1.36690723593347E-05,\"y\":269.972534179688,\"z\":1.41276518661471E-06}},\"1c0466\":{\"lock\":false,\"pos\":{\"x\":15.0133399963379,\"y\":2.33254885673523,\"z\":134.46159362793},\"rot\":{\"x\":1.25938568089623E-05,\"y\":269.990478515625,\"z\":2.84345787804341E-06}},\"1ca7c3\":{\"lock\":false,\"pos\":{\"x\":-22.3560009002686,\"y\":2.33254599571228,\"z\":110.416702270508},\"rot\":{\"x\":2.56220519077033E-05,\"y\":269.988586425781,\"z\":2.4690725695109E-06}},\"247fb2\":{\"lock\":false,\"pos\":{\"x\":-1.96170091629028,\"y\":2.33254790306091,\"z\":122.481201171875},\"rot\":{\"x\":1.89559486898361E-05,\"y\":269.972717285156,\"z\":8.73510373367026E-07}},\"25dbaa\":{\"lock\":false,\"pos\":{\"x\":15.0033016204834,\"y\":2.33254933357239,\"z\":136.870193481445},\"rot\":{\"x\":1.81332288775593E-05,\"y\":269.990966796875,\"z\":2.19173148252594E-06}},\"25dbe9\":{\"lock\":false,\"pos\":{\"x\":11.6293334960938,\"y\":2.33254933357239,\"z\":127.250396728516},\"rot\":{\"x\":1.77866404555971E-05,\"y\":269.973083496094,\"z\":-1.04556690416757E-07}},\"26ebaa\":{\"lock\":false,\"pos\":{\"x\":-5.3542103767395,\"y\":2.33254814147949,\"z\":117.647300720215},\"rot\":{\"x\":2.34817653108621E-05,\"y\":269.988830566406,\"z\":3.06485753753805E-06}},\"27d200\":{\"lock\":true,\"pos\":{\"x\":-2.0025999546051,\"y\":0.749499976634979,\"z\":122.32559967041},\"rot\":{\"x\":0,\"y\":270.000854492188,\"z\":0}},\"2a0fc5\":{\"lock\":false,\"pos\":{\"x\":-18.9558353424072,\"y\":2.33254814147949,\"z\":108.012100219727},\"rot\":{\"x\":1.46283127833158E-05,\"y\":269.988311767578,\"z\":3.95603456126992E-06}},\"2e510c\":{\"lock\":false,\"pos\":{\"x\":-1.96689987182617,\"y\":2.3325502872467,\"z\":105.603103637695},\"rot\":{\"x\":1.72099043993512E-05,\"y\":269.988800048828,\"z\":2.44242164626485E-06}},\"304b33\":{\"lock\":false,\"pos\":{\"x\":-5.36431312561035,\"y\":2.33254909515381,\"z\":108.019096374512},\"rot\":{\"x\":1.52296315718559E-05,\"y\":269.988800048828,\"z\":4.71194653073326E-06}},\"30f168\":{\"lock\":false,\"pos\":{\"x\":-1.96669971942902,\"y\":2.33254909515381,\"z\":112.830001831055},\"rot\":{\"x\":2.6560159312794E-05,\"y\":269.990905761719,\"z\":3.52056576957693E-06}},\"319711\":{\"lock\":false,\"pos\":{\"x\":-5.36660146713257,\"y\":2.33254718780518,\"z\":124.873199462891},\"rot\":{\"x\":1.44827445183182E-05,\"y\":269.973388671875,\"z\":1.35022389713413E-06}},\"3422bc\":{\"lock\":false,\"pos\":{\"x\":8.2357349395752,\"y\":2.33254861831665,\"z\":124.833702087402},\"rot\":{\"x\":1.42585386129213E-05,\"y\":269.972442626953,\"z\":-2.04446791940427E-06}},\"37df0b\":{\"lock\":false,\"pos\":{\"x\":-8.76431179046631,\"y\":2.33254885673523,\"z\":110.421997070313},\"rot\":{\"x\":1.51689237100072E-05,\"y\":269.988342285156,\"z\":4.10614256907138E-06}},\"399f41\":{\"lock\":false,\"pos\":{\"x\":15.0240116119385,\"y\":2.33254909515381,\"z\":129.64485168457},\"rot\":{\"x\":1.67253801919287E-05,\"y\":269.972961425781,\"z\":-1.84988792284457E-07}},\"3a1229\":{\"lock\":false,\"pos\":{\"x\":11.6254482269287,\"y\":2.33254957199097,\"z\":129.658493041992},\"rot\":{\"x\":9.67587038758211E-06,\"y\":269.971954345703,\"z\":-5.62629452360852E-07}},\"3eb779\":{\"lock\":false,\"pos\":{\"x\":11.6423330307007,\"y\":2.33255052566528,\"z\":117.618598937988},\"rot\":{\"x\":1.9481596609694E-05,\"y\":269.988647460938,\"z\":6.37918503798574E-07}},\"419b19\":{\"lock\":false,\"pos\":{\"x\":-18.9583187103271,\"y\":2.33254623413086,\"z\":124.867897033691},\"rot\":{\"x\":1.49147199408617E-05,\"y\":269.972076416016,\"z\":1.07505718460743E-06}},\"517f3f\":{\"lock\":false,\"pos\":{\"x\":-5.36391687393188,\"y\":2.33254909515381,\"z\":110.427101135254},\"rot\":{\"x\":2.08450928766979E-05,\"y\":269.989013671875,\"z\":7.25310599136719E-07}},\"574285\":{\"lock\":false,\"pos\":{\"x\":-5.36321830749512,\"y\":2.33254837989807,\"z\":115.243103027344},\"rot\":{\"x\":2.55308696068823E-05,\"y\":269.991119384766,\"z\":3.95954430132406E-06}},\"57ae3b\":{\"lock\":false,\"pos\":{\"x\":-12.1870231628418,\"y\":2.33254432678223,\"z\":136.913604736328},\"rot\":{\"x\":8.55865800986066E-06,\"y\":269.991180419922,\"z\":2.05819014809094E-06}},\"5c6b03\":{\"lock\":false,\"pos\":{\"x\":-22.3489608764648,\"y\":2.33254408836365,\"z\":122.481399536133},\"rot\":{\"x\":1.4354232007463E-05,\"y\":269.973785400391,\"z\":1.14565193598537E-06}},\"5cba80\":{\"lock\":false,\"pos\":{\"x\":15.0320425033569,\"y\":2.33255100250244,\"z\":107.974800109863},\"rot\":{\"x\":1.54874051077059E-05,\"y\":269.988159179688,\"z\":2.90831439997419E-06}},\"5eb053\":{\"lock\":false,\"pos\":{\"x\":-1.95670056343079,\"y\":2.33254814147949,\"z\":120.072196960449},\"rot\":{\"x\":1.36100516101578E-05,\"y\":269.98876953125,\"z\":2.59108355749049E-06}},\"63c351\":{\"lock\":false,\"pos\":{\"x\":-5.36272621154785,\"y\":2.33254861831665,\"z\":112.835067749023},\"rot\":{\"x\":1.16830206025043E-05,\"y\":269.985137939453,\"z\":1.38620890766106E-07}},\"650404\":{\"lock\":false,\"pos\":{\"x\":-8.7696647644043,\"y\":2.33254671096802,\"z\":127.303115844727},\"rot\":{\"x\":1.45526646520011E-05,\"y\":269.972839355469,\"z\":-1.78275013240636E-06}},\"69630c\":{\"lock\":false,\"pos\":{\"x\":-1.95399844646454,\"y\":2.33254861831665,\"z\":117.664001464844},\"rot\":{\"x\":1.40132651722524E-05,\"y\":269.98876953125,\"z\":2.45489559347334E-06}},\"6c1159\":{\"lock\":false,\"pos\":{\"x\":-22.3557186126709,\"y\":2.33254408836365,\"z\":124.88939666748},\"rot\":{\"x\":1.48822391565773E-05,\"y\":269.972961425781,\"z\":-4.17108822148293E-07}},\"6cff97\":{\"lock\":false,\"pos\":{\"x\":-18.9504451751709,\"y\":2.33254623413086,\"z\":122.458602905273},\"rot\":{\"x\":1.49986390169943E-05,\"y\":269.971496582031,\"z\":4.41769174130968E-07}},\"6da844\":{\"lock\":false,\"pos\":{\"x\":-18.9564685821533,\"y\":2.33254790306091,\"z\":110.420455932617},\"rot\":{\"x\":2.11389196920209E-05,\"y\":269.980529785156,\"z\":-2.25474337867126E-07}},\"71ac31\":{\"lock\":false,\"pos\":{\"x\":-18.9618358612061,\"y\":2.33254647254944,\"z\":127.277198791504},\"rot\":{\"x\":1.44979439937742E-05,\"y\":269.968505859375,\"z\":-2.09840322895616E-06}},\"72bf5d\":{\"lock\":false,\"pos\":{\"x\":-18.9482650756836,\"y\":2.33254671096802,\"z\":120.050796508789},\"rot\":{\"x\":2.59497319348156E-05,\"y\":269.988647460938,\"z\":4.4392886593414E-06}},\"7669e0\":{\"lock\":false,\"pos\":{\"x\":11.6330404281616,\"y\":2.33254981040955,\"z\":124.842498779297},\"rot\":{\"x\":1.50259529618779E-05,\"y\":269.972412109375,\"z\":1.42296084959526E-06}},\"7c447e\":{\"lock\":false,\"pos\":{\"x\":-22.3660697937012,\"y\":2.33254313468933,\"z\":129.706802368164},\"rot\":{\"x\":1.36893404487637E-05,\"y\":269.973907470703,\"z\":-9.49389800553035E-07}},\"7cf107\":{\"lock\":false,\"pos\":{\"x\":11.6045446395874,\"y\":2.33254790306091,\"z\":136.883895874023},\"rot\":{\"x\":2.04745138034923E-05,\"y\":269.991638183594,\"z\":1.12895939707869E-07}},\"81bee8\":{\"lock\":false,\"pos\":{\"x\":-1.99189984798431,\"y\":2.3325469493866,\"z\":136.932693481445},\"rot\":{\"x\":2.10367379622767E-05,\"y\":269.990905761719,\"z\":2.31374201575818E-06}},\"850c0a\":{\"lock\":false,\"pos\":{\"x\":4.83791732788086,\"y\":2.3325502872467,\"z\":105.56600189209},\"rot\":{\"x\":1.87644109246321E-05,\"y\":269.988189697266,\"z\":3.59929117621505E-06}},\"86cbfb\":{\"lock\":false,\"pos\":{\"x\":-5.3700098991394,\"y\":2.33254742622375,\"z\":127.282402038574},\"rot\":{\"x\":1.48105127664167E-05,\"y\":269.972991943359,\"z\":-7.66999562529236E-07}},\"878218\":{\"lock\":false,\"pos\":{\"x\":1.43110835552216,\"y\":2.33254981040955,\"z\":105.605697631836},\"rot\":{\"x\":1.95341690414352E-05,\"y\":269.988555908203,\"z\":1.76097955773002E-06}},\"8abde5\":{\"lock\":false,\"pos\":{\"x\":8.23752975463867,\"y\":2.33255004882813,\"z\":115.20369720459},\"rot\":{\"x\":1.95345146494219E-05,\"y\":269.990570068359,\"z\":2.11709266295657E-06}},\"8df6c2\":{\"lock\":false,\"pos\":{\"x\":11.6354446411133,\"y\":2.33255076408386,\"z\":115.211402893066},\"rot\":{\"x\":1.68533606483834E-05,\"y\":269.990631103516,\"z\":4.62446814708528E-06}},\"90c426\":{\"lock\":false,\"pos\":{\"x\":-8.75201511383057,\"y\":2.33254718780518,\"z\":120.07869720459},\"rot\":{\"x\":2.73957466561114E-05,\"y\":269.988403320313,\"z\":4.5341389522946E-06}},\"928c94\":{\"lock\":false,\"pos\":{\"x\":-8.78883075714111,\"y\":2.33254528045654,\"z\":136.9375},\"rot\":{\"x\":1.41107539093355E-05,\"y\":269.990814208984,\"z\":3.48628532265138E-06}},\"95a08a\":{\"lock\":false,\"pos\":{\"x\":-1.98120069503784,\"y\":2.3325469493866,\"z\":132.115798950195},\"rot\":{\"x\":2.43811682594242E-05,\"y\":269.990875244141,\"z\":3.91543426303542E-06}},\"987451\":{\"lock\":false,\"pos\":{\"x\":-18.9847621917725,\"y\":2.33254337310791,\"z\":136.910095214844},\"rot\":{\"x\":2.06620443350403E-05,\"y\":269.990020751953,\"z\":1.15544776235765E-06}},\"9a9566\":{\"lock\":false,\"pos\":{\"x\":15.0312118530273,\"y\":2.33255362510681,\"z\":105.566841125488},\"rot\":{\"x\":1.06411698652664E-05,\"y\":269.988677978516,\"z\":3.22154801324359E-06}},\"9ab94e\":{\"lock\":false,\"pos\":{\"x\":11.6351442337036,\"y\":2.3325502872467,\"z\":112.803596496582},\"rot\":{\"x\":2.33454702538438E-05,\"y\":269.990936279297,\"z\":4.05517630497343E-06}},\"9d0cf8\":{\"lock\":false,\"pos\":{\"x\":8.23524284362793,\"y\":2.33255171775818,\"z\":105.570503234863},\"rot\":{\"x\":1.83337269845651E-05,\"y\":269.98876953125,\"z\":2.02488604372775E-06}},\"9edba4\":{\"lock\":false,\"pos\":{\"x\":-18.9559764862061,\"y\":2.33254766464233,\"z\":112.830345153809},\"rot\":{\"x\":1.57138147187652E-05,\"y\":269.991729736328,\"z\":4.2446586121514E-06}},\"9f1683\":{\"lock\":false,\"pos\":{\"x\":-5.3715124130249,\"y\":2.3325469493866,\"z\":129.690994262695},\"rot\":{\"x\":1.36522612592671E-05,\"y\":269.972290039063,\"z\":1.0969890809065E-06}},\"a7576d\":{\"lock\":false,\"pos\":{\"x\":-1.96879959106445,\"y\":2.33254766464233,\"z\":124.889602661133},\"rot\":{\"x\":1.41351956699509E-05,\"y\":269.972625732422,\"z\":-9.48683464230271E-07}},\"a7f9f8\":{\"lock\":false,\"pos\":{\"x\":8.22805023193359,\"y\":2.33254766464233,\"z\":129.649597167969},\"rot\":{\"x\":1.72038344317116E-05,\"y\":269.971557617188,\"z\":-2.86350456235596E-07}},\"b071c9\":{\"lock\":false,\"pos\":{\"x\":15.0398387908936,\"y\":2.33255100250244,\"z\":120.011703491211},\"rot\":{\"x\":1.31830784084741E-05,\"y\":269.988555908203,\"z\":2.91391779683181E-06}},\"b08949\":{\"lock\":false,\"pos\":{\"x\":-12.171669960022,\"y\":2.33254623413086,\"z\":129.688079833984},\"rot\":{\"x\":1.42811413752497E-05,\"y\":269.97216796875,\"z\":-2.1894290966884E-06}},\"c037c3\":{\"lock\":false,\"pos\":{\"x\":-5.37610960006714,\"y\":2.33254647254944,\"z\":132.098999023438},\"rot\":{\"x\":1.0822266631294E-05,\"y\":269.990814208984,\"z\":3.53723316948162E-06}},\"c2b8b8\":{\"lock\":false,\"pos\":{\"x\":15.0199499130249,\"y\":2.33254909515381,\"z\":132.053298950195},\"rot\":{\"x\":2.75149450317258E-05,\"y\":269.988830566406,\"z\":3.69101121577842E-06}},\"c408e9\":{\"lock\":false,\"pos\":{\"x\":-5.3650074005127,\"y\":2.33254981040955,\"z\":105.610397338867},\"rot\":{\"x\":1.48459348565666E-05,\"y\":269.988830566406,\"z\":3.14961266667524E-06}},\"c62a0c\":{\"lock\":false,\"pos\":{\"x\":-1.98499870300293,\"y\":2.33254647254944,\"z\":134.524597167969},\"rot\":{\"x\":2.40883182414109E-05,\"y\":269.990875244141,\"z\":2.4891953671613E-06}},\"c632c2\":{\"lock\":false,\"pos\":{\"x\":-18.9541435241699,\"y\":2.33254718780518,\"z\":115.236999511719},\"rot\":{\"x\":2.06186450668611E-05,\"y\":269.989532470703,\"z\":4.32870535860275E-07}},\"ca98a0\":{\"lock\":false,\"pos\":{\"x\":-15.5535516738892,\"y\":2.33254599571228,\"z\":122.475898742676},\"rot\":{\"x\":1.32380191644188E-05,\"y\":269.974060058594,\"z\":2.09037665399592E-07}},\"ce1463\":{\"lock\":false,\"pos\":{\"x\":8.2375431060791,\"y\":2.33254981040955,\"z\":112.795700073242},\"rot\":{\"x\":1.23894806165481E-05,\"y\":269.990814208984,\"z\":1.48175706726761E-06}},\"d2d36d\":{\"lock\":false,\"pos\":{\"x\":15.0327386856079,\"y\":2.33255290985107,\"z\":110.38289642334},\"rot\":{\"x\":2.55710619967431E-05,\"y\":269.988342285156,\"z\":4.02219848183449E-06}},\"d5e451\":{\"lock\":false,\"pos\":{\"x\":11.6326131820679,\"y\":2.33255124092102,\"z\":105.578567504883},\"rot\":{\"x\":1.07267005660106E-05,\"y\":269.988586425781,\"z\":2.27192845159152E-06}},\"d7bfdb\":{\"lock\":false,\"pos\":{\"x\":-1.97831404209137,\"y\":2.3325469493866,\"z\":129.707122802734},\"rot\":{\"x\":1.45828853419516E-05,\"y\":269.972717285156,\"z\":-5.69865051147644E-07}},\"d97f4f\":{\"lock\":false,\"pos\":{\"x\":-1.9675008058548,\"y\":2.3325502872467,\"z\":108.011199951172},\"rot\":{\"x\":1.67768921528477E-05,\"y\":269.98876953125,\"z\":2.96485791295709E-06}},\"df97fd\":{\"lock\":false,\"pos\":{\"x\":-1.96340024471283,\"y\":2.33254885673523,\"z\":115.244903564453},\"rot\":{\"x\":2.2312939108815E-05,\"y\":269.990844726563,\"z\":2.15635759559518E-06}},\"e0d991\":{\"lock\":false,\"pos\":{\"x\":-1.97405600547791,\"y\":2.33254742622375,\"z\":127.297996520996},\"rot\":{\"x\":1.54127083078492E-05,\"y\":269.972717285156,\"z\":-7.84894552907645E-07}},\"e15c29\":{\"lock\":false,\"pos\":{\"x\":-8.76076126098633,\"y\":2.33254814147949,\"z\":115.259429931641},\"rot\":{\"x\":2.15839627344394E-05,\"y\":270.014526367188,\"z\":5.49971161944995E-07}},\"e3d0e1\":{\"lock\":false,\"pos\":{\"x\":-5.35860347747803,\"y\":2.33254766464233,\"z\":122.463500976563},\"rot\":{\"x\":1.4312451639853E-05,\"y\":269.972229003906,\"z\":-2.07315542866127E-06}},\"e505bc\":{\"lock\":false,\"pos\":{\"x\":15.0282106399536,\"y\":2.33254957199097,\"z\":127.236381530762},\"rot\":{\"x\":1.45892090586131E-05,\"y\":269.971435546875,\"z\":1.1226835567868E-06}},\"e89571\":{\"lock\":false,\"pos\":{\"x\":15.0343589782715,\"y\":2.33255124092102,\"z\":115.19889831543},\"rot\":{\"x\":2.1477335394593E-05,\"y\":269.989929199219,\"z\":1.82182964181266E-06}},\"e92012\":{\"lock\":false,\"pos\":{\"x\":-22.3524837493896,\"y\":2.3325457572937,\"z\":115.253868103027},\"rot\":{\"x\":1.69732575159287E-05,\"y\":269.990051269531,\"z\":4.52931453764904E-06}},\"eab610\":{\"lock\":false,\"pos\":{\"x\":-15.5730466842651,\"y\":2.33254599571228,\"z\":132.110595703125},\"rot\":{\"x\":1.73591961356578E-05,\"y\":269.974426269531,\"z\":-6.0817495750598E-07}},\"f2c9b5\":{\"lock\":false,\"pos\":{\"x\":-1.96800088882446,\"y\":2.33254933357239,\"z\":110.41919708252},\"rot\":{\"x\":2.01175153051736E-05,\"y\":269.988800048828,\"z\":8.92639704375142E-08}},\"f34463\":{\"lock\":false,\"pos\":{\"x\":15.036434173584,\"y\":2.33255076408386,\"z\":122.421096801758},\"rot\":{\"x\":2.09170048037777E-05,\"y\":269.970764160156,\"z\":5.80434367236649E-08}},\"f3d1b3\":{\"lock\":false,\"pos\":{\"x\":-5.38280010223389,\"y\":2.33254647254944,\"z\":134.507095336914},\"rot\":{\"x\":1.47743612615159E-05,\"y\":269.990814208984,\"z\":3.99599366573966E-06}},\"f4b749\":{\"lock\":false,\"pos\":{\"x\":15.0321350097656,\"y\":2.33255004882813,\"z\":124.828498840332},\"rot\":{\"x\":1.47675218613585E-05,\"y\":269.970275878906,\"z\":-1.31489684918051E-06}},\"f50474\":{\"lock\":false,\"pos\":{\"x\":-22.3438549041748,\"y\":2.33254528045654,\"z\":120.073303222656},\"rot\":{\"x\":1.93757641682168E-05,\"y\":269.9892578125,\"z\":1.64193704677018E-06}},\"f88878\":{\"lock\":false,\"pos\":{\"x\":-8.83023166656494,\"y\":2.33254671096802,\"z\":132.095977783203},\"rot\":{\"x\":8.44031819724478E-06,\"y\":269.338043212891,\"z\":1.42961187066248E-06}},\"fccdc8\":{\"lock\":false,\"pos\":{\"x\":-8.76332092285156,\"y\":2.33254861831665,\"z\":108.013999938965},\"rot\":{\"x\":1.66365352924913E-05,\"y\":269.988220214844,\"z\":4.82412406199728E-06}},\"fef53f\":{\"lock\":false,\"pos\":{\"x\":11.6405448913574,\"y\":2.33255076408386,\"z\":120.026397705078},\"rot\":{\"x\":2.33659011428244E-05,\"y\":269.989227294922,\"z\":4.15739577874774E-06}}}}",
   "XmlUI": "",
   "ContainedObjects": [
@@ -84,7 +84,7 @@
       },
       "Nickname": "Manual Dexterity (2)",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"60325\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Rogue\",\r\n  \"level\": 2,\r\n  \"traits\": \"Innate. Developed.\",\r\n  \"agilityIcons\": 3,\r\n  \"cycle\": \"Investigator Packs\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"60325\",\n  \"type\": \"Skill\",\n  \"class\": \"Rogue\",\n  \"level\": 2,\n  \"traits\": \"Innate. Developed.\",\n  \"agilityIcons\": 3,\n  \"cycle\": \"Investigator Packs\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -145,7 +145,7 @@
           },
           "Nickname": "Manual Dexterity (2)",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"60325\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Rogue\",\r\n  \"level\": 2,\r\n  \"traits\": \"Innate. Developed.\",\r\n  \"agilityIcons\": 3,\r\n  \"cycle\": \"Investigator Packs\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"60325\",\n  \"type\": \"Skill\",\n  \"class\": \"Rogue\",\n  \"level\": 2,\n  \"traits\": \"Innate. Developed.\",\n  \"agilityIcons\": 3,\n  \"cycle\": \"Investigator Packs\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -208,7 +208,7 @@
       },
       "Nickname": "Backstab (3)",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"60329\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Rogue\",\r\n  \"cost\": 3,\r\n  \"level\": 3,\r\n  \"traits\": \"Tactic.\",\r\n  \"combatIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"Investigator Packs\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"60329\",\n  \"type\": \"Event\",\n  \"class\": \"Rogue\",\n  \"cost\": 3,\n  \"level\": 3,\n  \"traits\": \"Tactic.\",\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"Investigator Packs\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -269,7 +269,7 @@
           },
           "Nickname": "Backstab (3)",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"60329\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Rogue\",\r\n  \"cost\": 3,\r\n  \"level\": 3,\r\n  \"traits\": \"Tactic.\",\r\n  \"combatIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"Investigator Packs\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"60329\",\n  \"type\": \"Event\",\n  \"class\": \"Rogue\",\n  \"cost\": 3,\n  \"level\": 3,\n  \"traits\": \"Tactic.\",\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"Investigator Packs\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -332,7 +332,7 @@
       },
       "Nickname": "Daisy's Tote Bag",
       "Description": "Signature",
-      "GMNotes": "{\r\n  \"id\": \"01008\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 2,\r\n  \"traits\": \"Item.\",\r\n  \"willpowerIcons\": 1,\r\n  \"intellectIcons\": 1,\r\n  \"wildIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01008\",\n  \"type\": \"Asset\",\n  \"class\": \"Neutral\",\n  \"cost\": 2,\n  \"traits\": \"Item.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"wildIcons\": 1,\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -394,7 +394,7 @@
           },
           "Nickname": "Daisy's Tote Bag",
           "Description": "Signature",
-          "GMNotes": "{\r\n  \"id\": \"01008\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 2,\r\n  \"traits\": \"Item.\",\r\n  \"willpowerIcons\": 1,\r\n  \"intellectIcons\": 1,\r\n  \"wildIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01008\",\n  \"type\": \"Asset\",\n  \"class\": \"Neutral\",\n  \"cost\": 2,\n  \"traits\": \"Item.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"wildIcons\": 1,\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -458,7 +458,7 @@
       },
       "Nickname": "Lone Wolf",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"02188\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Rogue\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Talent.\",\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"02188\",\n  \"type\": \"Asset\",\n  \"class\": \"Rogue\",\n  \"cost\": 1,\n  \"level\": 0,\n  \"traits\": \"Talent.\",\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -520,7 +520,7 @@
           },
           "Nickname": "Lone Wolf",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"02188\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Rogue\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Talent.\",\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"02188\",\n  \"type\": \"Asset\",\n  \"class\": \"Rogue\",\n  \"cost\": 1,\n  \"level\": 0,\n  \"traits\": \"Talent.\",\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -584,7 +584,7 @@
       },
       "Nickname": "Beat Cop",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"01018\",\r\n  \"alternate_ids\": [\r\n    \"01518\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Ally\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 4,\r\n  \"level\": 0,\r\n  \"traits\": \"Ally. Police.\",\r\n  \"combatIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01018\",\n  \"alternate_ids\": [\n    \"01518\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Ally\",\n  \"class\": \"Guardian\",\n  \"cost\": 4,\n  \"level\": 0,\n  \"traits\": \"Ally. Police.\",\n  \"combatIcons\": 1,\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -646,7 +646,7 @@
           },
           "Nickname": "Beat Cop",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"01018\",\r\n  \"alternate_ids\": [\r\n    \"01518\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Ally\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 4,\r\n  \"level\": 0,\r\n  \"traits\": \"Ally. Police.\",\r\n  \"combatIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01018\",\n  \"alternate_ids\": [\n    \"01518\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Ally\",\n  \"class\": \"Guardian\",\n  \"cost\": 4,\n  \"level\": 0,\n  \"traits\": \"Ally. Police.\",\n  \"combatIcons\": 1,\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -710,7 +710,7 @@
       },
       "Nickname": "Ward of Protection",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"01065\",\r\n  \"alternate_ids\": [\r\n    \"01565\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Spell. Spirit.\",\r\n  \"wildIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01065\",\n  \"alternate_ids\": [\n    \"01565\"\n  ],\n  \"type\": \"Event\",\n  \"class\": \"Mystic\",\n  \"cost\": 1,\n  \"level\": 0,\n  \"traits\": \"Spell. Spirit.\",\n  \"wildIcons\": 1,\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -771,7 +771,7 @@
           },
           "Nickname": "Ward of Protection",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"01065\",\r\n  \"alternate_ids\": [\r\n    \"01565\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Spell. Spirit.\",\r\n  \"wildIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01065\",\n  \"alternate_ids\": [\n    \"01565\"\n  ],\n  \"type\": \"Event\",\n  \"class\": \"Mystic\",\n  \"cost\": 1,\n  \"level\": 0,\n  \"traits\": \"Spell. Spirit.\",\n  \"wildIcons\": 1,\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -834,7 +834,7 @@
       },
       "Nickname": "\"I've got a plan!\"",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"02107\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Seeker\",\r\n  \"cost\": 3,\r\n  \"level\": 0,\r\n  \"traits\": \"Insight. Tactic.\",\r\n  \"intellectIcons\": 1,\r\n  \"combatIcons\": 1,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"02107\",\n  \"type\": \"Event\",\n  \"class\": \"Seeker\",\n  \"cost\": 3,\n  \"level\": 0,\n  \"traits\": \"Insight. Tactic.\",\n  \"intellectIcons\": 1,\n  \"combatIcons\": 1,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -895,7 +895,7 @@
           },
           "Nickname": "\"I've got a plan!\"",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"02107\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Seeker\",\r\n  \"cost\": 3,\r\n  \"level\": 0,\r\n  \"traits\": \"Insight. Tactic.\",\r\n  \"intellectIcons\": 1,\r\n  \"combatIcons\": 1,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"02107\",\n  \"type\": \"Event\",\n  \"class\": \"Seeker\",\n  \"cost\": 3,\n  \"level\": 0,\n  \"traits\": \"Insight. Tactic.\",\n  \"intellectIcons\": 1,\n  \"combatIcons\": 1,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -958,7 +958,7 @@
       },
       "Nickname": "Charisma (3)",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"02158\",\r\n  \"alternate_ids\": [\r\n    \"01694\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Neutral\",\r\n  \"level\": 3,\r\n  \"traits\": \"Talent.\",\r\n  \"permanent\": true,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"02158\",\n  \"alternate_ids\": [\n    \"01694\"\n  ],\n  \"type\": \"Asset\",\n  \"class\": \"Neutral\",\n  \"level\": 3,\n  \"traits\": \"Talent.\",\n  \"permanent\": true,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -1020,7 +1020,7 @@
           },
           "Nickname": "Charisma (3)",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"02158\",\r\n  \"alternate_ids\": [\r\n    \"01694\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Neutral\",\r\n  \"level\": 3,\r\n  \"traits\": \"Talent.\",\r\n  \"permanent\": true,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"02158\",\n  \"alternate_ids\": [\n    \"01694\"\n  ],\n  \"type\": \"Asset\",\n  \"class\": \"Neutral\",\n  \"level\": 3,\n  \"traits\": \"Talent.\",\n  \"permanent\": true,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -1084,7 +1084,7 @@
       },
       "Nickname": "Pete's Guitar",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"90047\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 2,\r\n  \"traits\": \"Item. Instrument.\",\r\n  \"cycle\": \"On the Road Again\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"90047\",\n  \"type\": \"Asset\",\n  \"class\": \"Neutral\",\n  \"cost\": 2,\n  \"traits\": \"Item. Instrument.\",\n  \"cycle\": \"On the Road Again\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -1146,7 +1146,7 @@
           },
           "Nickname": "Pete's Guitar",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"90047\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 2,\r\n  \"traits\": \"Item. Instrument.\",\r\n  \"cycle\": \"On the Road Again\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"90047\",\n  \"type\": \"Asset\",\n  \"class\": \"Neutral\",\n  \"cost\": 2,\n  \"traits\": \"Item. Instrument.\",\n  \"cycle\": \"On the Road Again\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -1210,7 +1210,7 @@
       },
       "Nickname": "Vicious Blow",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"01025\",\r\n  \"alternate_ids\": [\r\n    \"60119\",\r\n    \"01525\"\r\n  ],\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Guardian\",\r\n  \"level\": 0,\r\n  \"traits\": \"Practiced.\",\r\n  \"combatIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01025\",\n  \"alternate_ids\": [\n    \"60119\",\n    \"01525\"\n  ],\n  \"type\": \"Skill\",\n  \"class\": \"Guardian\",\n  \"level\": 0,\n  \"traits\": \"Practiced.\",\n  \"combatIcons\": 1,\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -1271,7 +1271,7 @@
           },
           "Nickname": "Vicious Blow",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"01025\",\r\n  \"alternate_ids\": [\r\n    \"60119\",\r\n    \"01525\"\r\n  ],\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Guardian\",\r\n  \"level\": 0,\r\n  \"traits\": \"Practiced.\",\r\n  \"combatIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01025\",\n  \"alternate_ids\": [\n    \"60119\",\n    \"01525\"\n  ],\n  \"type\": \"Skill\",\n  \"class\": \"Guardian\",\n  \"level\": 0,\n  \"traits\": \"Practiced.\",\n  \"combatIcons\": 1,\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -1334,7 +1334,7 @@
       },
       "Nickname": "Emergency Cache",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"01088\",\r\n  \"alternate_ids\": [\r\n    \"01588\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Supply.\",\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01088\",\n  \"alternate_ids\": [\n    \"01588\"\n  ],\n  \"type\": \"Event\",\n  \"class\": \"Neutral\",\n  \"cost\": 0,\n  \"level\": 0,\n  \"traits\": \"Supply.\",\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -1395,7 +1395,7 @@
           },
           "Nickname": "Emergency Cache",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"01088\",\r\n  \"alternate_ids\": [\r\n    \"01588\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Supply.\",\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01088\",\n  \"alternate_ids\": [\n    \"01588\"\n  ],\n  \"type\": \"Event\",\n  \"class\": \"Neutral\",\n  \"cost\": 0,\n  \"level\": 0,\n  \"traits\": \"Supply.\",\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -1458,7 +1458,7 @@
       },
       "Nickname": "Unexpected Courage (2)",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"60526\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Survivor\",\r\n  \"level\": 2,\r\n  \"traits\": \"Innate. Developed.\",\r\n  \"wildIcons\": 2,\r\n  \"cycle\": \"Investigator Packs\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"60526\",\n  \"type\": \"Skill\",\n  \"class\": \"Survivor\",\n  \"level\": 2,\n  \"traits\": \"Innate. Developed.\",\n  \"wildIcons\": 2,\n  \"cycle\": \"Investigator Packs\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -1519,7 +1519,7 @@
           },
           "Nickname": "Unexpected Courage (2)",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"60526\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Survivor\",\r\n  \"level\": 2,\r\n  \"traits\": \"Innate. Developed.\",\r\n  \"wildIcons\": 2,\r\n  \"cycle\": \"Investigator Packs\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"60526\",\n  \"type\": \"Skill\",\n  \"class\": \"Survivor\",\n  \"level\": 2,\n  \"traits\": \"Innate. Developed.\",\n  \"wildIcons\": 2,\n  \"cycle\": \"Investigator Packs\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -1582,7 +1582,7 @@
       },
       "Nickname": "Magnifying Glass (1)",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"01040\",\r\n  \"alternate_ids\": [\r\n    \"01540\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Hand\",\r\n  \"class\": \"Seeker\",\r\n  \"cost\": 0,\r\n  \"level\": 1,\r\n  \"traits\": \"Item. Tool.\",\r\n  \"intellectIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01040\",\n  \"alternate_ids\": [\n    \"01540\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Hand\",\n  \"class\": \"Seeker\",\n  \"cost\": 0,\n  \"level\": 1,\n  \"traits\": \"Item. Tool.\",\n  \"intellectIcons\": 1,\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -1644,7 +1644,7 @@
           },
           "Nickname": "Magnifying Glass (1)",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"01040\",\r\n  \"alternate_ids\": [\r\n    \"01540\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Hand\",\r\n  \"class\": \"Seeker\",\r\n  \"cost\": 0,\r\n  \"level\": 1,\r\n  \"traits\": \"Item. Tool.\",\r\n  \"intellectIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01040\",\n  \"alternate_ids\": [\n    \"01540\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Hand\",\n  \"class\": \"Seeker\",\n  \"cost\": 0,\n  \"level\": 1,\n  \"traits\": \"Item. Tool.\",\n  \"intellectIcons\": 1,\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -1832,7 +1832,7 @@
       },
       "Nickname": "Evidence!",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"01022\",\r\n  \"alternate_ids\": [\r\n    \"01522\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Insight.\",\r\n  \"intellectIcons\": 2,\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01022\",\n  \"alternate_ids\": [\n    \"01522\"\n  ],\n  \"type\": \"Event\",\n  \"class\": \"Guardian\",\n  \"cost\": 1,\n  \"level\": 0,\n  \"traits\": \"Insight.\",\n  \"intellectIcons\": 2,\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -1893,7 +1893,7 @@
           },
           "Nickname": "Evidence!",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"01022\",\r\n  \"alternate_ids\": [\r\n    \"01522\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Insight.\",\r\n  \"intellectIcons\": 2,\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01022\",\n  \"alternate_ids\": [\n    \"01522\"\n  ],\n  \"type\": \"Event\",\n  \"class\": \"Guardian\",\n  \"cost\": 1,\n  \"level\": 0,\n  \"traits\": \"Insight.\",\n  \"intellectIcons\": 2,\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -1956,7 +1956,7 @@
       },
       "Nickname": "Lucky Cigarette Case",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"04107\",\r\n  \"alternate_ids\": [\r\n    \"60308\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Accessory\",\r\n  \"class\": \"Rogue\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Item. Charm.\",\r\n  \"willpowerIcons\": 1,\r\n  \"cycle\": \"The Forgotten Age\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"04107\",\n  \"alternate_ids\": [\n    \"60308\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Accessory\",\n  \"class\": \"Rogue\",\n  \"cost\": 2,\n  \"level\": 0,\n  \"traits\": \"Item. Charm.\",\n  \"willpowerIcons\": 1,\n  \"cycle\": \"The Forgotten Age\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -2018,7 +2018,7 @@
           },
           "Nickname": "Lucky Cigarette Case",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"04107\",\r\n  \"alternate_ids\": [\r\n    \"60308\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Accessory\",\r\n  \"class\": \"Rogue\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Item. Charm.\",\r\n  \"willpowerIcons\": 1,\r\n  \"cycle\": \"The Forgotten Age\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"04107\",\n  \"alternate_ids\": [\n    \"60308\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Accessory\",\n  \"class\": \"Rogue\",\n  \"cost\": 2,\n  \"level\": 0,\n  \"traits\": \"Item. Charm.\",\n  \"willpowerIcons\": 1,\n  \"cycle\": \"The Forgotten Age\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -3311,7 +3311,7 @@
       },
       "Nickname": "Take Heart",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"04201\",\r\n  \"alternate_ids\": [\r\n    \"60519\"\r\n  ],\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Survivor\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"cycle\": \"The Forgotten Age\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"04201\",\n  \"alternate_ids\": [\n    \"60519\"\n  ],\n  \"type\": \"Skill\",\n  \"class\": \"Survivor\",\n  \"level\": 0,\n  \"traits\": \"Innate.\",\n  \"cycle\": \"The Forgotten Age\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -3372,7 +3372,7 @@
           },
           "Nickname": "Take Heart",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"04201\",\r\n  \"alternate_ids\": [\r\n    \"60519\"\r\n  ],\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Survivor\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"cycle\": \"The Forgotten Age\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"04201\",\n  \"alternate_ids\": [\n    \"60519\"\n  ],\n  \"type\": \"Skill\",\n  \"class\": \"Survivor\",\n  \"level\": 0,\n  \"traits\": \"Innate.\",\n  \"cycle\": \"The Forgotten Age\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -3561,7 +3561,7 @@
       },
       "Nickname": "Peter Sylvestre (2)",
       "Description": "Big Man on Campus",
-      "GMNotes": "{\r\n  \"id\": \"02035\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Ally\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 3,\r\n  \"level\": 2,\r\n  \"traits\": \"Ally. Miskatonic.\",\r\n  \"willpowerIcons\": 1,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"02035\",\n  \"type\": \"Asset\",\n  \"slot\": \"Ally\",\n  \"class\": \"Survivor\",\n  \"cost\": 3,\n  \"level\": 2,\n  \"traits\": \"Ally. Miskatonic.\",\n  \"willpowerIcons\": 1,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -3623,7 +3623,7 @@
           },
           "Nickname": "Peter Sylvestre (2)",
           "Description": "Big Man on Campus",
-          "GMNotes": "{\r\n  \"id\": \"02035\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Ally\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 3,\r\n  \"level\": 2,\r\n  \"traits\": \"Ally. Miskatonic.\",\r\n  \"willpowerIcons\": 1,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"02035\",\n  \"type\": \"Asset\",\n  \"slot\": \"Ally\",\n  \"class\": \"Survivor\",\n  \"cost\": 3,\n  \"level\": 2,\n  \"traits\": \"Ally. Miskatonic.\",\n  \"willpowerIcons\": 1,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -3687,7 +3687,7 @@
       },
       "Nickname": "Shrivelling",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"01060\",\r\n  \"alternate_ids\": [\r\n    \"01560\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Arcane\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 3,\r\n  \"level\": 0,\r\n  \"traits\": \"Spell.\",\r\n  \"combatIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 4,\r\n      \"type\": \"Charge\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01060\",\n  \"alternate_ids\": [\n    \"01560\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Arcane\",\n  \"class\": \"Mystic\",\n  \"cost\": 3,\n  \"level\": 0,\n  \"traits\": \"Spell.\",\n  \"combatIcons\": 1,\n  \"uses\": [\n    {\n      \"count\": 4,\n      \"type\": \"Charge\",\n      \"token\": \"resource\"\n    }\n  ],\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -3749,7 +3749,7 @@
           },
           "Nickname": "Shrivelling",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"01060\",\r\n  \"alternate_ids\": [\r\n    \"01560\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Arcane\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 3,\r\n  \"level\": 0,\r\n  \"traits\": \"Spell.\",\r\n  \"combatIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 4,\r\n      \"type\": \"Charge\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01060\",\n  \"alternate_ids\": [\n    \"01560\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Arcane\",\n  \"class\": \"Mystic\",\n  \"cost\": 3,\n  \"level\": 0,\n  \"traits\": \"Spell.\",\n  \"combatIcons\": 1,\n  \"uses\": [\n    {\n      \"count\": 4,\n      \"type\": \"Charge\",\n      \"token\": \"resource\"\n    }\n  ],\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -3813,7 +3813,7 @@
       },
       "Nickname": "Laboratory Assistant",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"02020\",\r\n  \"alternate_ids\": [\r\n    \"60212\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Ally\",\r\n  \"class\": \"Seeker\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Ally. Miskatonic. Science.\",\r\n  \"intellectIcons\": 1,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"02020\",\n  \"alternate_ids\": [\n    \"60212\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Ally\",\n  \"class\": \"Seeker\",\n  \"cost\": 2,\n  \"level\": 0,\n  \"traits\": \"Ally. Miskatonic. Science.\",\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -3875,7 +3875,7 @@
           },
           "Nickname": "Laboratory Assistant",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"02020\",\r\n  \"alternate_ids\": [\r\n    \"60212\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Ally\",\r\n  \"class\": \"Seeker\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Ally. Miskatonic. Science.\",\r\n  \"intellectIcons\": 1,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"02020\",\n  \"alternate_ids\": [\n    \"60212\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Ally\",\n  \"class\": \"Seeker\",\n  \"cost\": 2,\n  \"level\": 0,\n  \"traits\": \"Ally. Miskatonic. Science.\",\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -3939,7 +3939,7 @@
       },
       "Nickname": "Preposterous Sketches",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"02186\",\r\n  \"alternate_ids\": [\r\n    \"60218\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Seeker\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Insight.\",\r\n  \"willpowerIcons\": 1,\r\n  \"intellectIcons\": 1,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"02186\",\n  \"alternate_ids\": [\n    \"60218\"\n  ],\n  \"type\": \"Event\",\n  \"class\": \"Seeker\",\n  \"cost\": 2,\n  \"level\": 0,\n  \"traits\": \"Insight.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -4000,7 +4000,7 @@
           },
           "Nickname": "Preposterous Sketches",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"02186\",\r\n  \"alternate_ids\": [\r\n    \"60218\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Seeker\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Insight.\",\r\n  \"willpowerIcons\": 1,\r\n  \"intellectIcons\": 1,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"02186\",\n  \"alternate_ids\": [\n    \"60218\"\n  ],\n  \"type\": \"Event\",\n  \"class\": \"Seeker\",\n  \"cost\": 2,\n  \"level\": 0,\n  \"traits\": \"Insight.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -4063,7 +4063,7 @@
       },
       "Nickname": "Leather Coat",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"01072\",\r\n  \"alternate_ids\": [\r\n    \"01572\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Body\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Item. Armor.\",\r\n  \"combatIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01072\",\n  \"alternate_ids\": [\n    \"01572\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Body\",\n  \"class\": \"Survivor\",\n  \"cost\": 0,\n  \"level\": 0,\n  \"traits\": \"Item. Armor.\",\n  \"combatIcons\": 1,\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -4125,7 +4125,7 @@
           },
           "Nickname": "Leather Coat",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"01072\",\r\n  \"alternate_ids\": [\r\n    \"01572\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Body\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Item. Armor.\",\r\n  \"combatIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01072\",\n  \"alternate_ids\": [\n    \"01572\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Body\",\n  \"class\": \"Survivor\",\n  \"cost\": 0,\n  \"level\": 0,\n  \"traits\": \"Item. Armor.\",\n  \"combatIcons\": 1,\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -4189,7 +4189,7 @@
       },
       "Nickname": "Prepared for the Worst",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"02184\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Tactic.\",\r\n  \"intellectIcons\": 1,\r\n  \"combatIcons\": 1,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"02184\",\n  \"type\": \"Event\",\n  \"class\": \"Guardian\",\n  \"cost\": 1,\n  \"level\": 0,\n  \"traits\": \"Tactic.\",\n  \"intellectIcons\": 1,\n  \"combatIcons\": 1,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -4250,7 +4250,7 @@
           },
           "Nickname": "Prepared for the Worst",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"02184\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Tactic.\",\r\n  \"intellectIcons\": 1,\r\n  \"combatIcons\": 1,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"02184\",\n  \"type\": \"Event\",\n  \"class\": \"Guardian\",\n  \"cost\": 1,\n  \"level\": 0,\n  \"traits\": \"Tactic.\",\n  \"intellectIcons\": 1,\n  \"combatIcons\": 1,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -4313,7 +4313,7 @@
       },
       "Nickname": "Dodge",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"01023\",\r\n  \"alternate_ids\": [\r\n    \"60113\",\r\n    \"01523\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Tactic.\",\r\n  \"willpowerIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01023\",\n  \"alternate_ids\": [\n    \"60113\",\n    \"01523\"\n  ],\n  \"type\": \"Event\",\n  \"class\": \"Guardian\",\n  \"cost\": 1,\n  \"level\": 0,\n  \"traits\": \"Tactic.\",\n  \"willpowerIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -4374,7 +4374,7 @@
           },
           "Nickname": "Dodge",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"01023\",\r\n  \"alternate_ids\": [\r\n    \"60113\",\r\n    \"01523\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Tactic.\",\r\n  \"willpowerIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01023\",\n  \"alternate_ids\": [\n    \"60113\",\n    \"01523\"\n  ],\n  \"type\": \"Event\",\n  \"class\": \"Guardian\",\n  \"cost\": 1,\n  \"level\": 0,\n  \"traits\": \"Tactic.\",\n  \"willpowerIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -4437,7 +4437,7 @@
       },
       "Nickname": "Faustian Bargain",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"07028\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Rogue\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Pact. Cursed.\",\r\n  \"willpowerIcons\": 1,\r\n  \"intellectIcons\": 1,\r\n  \"cycle\": \"The Innsmouth Conspiracy\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"07028\",\n  \"type\": \"Event\",\n  \"class\": \"Rogue\",\n  \"cost\": 0,\n  \"level\": 0,\n  \"traits\": \"Pact. Cursed.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Innsmouth Conspiracy\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -4498,7 +4498,7 @@
           },
           "Nickname": "Faustian Bargain",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"07028\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Rogue\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Pact. Cursed.\",\r\n  \"willpowerIcons\": 1,\r\n  \"intellectIcons\": 1,\r\n  \"cycle\": \"The Innsmouth Conspiracy\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"07028\",\n  \"type\": \"Event\",\n  \"class\": \"Rogue\",\n  \"cost\": 0,\n  \"level\": 0,\n  \"traits\": \"Pact. Cursed.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Innsmouth Conspiracy\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -4561,7 +4561,7 @@
       },
       "Nickname": "Deduction",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"01039\",\r\n  \"alternate_ids\": [\r\n    \"60219\"\r\n  ],\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Seeker\",\r\n  \"level\": 0,\r\n  \"traits\": \"Practiced.\",\r\n  \"intellectIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01039\",\n  \"alternate_ids\": [\n    \"60219\"\n  ],\n  \"type\": \"Skill\",\n  \"class\": \"Seeker\",\n  \"level\": 0,\n  \"traits\": \"Practiced.\",\n  \"intellectIcons\": 1,\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -4622,7 +4622,7 @@
           },
           "Nickname": "Deduction",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"01039\",\r\n  \"alternate_ids\": [\r\n    \"60219\"\r\n  ],\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Seeker\",\r\n  \"level\": 0,\r\n  \"traits\": \"Practiced.\",\r\n  \"intellectIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01039\",\n  \"alternate_ids\": [\n    \"60219\"\n  ],\n  \"type\": \"Skill\",\n  \"class\": \"Seeker\",\n  \"level\": 0,\n  \"traits\": \"Practiced.\",\n  \"intellectIcons\": 1,\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -4685,7 +4685,7 @@
       },
       "Nickname": "Peter Sylvestre",
       "Description": "Big Man on Campus",
-      "GMNotes": "{\r\n  \"id\": \"02033\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Ally\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 3,\r\n  \"level\": 0,\r\n  \"traits\": \"Ally. Miskatonic.\",\r\n  \"willpowerIcons\": 1,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"02033\",\n  \"type\": \"Asset\",\n  \"slot\": \"Ally\",\n  \"class\": \"Survivor\",\n  \"cost\": 3,\n  \"level\": 0,\n  \"traits\": \"Ally. Miskatonic.\",\n  \"willpowerIcons\": 1,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -4747,7 +4747,7 @@
           },
           "Nickname": "Peter Sylvestre",
           "Description": "Big Man on Campus",
-          "GMNotes": "{\r\n  \"id\": \"02033\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Ally\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 3,\r\n  \"level\": 0,\r\n  \"traits\": \"Ally. Miskatonic.\",\r\n  \"willpowerIcons\": 1,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"02033\",\n  \"type\": \"Asset\",\n  \"slot\": \"Ally\",\n  \"class\": \"Survivor\",\n  \"cost\": 3,\n  \"level\": 0,\n  \"traits\": \"Ally. Miskatonic.\",\n  \"willpowerIcons\": 1,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -4811,7 +4811,7 @@
       },
       "Nickname": "Shrivelling (5)",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"02306\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Arcane\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 3,\r\n  \"level\": 5,\r\n  \"traits\": \"Spell.\",\r\n  \"willpowerIcons\": 1,\r\n  \"combatIcons\": 2,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 4,\r\n      \"type\": \"Charge\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"02306\",\n  \"type\": \"Asset\",\n  \"slot\": \"Arcane\",\n  \"class\": \"Mystic\",\n  \"cost\": 3,\n  \"level\": 5,\n  \"traits\": \"Spell.\",\n  \"willpowerIcons\": 1,\n  \"combatIcons\": 2,\n  \"uses\": [\n    {\n      \"count\": 4,\n      \"type\": \"Charge\",\n      \"token\": \"resource\"\n    }\n  ],\n  \"cycle\": \"The Dunwich Legacy\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -4873,7 +4873,7 @@
           },
           "Nickname": "Shrivelling (5)",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"02306\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Arcane\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 3,\r\n  \"level\": 5,\r\n  \"traits\": \"Spell.\",\r\n  \"willpowerIcons\": 1,\r\n  \"combatIcons\": 2,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 4,\r\n      \"type\": \"Charge\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"02306\",\n  \"type\": \"Asset\",\n  \"slot\": \"Arcane\",\n  \"class\": \"Mystic\",\n  \"cost\": 3,\n  \"level\": 5,\n  \"traits\": \"Spell.\",\n  \"willpowerIcons\": 1,\n  \"combatIcons\": 2,\n  \"uses\": [\n    {\n      \"count\": 4,\n      \"type\": \"Charge\",\n      \"token\": \"resource\"\n    }\n  ],\n  \"cycle\": \"The Dunwich Legacy\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -4937,7 +4937,7 @@
       },
       "Nickname": "Duke",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"02014\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 2,\r\n  \"traits\": \"Ally. Creature.\",\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"02014\",\n  \"type\": \"Asset\",\n  \"class\": \"Neutral\",\n  \"cost\": 2,\n  \"traits\": \"Ally. Creature.\",\n  \"cycle\": \"The Dunwich Legacy\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -4999,7 +4999,7 @@
           },
           "Nickname": "Duke",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"02014\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 2,\r\n  \"traits\": \"Ally. Creature.\",\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"02014\",\n  \"type\": \"Asset\",\n  \"class\": \"Neutral\",\n  \"cost\": 2,\n  \"traits\": \"Ally. Creature.\",\n  \"cycle\": \"The Dunwich Legacy\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -5063,7 +5063,7 @@
       },
       "Nickname": "Inquiring Mind",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"02227\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Seeker\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"wildIcons\": 3,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"02227\",\n  \"type\": \"Skill\",\n  \"class\": \"Seeker\",\n  \"level\": 0,\n  \"traits\": \"Innate.\",\n  \"wildIcons\": 3,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -5124,7 +5124,7 @@
           },
           "Nickname": "Inquiring Mind",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"02227\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Seeker\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"wildIcons\": 3,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"02227\",\n  \"type\": \"Skill\",\n  \"class\": \"Seeker\",\n  \"level\": 0,\n  \"traits\": \"Innate.\",\n  \"wildIcons\": 3,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -5187,7 +5187,7 @@
       },
       "Nickname": "\"Look what I found!\"",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"01079\",\r\n  \"alternate_ids\": [\r\n    \"60517\",\r\n    \"01579\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Fortune.\",\r\n  \"intellectIcons\": 2,\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01079\",\n  \"alternate_ids\": [\n    \"60517\",\n    \"01579\"\n  ],\n  \"type\": \"Event\",\n  \"class\": \"Survivor\",\n  \"cost\": 2,\n  \"level\": 0,\n  \"traits\": \"Fortune.\",\n  \"intellectIcons\": 2,\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -5248,7 +5248,7 @@
           },
           "Nickname": "\"Look what I found!\"",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"01079\",\r\n  \"alternate_ids\": [\r\n    \"60517\",\r\n    \"01579\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Fortune.\",\r\n  \"intellectIcons\": 2,\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01079\",\n  \"alternate_ids\": [\n    \"60517\",\n    \"01579\"\n  ],\n  \"type\": \"Event\",\n  \"class\": \"Survivor\",\n  \"cost\": 2,\n  \"level\": 0,\n  \"traits\": \"Fortune.\",\n  \"intellectIcons\": 2,\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -5311,7 +5311,7 @@
       },
       "Nickname": "Leo De Luca",
       "Description": "The Louisiana Lion",
-      "GMNotes": "{\r\n  \"id\": \"01048\",\r\n  \"alternate_ids\": [\r\n    \"01548\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Ally\",\r\n  \"class\": \"Rogue\",\r\n  \"cost\": 6,\r\n  \"level\": 0,\r\n  \"traits\": \"Ally. Criminal.\",\r\n  \"intellectIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 1,\r\n      \"type\": \"Universal\",\r\n      \"token\": \"universalActionAbility\"\r\n    }\r\n  ],\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01048\",\n  \"alternate_ids\": [\n    \"01548\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Ally\",\n  \"class\": \"Rogue\",\n  \"cost\": 6,\n  \"level\": 0,\n  \"traits\": \"Ally. Criminal.\",\n  \"intellectIcons\": 1,\n  \"uses\": [\n    {\n      \"count\": 1,\n      \"type\": \"Universal\",\n      \"token\": \"universalActionAbility\"\n    }\n  ],\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -5373,7 +5373,7 @@
           },
           "Nickname": "Leo De Luca",
           "Description": "The Louisiana Lion",
-          "GMNotes": "{\r\n  \"id\": \"01048\",\r\n  \"alternate_ids\": [\r\n    \"01548\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Ally\",\r\n  \"class\": \"Rogue\",\r\n  \"cost\": 6,\r\n  \"level\": 0,\r\n  \"traits\": \"Ally. Criminal.\",\r\n  \"intellectIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 1,\r\n      \"type\": \"Universal\",\r\n      \"token\": \"universalActionAbility\"\r\n    }\r\n  ],\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01048\",\n  \"alternate_ids\": [\n    \"01548\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Ally\",\n  \"class\": \"Rogue\",\n  \"cost\": 6,\n  \"level\": 0,\n  \"traits\": \"Ally. Criminal.\",\n  \"intellectIcons\": 1,\n  \"uses\": [\n    {\n      \"count\": 1,\n      \"type\": \"Universal\",\n      \"token\": \"universalActionAbility\"\n    }\n  ],\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -5437,7 +5437,7 @@
       },
       "Nickname": "Arcane Initiate",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"01063\",\r\n  \"alternate_ids\": [\r\n    \"01563\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Ally\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Ally. Sorcerer.\",\r\n  \"willpowerIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 1,\r\n      \"type\": \"Doom\",\r\n      \"token\": \"doom\"\r\n    }\r\n  ],\r\n  \"cycle\": \"Core\"\r\n}",
+      "GMNotes": "{\n  \"id\": \"01063\",\n  \"alternate_ids\": [\n    \"01563\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Ally\",\n  \"class\": \"Mystic\",\n  \"cost\": 1,\n  \"level\": 0,\n  \"traits\": \"Ally. Sorcerer.\",\n  \"willpowerIcons\": 1,\n  \"uses\": [\n    {\n      \"count\": 1,\n      \"type\": \"Doom\",\n      \"token\": \"doom\"\n    }\n  ],\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -5499,7 +5499,7 @@
           },
           "Nickname": "Arcane Initiate",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"01063\",\r\n  \"alternate_ids\": [\r\n    \"01563\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Ally\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Ally. Sorcerer.\",\r\n  \"willpowerIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 1,\r\n      \"type\": \"Doom\",\r\n      \"token\": \"doom\"\r\n    }\r\n  ],\r\n  \"cycle\": \"Core\"\r\n}",
+          "GMNotes": "{\n  \"id\": \"01063\",\n  \"alternate_ids\": [\n    \"01563\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Ally\",\n  \"class\": \"Mystic\",\n  \"cost\": 1,\n  \"level\": 0,\n  \"traits\": \"Ally. Sorcerer.\",\n  \"willpowerIcons\": 1,\n  \"uses\": [\n    {\n      \"count\": 1,\n      \"type\": \"Doom\",\n      \"token\": \"doom\"\n    }\n  ],\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -5563,7 +5563,7 @@
       },
       "Nickname": ".45 Automatic",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"01016\",\r\n  \"alternate_ids\": [\r\n    \"01516\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Hand\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 4,\r\n  \"level\": 0,\r\n  \"traits\": \"Item. Weapon. Firearm.\",\r\n  \"agilityIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 4,\r\n      \"type\": \"Ammo\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01016\",\n  \"alternate_ids\": [\n    \"01516\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Hand\",\n  \"class\": \"Guardian\",\n  \"cost\": 4,\n  \"level\": 0,\n  \"traits\": \"Item. Weapon. Firearm.\",\n  \"agilityIcons\": 1,\n  \"uses\": [\n    {\n      \"count\": 4,\n      \"type\": \"Ammo\",\n      \"token\": \"resource\"\n    }\n  ],\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -5625,7 +5625,7 @@
           },
           "Nickname": ".45 Automatic",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"01016\",\r\n  \"alternate_ids\": [\r\n    \"01516\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Hand\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 4,\r\n  \"level\": 0,\r\n  \"traits\": \"Item. Weapon. Firearm.\",\r\n  \"agilityIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 4,\r\n      \"type\": \"Ammo\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01016\",\n  \"alternate_ids\": [\n    \"01516\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Hand\",\n  \"class\": \"Guardian\",\n  \"cost\": 4,\n  \"level\": 0,\n  \"traits\": \"Item. Weapon. Firearm.\",\n  \"agilityIcons\": 1,\n  \"uses\": [\n    {\n      \"count\": 4,\n      \"type\": \"Ammo\",\n      \"token\": \"resource\"\n    }\n  ],\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -5689,7 +5689,7 @@
       },
       "Nickname": "Leo De Luca (1)",
       "Description": "The Louisiana Lion",
-      "GMNotes": "{\r\n  \"id\": \"01054\",\r\n  \"alternate_ids\": [\r\n    \"01554\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Ally\",\r\n  \"class\": \"Rogue\",\r\n  \"cost\": 5,\r\n  \"level\": 1,\r\n  \"traits\": \"Ally. Criminal.\",\r\n  \"intellectIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 1,\r\n      \"type\": \"Universal\",\r\n      \"token\": \"universalActionAbility\"\r\n    }\r\n  ],\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01054\",\n  \"alternate_ids\": [\n    \"01554\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Ally\",\n  \"class\": \"Rogue\",\n  \"cost\": 5,\n  \"level\": 1,\n  \"traits\": \"Ally. Criminal.\",\n  \"intellectIcons\": 1,\n  \"uses\": [\n    {\n      \"count\": 1,\n      \"type\": \"Universal\",\n      \"token\": \"universalActionAbility\"\n    }\n  ],\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -5751,7 +5751,7 @@
           },
           "Nickname": "Leo De Luca (1)",
           "Description": "The Louisiana Lion",
-          "GMNotes": "{\r\n  \"id\": \"01054\",\r\n  \"alternate_ids\": [\r\n    \"01554\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Ally\",\r\n  \"class\": \"Rogue\",\r\n  \"cost\": 5,\r\n  \"level\": 1,\r\n  \"traits\": \"Ally. Criminal.\",\r\n  \"intellectIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 1,\r\n      \"type\": \"Universal\",\r\n      \"token\": \"universalActionAbility\"\r\n    }\r\n  ],\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01054\",\n  \"alternate_ids\": [\n    \"01554\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Ally\",\n  \"class\": \"Rogue\",\n  \"cost\": 5,\n  \"level\": 1,\n  \"traits\": \"Ally. Criminal.\",\n  \"intellectIcons\": 1,\n  \"uses\": [\n    {\n      \"count\": 1,\n      \"type\": \"Universal\",\n      \"token\": \"universalActionAbility\"\n    }\n  ],\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -5815,7 +5815,7 @@
       },
       "Nickname": "Eureka!",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"03231\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Seeker\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"willpowerIcons\": 1,\r\n  \"intellectIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"03231\",\n  \"type\": \"Skill\",\n  \"class\": \"Seeker\",\n  \"level\": 0,\n  \"traits\": \"Innate.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Path to Carcosa\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -5876,7 +5876,7 @@
           },
           "Nickname": "Eureka!",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"03231\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Seeker\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"willpowerIcons\": 1,\r\n  \"intellectIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"03231\",\n  \"type\": \"Skill\",\n  \"class\": \"Seeker\",\n  \"level\": 0,\n  \"traits\": \"Innate.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Path to Carcosa\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -5939,7 +5939,7 @@
       },
       "Nickname": "Deduction (2)",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"02150\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Seeker\",\r\n  \"level\": 2,\r\n  \"traits\": \"Practiced. Expert.\",\r\n  \"intellectIcons\": 2,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"02150\",\n  \"type\": \"Skill\",\n  \"class\": \"Seeker\",\n  \"level\": 2,\n  \"traits\": \"Practiced. Expert.\",\n  \"intellectIcons\": 2,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -6000,7 +6000,7 @@
           },
           "Nickname": "Deduction (2)",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"02150\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Seeker\",\r\n  \"level\": 2,\r\n  \"traits\": \"Practiced. Expert.\",\r\n  \"intellectIcons\": 2,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"02150\",\n  \"type\": \"Skill\",\n  \"class\": \"Seeker\",\n  \"level\": 2,\n  \"traits\": \"Practiced. Expert.\",\n  \"intellectIcons\": 2,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -6063,7 +6063,7 @@
       },
       "Nickname": "Resourceful",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"03039\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Survivor\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"intellectIcons\": 1,\r\n  \"combatIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"03039\",\n  \"type\": \"Skill\",\n  \"class\": \"Survivor\",\n  \"level\": 0,\n  \"traits\": \"Innate.\",\n  \"intellectIcons\": 1,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Path to Carcosa\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -6124,7 +6124,7 @@
           },
           "Nickname": "Resourceful",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"03039\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Survivor\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"intellectIcons\": 1,\r\n  \"combatIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"03039\",\n  \"type\": \"Skill\",\n  \"class\": \"Survivor\",\n  \"level\": 0,\n  \"traits\": \"Innate.\",\n  \"intellectIcons\": 1,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Path to Carcosa\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -6187,7 +6187,7 @@
       },
       "Nickname": "Vicious Blow (2)",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"02299\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Guardian\",\r\n  \"level\": 2,\r\n  \"traits\": \"Practiced. Expert.\",\r\n  \"combatIcons\": 2,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"02299\",\n  \"type\": \"Skill\",\n  \"class\": \"Guardian\",\n  \"level\": 2,\n  \"traits\": \"Practiced. Expert.\",\n  \"combatIcons\": 2,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -6248,7 +6248,7 @@
           },
           "Nickname": "Vicious Blow (2)",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"02299\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Guardian\",\r\n  \"level\": 2,\r\n  \"traits\": \"Practiced. Expert.\",\r\n  \"combatIcons\": 2,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"02299\",\n  \"type\": \"Skill\",\n  \"class\": \"Guardian\",\n  \"level\": 2,\n  \"traits\": \"Practiced. Expert.\",\n  \"combatIcons\": 2,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -6311,7 +6311,7 @@
       },
       "Nickname": "Quick Thinking",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"02229\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Rogue\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"wildIcons\": 1,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"02229\",\n  \"type\": \"Skill\",\n  \"class\": \"Rogue\",\n  \"level\": 0,\n  \"traits\": \"Innate.\",\n  \"wildIcons\": 1,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -6372,7 +6372,7 @@
           },
           "Nickname": "Quick Thinking",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"02229\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Rogue\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"wildIcons\": 1,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"02229\",\n  \"type\": \"Skill\",\n  \"class\": \"Rogue\",\n  \"level\": 0,\n  \"traits\": \"Innate.\",\n  \"wildIcons\": 1,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -6435,7 +6435,7 @@
       },
       "Nickname": "Mind over Matter",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"01036\",\r\n  \"alternate_ids\": [\r\n    \"01536\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Seeker\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Insight.\",\r\n  \"combatIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01036\",\n  \"alternate_ids\": [\n    \"01536\"\n  ],\n  \"type\": \"Event\",\n  \"class\": \"Seeker\",\n  \"cost\": 1,\n  \"level\": 0,\n  \"traits\": \"Insight.\",\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -6496,7 +6496,7 @@
           },
           "Nickname": "Mind over Matter",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"01036\",\r\n  \"alternate_ids\": [\r\n    \"01536\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Seeker\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Insight.\",\r\n  \"combatIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01036\",\n  \"alternate_ids\": [\n    \"01536\"\n  ],\n  \"type\": \"Event\",\n  \"class\": \"Seeker\",\n  \"cost\": 1,\n  \"level\": 0,\n  \"traits\": \"Insight.\",\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -6559,7 +6559,7 @@
       },
       "Nickname": "Overpower (2)",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"60126\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Guardian\",\r\n  \"level\": 2,\r\n  \"traits\": \"Practiced. Expert.\",\r\n  \"combatIcons\": 3,\r\n  \"cycle\": \"Investigator Packs\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"60126\",\n  \"type\": \"Skill\",\n  \"class\": \"Guardian\",\n  \"level\": 2,\n  \"traits\": \"Practiced. Expert.\",\n  \"combatIcons\": 3,\n  \"cycle\": \"Investigator Packs\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -6620,7 +6620,7 @@
           },
           "Nickname": "Overpower (2)",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"60126\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Guardian\",\r\n  \"level\": 2,\r\n  \"traits\": \"Practiced. Expert.\",\r\n  \"combatIcons\": 3,\r\n  \"cycle\": \"Investigator Packs\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"60126\",\n  \"type\": \"Skill\",\n  \"class\": \"Guardian\",\n  \"level\": 2,\n  \"traits\": \"Practiced. Expert.\",\n  \"combatIcons\": 3,\n  \"cycle\": \"Investigator Packs\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -6683,7 +6683,7 @@
       },
       "Nickname": "The Painted World",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"03012\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Neutral\",\r\n  \"traits\": \"Spell.\",\r\n  \"willpowerIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"wildIcons\": 1,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"03012\",\n  \"type\": \"Event\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Spell.\",\n  \"willpowerIcons\": 1,\n  \"agilityIcons\": 1,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Path to Carcosa\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -6744,7 +6744,7 @@
           },
           "Nickname": "The Painted World",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"03012\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Neutral\",\r\n  \"traits\": \"Spell.\",\r\n  \"willpowerIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"wildIcons\": 1,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"03012\",\n  \"type\": \"Event\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Spell.\",\n  \"willpowerIcons\": 1,\n  \"agilityIcons\": 1,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Path to Carcosa\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -6807,7 +6807,7 @@
       },
       "Nickname": "Flashlight",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"01087\",\r\n  \"alternate_ids\": [\r\n    \"01587\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Hand\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Item. Tool.\",\r\n  \"intellectIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 3,\r\n      \"type\": \"Supply\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01087\",\n  \"alternate_ids\": [\n    \"01587\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Hand\",\n  \"class\": \"Neutral\",\n  \"cost\": 2,\n  \"level\": 0,\n  \"traits\": \"Item. Tool.\",\n  \"intellectIcons\": 1,\n  \"uses\": [\n    {\n      \"count\": 3,\n      \"type\": \"Supply\",\n      \"token\": \"resource\"\n    }\n  ],\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -6869,7 +6869,7 @@
           },
           "Nickname": "Flashlight",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"01087\",\r\n  \"alternate_ids\": [\r\n    \"01587\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Hand\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Item. Tool.\",\r\n  \"intellectIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 3,\r\n      \"type\": \"Supply\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01087\",\n  \"alternate_ids\": [\n    \"01587\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Hand\",\n  \"class\": \"Neutral\",\n  \"cost\": 2,\n  \"level\": 0,\n  \"traits\": \"Item. Tool.\",\n  \"intellectIcons\": 1,\n  \"uses\": [\n    {\n      \"count\": 3,\n      \"type\": \"Supply\",\n      \"token\": \"resource\"\n    }\n  ],\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -6933,7 +6933,7 @@
       },
       "Nickname": "Hard Times",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"90048\",\r\n  \"type\": \"Treachery\",\r\n  \"class\": \"Neutral\",\r\n  \"traits\": \"Hardship.\",\r\n  \"weakness\": true,\r\n  \"cycle\": \"On the Road Again\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"90048\",\n  \"type\": \"Treachery\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Hardship.\",\n  \"weakness\": true,\n  \"cycle\": \"On the Road Again\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -6994,7 +6994,7 @@
           },
           "Nickname": "Hard Times",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"90048\",\r\n  \"type\": \"Treachery\",\r\n  \"class\": \"Neutral\",\r\n  \"traits\": \"Hardship.\",\r\n  \"weakness\": true,\r\n  \"cycle\": \"On the Road Again\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"90048\",\n  \"type\": \"Treachery\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Hardship.\",\n  \"weakness\": true,\n  \"cycle\": \"On the Road Again\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -7057,7 +7057,7 @@
       },
       "Nickname": "Machete",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"01020\",\r\n  \"alternate_ids\": [\r\n    \"01520\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Hand\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 3,\r\n  \"level\": 0,\r\n  \"traits\": \"Item. Weapon. Melee.\",\r\n  \"combatIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01020\",\n  \"alternate_ids\": [\n    \"01520\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Hand\",\n  \"class\": \"Guardian\",\n  \"cost\": 3,\n  \"level\": 0,\n  \"traits\": \"Item. Weapon. Melee.\",\n  \"combatIcons\": 1,\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -7119,7 +7119,7 @@
           },
           "Nickname": "Machete",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"01020\",\r\n  \"alternate_ids\": [\r\n    \"01520\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Hand\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 3,\r\n  \"level\": 0,\r\n  \"traits\": \"Item. Weapon. Melee.\",\r\n  \"combatIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01020\",\n  \"alternate_ids\": [\n    \"01520\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Hand\",\n  \"class\": \"Guardian\",\n  \"cost\": 3,\n  \"level\": 0,\n  \"traits\": \"Item. Weapon. Melee.\",\n  \"combatIcons\": 1,\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -7183,7 +7183,7 @@
       },
       "Nickname": "Stars of Hyades",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"03013\",\r\n  \"type\": \"Treachery\",\r\n  \"class\": \"Neutral\",\r\n  \"traits\": \"Curse.\",\r\n  \"weakness\": true,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"03013\",\n  \"type\": \"Treachery\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Curse.\",\n  \"weakness\": true,\n  \"cycle\": \"The Path to Carcosa\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -7244,7 +7244,7 @@
           },
           "Nickname": "Stars of Hyades",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"03013\",\r\n  \"type\": \"Treachery\",\r\n  \"class\": \"Neutral\",\r\n  \"traits\": \"Curse.\",\r\n  \"weakness\": true,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"03013\",\n  \"type\": \"Treachery\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Curse.\",\n  \"weakness\": true,\n  \"cycle\": \"The Path to Carcosa\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -7307,7 +7307,7 @@
       },
       "Nickname": "Read the Signs",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"06117\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Spell.\",\r\n  \"willpowerIcons\": 1,\r\n  \"intellectIcons\": 1,\r\n  \"cycle\": \"The Dream-Eaters\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"06117\",\n  \"type\": \"Event\",\n  \"class\": \"Mystic\",\n  \"cost\": 2,\n  \"level\": 0,\n  \"traits\": \"Spell.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Dream-Eaters\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -7368,7 +7368,7 @@
           },
           "Nickname": "Read the Signs",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"06117\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Spell.\",\r\n  \"willpowerIcons\": 1,\r\n  \"intellectIcons\": 1,\r\n  \"cycle\": \"The Dream-Eaters\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"06117\",\n  \"type\": \"Event\",\n  \"class\": \"Mystic\",\n  \"cost\": 2,\n  \"level\": 0,\n  \"traits\": \"Spell.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Dream-Eaters\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -7431,7 +7431,7 @@
       },
       "Nickname": "Deny Existence",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"05032\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Spell. Paradox.\",\r\n  \"wildIcons\": 1,\r\n  \"cycle\": \"The Circle Undone\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"05032\",\n  \"type\": \"Event\",\n  \"class\": \"Mystic\",\n  \"cost\": 0,\n  \"level\": 0,\n  \"traits\": \"Spell. Paradox.\",\n  \"wildIcons\": 1,\n  \"cycle\": \"The Circle Undone\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -7492,7 +7492,7 @@
           },
           "Nickname": "Deny Existence",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"05032\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Spell. Paradox.\",\r\n  \"wildIcons\": 1,\r\n  \"cycle\": \"The Circle Undone\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"05032\",\n  \"type\": \"Event\",\n  \"class\": \"Mystic\",\n  \"cost\": 0,\n  \"level\": 0,\n  \"traits\": \"Spell. Paradox.\",\n  \"wildIcons\": 1,\n  \"cycle\": \"The Circle Undone\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -7555,7 +7555,7 @@
       },
       "Nickname": "Lucky Cigarette Case (3)",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"60326\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Accessory\",\r\n  \"class\": \"Rogue\",\r\n  \"cost\": 2,\r\n  \"level\": 3,\r\n  \"traits\": \"Item. Charm.\",\r\n  \"willpowerIcons\": 2,\r\n  \"cycle\": \"Investigator Packs\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"60326\",\n  \"type\": \"Asset\",\n  \"slot\": \"Accessory\",\n  \"class\": \"Rogue\",\n  \"cost\": 2,\n  \"level\": 3,\n  \"traits\": \"Item. Charm.\",\n  \"willpowerIcons\": 2,\n  \"cycle\": \"Investigator Packs\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -7617,7 +7617,7 @@
           },
           "Nickname": "Lucky Cigarette Case (3)",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"60326\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Accessory\",\r\n  \"class\": \"Rogue\",\r\n  \"cost\": 2,\r\n  \"level\": 3,\r\n  \"traits\": \"Item. Charm.\",\r\n  \"willpowerIcons\": 2,\r\n  \"cycle\": \"Investigator Packs\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"60326\",\n  \"type\": \"Asset\",\n  \"slot\": \"Accessory\",\n  \"class\": \"Rogue\",\n  \"cost\": 2,\n  \"level\": 3,\n  \"traits\": \"Item. Charm.\",\n  \"willpowerIcons\": 2,\n  \"cycle\": \"Investigator Packs\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -7681,7 +7681,7 @@
       },
       "Nickname": "Roland's .38 Special",
       "Description": "Advanced",
-      "GMNotes": "{\r\n  \"id\": \"90030\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Hand\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 3,\r\n  \"traits\": \"Item. Weapon. Firearm.\",\r\n  \"intellectIcons\": 1,\r\n  \"combatIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"wildIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 4,\r\n      \"type\": \"Ammo\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"By the Book\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"90030\",\n  \"type\": \"Asset\",\n  \"slot\": \"Hand\",\n  \"class\": \"Neutral\",\n  \"cost\": 3,\n  \"traits\": \"Item. Weapon. Firearm.\",\n  \"intellectIcons\": 1,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"wildIcons\": 1,\n  \"uses\": [\n    {\n      \"count\": 4,\n      \"type\": \"Ammo\",\n      \"token\": \"resource\"\n    }\n  ],\n  \"cycle\": \"By the Book\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -7743,7 +7743,7 @@
           },
           "Nickname": "Roland's .38 Special",
           "Description": "Advanced",
-          "GMNotes": "{\r\n  \"id\": \"90030\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Hand\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 3,\r\n  \"traits\": \"Item. Weapon. Firearm.\",\r\n  \"intellectIcons\": 1,\r\n  \"combatIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"wildIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 4,\r\n      \"type\": \"Ammo\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"By the Book\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"90030\",\n  \"type\": \"Asset\",\n  \"slot\": \"Hand\",\n  \"class\": \"Neutral\",\n  \"cost\": 3,\n  \"traits\": \"Item. Weapon. Firearm.\",\n  \"intellectIcons\": 1,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"wildIcons\": 1,\n  \"uses\": [\n    {\n      \"count\": 4,\n      \"type\": \"Ammo\",\n      \"token\": \"resource\"\n    }\n  ],\n  \"cycle\": \"By the Book\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -7807,7 +7807,7 @@
       },
       "Nickname": "In the Thick of It",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"08125\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Neutral\",\r\n  \"level\": 0,\r\n  \"traits\": \"Curse.\",\r\n  \"permanent\": true,\r\n  \"cycle\": \"Edge of the Earth\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"08125\",\n  \"type\": \"Asset\",\n  \"class\": \"Neutral\",\n  \"level\": 0,\n  \"traits\": \"Curse.\",\n  \"permanent\": true,\n  \"cycle\": \"Edge of the Earth\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -7869,7 +7869,7 @@
           },
           "Nickname": "In the Thick of It",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"08125\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Neutral\",\r\n  \"level\": 0,\r\n  \"traits\": \"Curse.\",\r\n  \"permanent\": true,\r\n  \"cycle\": \"Edge of the Earth\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"08125\",\n  \"type\": \"Asset\",\n  \"class\": \"Neutral\",\n  \"level\": 0,\n  \"traits\": \"Curse.\",\n  \"permanent\": true,\n  \"cycle\": \"Edge of the Earth\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -7933,7 +7933,7 @@
       },
       "Nickname": "Unexpected Courage",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"01093\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Neutral\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"wildIcons\": 2,\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01093\",\n  \"type\": \"Skill\",\n  \"class\": \"Neutral\",\n  \"level\": 0,\n  \"traits\": \"Innate.\",\n  \"wildIcons\": 2,\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -7994,7 +7994,7 @@
           },
           "Nickname": "Unexpected Courage",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"01093\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Neutral\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"wildIcons\": 2,\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01093\",\n  \"type\": \"Skill\",\n  \"class\": \"Neutral\",\n  \"level\": 0,\n  \"traits\": \"Innate.\",\n  \"wildIcons\": 2,\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -8057,7 +8057,7 @@
       },
       "Nickname": "Cover Up",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"01007\",\r\n  \"alternate_ids\": [\r\n    \"01507\"\r\n  ],\r\n  \"type\": \"Treachery\",\r\n  \"class\": \"Neutral\",\r\n  \"traits\": \"Task.\",\r\n  \"weakness\": true,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 3,\r\n      \"type\": \"Clue\",\r\n      \"token\": \"clue\"\r\n    }\r\n  ],\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01007\",\n  \"alternate_ids\": [\n    \"01507\"\n  ],\n  \"type\": \"Treachery\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Task.\",\n  \"weakness\": true,\n  \"uses\": [\n    {\n      \"count\": 3,\n      \"type\": \"Clue\",\n      \"token\": \"clue\"\n    }\n  ],\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -8118,7 +8118,7 @@
           },
           "Nickname": "Cover Up",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"01007\",\r\n  \"alternate_ids\": [\r\n    \"01507\"\r\n  ],\r\n  \"type\": \"Treachery\",\r\n  \"class\": \"Neutral\",\r\n  \"traits\": \"Task.\",\r\n  \"weakness\": true,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 3,\r\n      \"type\": \"Clue\",\r\n      \"token\": \"clue\"\r\n    }\r\n  ],\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01007\",\n  \"alternate_ids\": [\n    \"01507\"\n  ],\n  \"type\": \"Treachery\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Task.\",\n  \"weakness\": true,\n  \"uses\": [\n    {\n      \"count\": 3,\n      \"type\": \"Clue\",\n      \"token\": \"clue\"\n    }\n  ],\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -8181,7 +8181,7 @@
       },
       "Nickname": "Spectral Razor",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"06201\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Spell.\",\r\n  \"willpowerIcons\": 1,\r\n  \"combatIcons\": 1,\r\n  \"cycle\": \"The Dream-Eaters\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"06201\",\n  \"type\": \"Event\",\n  \"class\": \"Mystic\",\n  \"cost\": 2,\n  \"level\": 0,\n  \"traits\": \"Spell.\",\n  \"willpowerIcons\": 1,\n  \"combatIcons\": 1,\n  \"cycle\": \"The Dream-Eaters\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -8242,7 +8242,7 @@
           },
           "Nickname": "Spectral Razor",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"06201\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Spell.\",\r\n  \"willpowerIcons\": 1,\r\n  \"combatIcons\": 1,\r\n  \"cycle\": \"The Dream-Eaters\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"06201\",\n  \"type\": \"Event\",\n  \"class\": \"Mystic\",\n  \"cost\": 2,\n  \"level\": 0,\n  \"traits\": \"Spell.\",\n  \"willpowerIcons\": 1,\n  \"combatIcons\": 1,\n  \"cycle\": \"The Dream-Eaters\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -8305,7 +8305,7 @@
       },
       "Nickname": "Wracked by Nightmares",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"02015\",\r\n  \"type\": \"Treachery\",\r\n  \"class\": \"Neutral\",\r\n  \"traits\": \"Madness.\",\r\n  \"weakness\": true,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"02015\",\n  \"type\": \"Treachery\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Madness.\",\n  \"weakness\": true,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -8366,7 +8366,7 @@
           },
           "Nickname": "Wracked by Nightmares",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"02015\",\r\n  \"type\": \"Treachery\",\r\n  \"class\": \"Neutral\",\r\n  \"traits\": \"Madness.\",\r\n  \"weakness\": true,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"02015\",\n  \"type\": \"Treachery\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Madness.\",\n  \"weakness\": true,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -8429,7 +8429,7 @@
       },
       "Nickname": "Fearless",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"01067\",\r\n  \"alternate_ids\": [\r\n    \"01567\"\r\n  ],\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Mystic\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"willpowerIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01067\",\n  \"alternate_ids\": [\n    \"01567\"\n  ],\n  \"type\": \"Skill\",\n  \"class\": \"Mystic\",\n  \"level\": 0,\n  \"traits\": \"Innate.\",\n  \"willpowerIcons\": 1,\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -8490,7 +8490,7 @@
           },
           "Nickname": "Fearless",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"01067\",\r\n  \"alternate_ids\": [\r\n    \"01567\"\r\n  ],\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Mystic\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"willpowerIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01067\",\n  \"alternate_ids\": [\n    \"01567\"\n  ],\n  \"type\": \"Skill\",\n  \"class\": \"Mystic\",\n  \"level\": 0,\n  \"traits\": \"Innate.\",\n  \"willpowerIcons\": 1,\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -8553,7 +8553,7 @@
       },
       "Nickname": "Holy Rosary (2)",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"07220\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Accessory\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 2,\r\n  \"level\": 2,\r\n  \"traits\": \"Item. Charm. Blessed.\",\r\n  \"willpowerIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"The Innsmouth Conspiracy\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"07220\",\n  \"type\": \"Asset\",\n  \"slot\": \"Accessory\",\n  \"class\": \"Guardian\",\n  \"cost\": 2,\n  \"level\": 2,\n  \"traits\": \"Item. Charm. Blessed.\",\n  \"willpowerIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Innsmouth Conspiracy\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -8615,7 +8615,7 @@
           },
           "Nickname": "Holy Rosary (2)",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"07220\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Accessory\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 2,\r\n  \"level\": 2,\r\n  \"traits\": \"Item. Charm. Blessed.\",\r\n  \"willpowerIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"The Innsmouth Conspiracy\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"07220\",\n  \"type\": \"Asset\",\n  \"slot\": \"Accessory\",\n  \"class\": \"Guardian\",\n  \"cost\": 2,\n  \"level\": 2,\n  \"traits\": \"Item. Charm. Blessed.\",\n  \"willpowerIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Innsmouth Conspiracy\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -8679,7 +8679,7 @@
       },
       "Nickname": "Magnifying Glass",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"01030\",\r\n  \"alternate_ids\": [\r\n    \"01530\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Hand\",\r\n  \"class\": \"Seeker\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Item. Tool.\",\r\n  \"intellectIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01030\",\n  \"alternate_ids\": [\n    \"01530\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Hand\",\n  \"class\": \"Seeker\",\n  \"cost\": 1,\n  \"level\": 0,\n  \"traits\": \"Item. Tool.\",\n  \"intellectIcons\": 1,\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -8740,7 +8740,7 @@
           },
           "Nickname": "Magnifying Glass",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"01030\",\r\n  \"alternate_ids\": [\r\n    \"01530\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Hand\",\r\n  \"class\": \"Seeker\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Item. Tool.\",\r\n  \"intellectIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01030\",\n  \"alternate_ids\": [\n    \"01530\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Hand\",\n  \"class\": \"Seeker\",\n  \"cost\": 1,\n  \"level\": 0,\n  \"traits\": \"Item. Tool.\",\n  \"intellectIcons\": 1,\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -8803,7 +8803,7 @@
       },
       "Nickname": "Stand Together",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"60118\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Spirit.\",\r\n  \"willpowerIcons\": 1,\r\n  \"cycle\": \"Investigator Packs\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"60118\",\n  \"type\": \"Event\",\n  \"class\": \"Guardian\",\n  \"cost\": 0,\n  \"level\": 0,\n  \"traits\": \"Spirit.\",\n  \"willpowerIcons\": 1,\n  \"cycle\": \"Investigator Packs\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -8864,7 +8864,7 @@
           },
           "Nickname": "Stand Together",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"60118\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Spirit.\",\r\n  \"willpowerIcons\": 1,\r\n  \"cycle\": \"Investigator Packs\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"60118\",\n  \"type\": \"Event\",\n  \"class\": \"Guardian\",\n  \"cost\": 0,\n  \"level\": 0,\n  \"traits\": \"Spirit.\",\n  \"willpowerIcons\": 1,\n  \"cycle\": \"Investigator Packs\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -8927,7 +8927,7 @@
       },
       "Nickname": "Backstab",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"01051\",\r\n  \"alternate_ids\": [\r\n    \"01551\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Rogue\",\r\n  \"cost\": 3,\r\n  \"level\": 0,\r\n  \"traits\": \"Tactic.\",\r\n  \"combatIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01051\",\n  \"alternate_ids\": [\n    \"01551\"\n  ],\n  \"type\": \"Event\",\n  \"class\": \"Rogue\",\n  \"cost\": 3,\n  \"level\": 0,\n  \"traits\": \"Tactic.\",\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -8988,7 +8988,7 @@
           },
           "Nickname": "Backstab",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"01051\",\r\n  \"alternate_ids\": [\r\n    \"01551\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Rogue\",\r\n  \"cost\": 3,\r\n  \"level\": 0,\r\n  \"traits\": \"Tactic.\",\r\n  \"combatIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01051\",\n  \"alternate_ids\": [\n    \"01551\"\n  ],\n  \"type\": \"Event\",\n  \"class\": \"Rogue\",\n  \"cost\": 3,\n  \"level\": 0,\n  \"traits\": \"Tactic.\",\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -9051,7 +9051,7 @@
       },
       "Nickname": ".45 Automatic (2)",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"03190\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Hand\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 4,\r\n  \"level\": 2,\r\n  \"traits\": \"Item. Weapon. Firearm.\",\r\n  \"combatIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 4,\r\n      \"type\": \"Ammo\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"03190\",\n  \"type\": \"Asset\",\n  \"slot\": \"Hand\",\n  \"class\": \"Guardian\",\n  \"cost\": 4,\n  \"level\": 2,\n  \"traits\": \"Item. Weapon. Firearm.\",\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"uses\": [\n    {\n      \"count\": 4,\n      \"type\": \"Ammo\",\n      \"token\": \"resource\"\n    }\n  ],\n  \"cycle\": \"The Path to Carcosa\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -9113,7 +9113,7 @@
           },
           "Nickname": ".45 Automatic (2)",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"03190\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Hand\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 4,\r\n  \"level\": 2,\r\n  \"traits\": \"Item. Weapon. Firearm.\",\r\n  \"combatIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 4,\r\n      \"type\": \"Ammo\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"03190\",\n  \"type\": \"Asset\",\n  \"slot\": \"Hand\",\n  \"class\": \"Guardian\",\n  \"cost\": 4,\n  \"level\": 2,\n  \"traits\": \"Item. Weapon. Firearm.\",\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"uses\": [\n    {\n      \"count\": 4,\n      \"type\": \"Ammo\",\n      \"token\": \"resource\"\n    }\n  ],\n  \"cycle\": \"The Path to Carcosa\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -9177,7 +9177,7 @@
       },
       "Nickname": "Roland's .38 Special",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"01006\",\r\n  \"alternate_ids\": [\r\n    \"01506\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Hand\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 3,\r\n  \"traits\": \"Item. Weapon. Firearm.\",\r\n  \"combatIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"wildIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 4,\r\n      \"type\": \"Ammo\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01006\",\n  \"alternate_ids\": [\n    \"01506\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Hand\",\n  \"class\": \"Neutral\",\n  \"cost\": 3,\n  \"traits\": \"Item. Weapon. Firearm.\",\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"wildIcons\": 1,\n  \"uses\": [\n    {\n      \"count\": 4,\n      \"type\": \"Ammo\",\n      \"token\": \"resource\"\n    }\n  ],\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -9239,7 +9239,7 @@
           },
           "Nickname": "Roland's .38 Special",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"01006\",\r\n  \"alternate_ids\": [\r\n    \"01506\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Hand\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 3,\r\n  \"traits\": \"Item. Weapon. Firearm.\",\r\n  \"combatIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"wildIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 4,\r\n      \"type\": \"Ammo\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01006\",\n  \"alternate_ids\": [\n    \"01506\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Hand\",\n  \"class\": \"Neutral\",\n  \"cost\": 3,\n  \"traits\": \"Item. Weapon. Firearm.\",\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"wildIcons\": 1,\n  \"uses\": [\n    {\n      \"count\": 4,\n      \"type\": \"Ammo\",\n      \"token\": \"resource\"\n    }\n  ],\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -9303,7 +9303,7 @@
       },
       "Nickname": "Emergency Cache (3)",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"03239\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 0,\r\n  \"level\": 3,\r\n  \"traits\": \"Supply.\",\r\n  \"uses\": [\r\n    {\r\n      \"count\": 4,\r\n      \"type\": \"Supply\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"03239\",\n  \"type\": \"Event\",\n  \"class\": \"Neutral\",\n  \"cost\": 0,\n  \"level\": 3,\n  \"traits\": \"Supply.\",\n  \"uses\": [\n    {\n      \"count\": 4,\n      \"type\": \"Supply\",\n      \"token\": \"resource\"\n    }\n  ],\n  \"cycle\": \"The Path to Carcosa\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -9364,7 +9364,7 @@
           },
           "Nickname": "Emergency Cache (3)",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"03239\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 0,\r\n  \"level\": 3,\r\n  \"traits\": \"Supply.\",\r\n  \"uses\": [\r\n    {\r\n      \"count\": 4,\r\n      \"type\": \"Supply\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"03239\",\n  \"type\": \"Event\",\n  \"class\": \"Neutral\",\n  \"cost\": 0,\n  \"level\": 3,\n  \"traits\": \"Supply.\",\n  \"uses\": [\n    {\n      \"count\": 4,\n      \"type\": \"Supply\",\n      \"token\": \"resource\"\n    }\n  ],\n  \"cycle\": \"The Path to Carcosa\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -9553,7 +9553,7 @@
       },
       "Nickname": "Flashlight (3)",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"09122\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Hand\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 2,\r\n  \"level\": 3,\r\n  \"traits\": \"Item. Tool.\",\r\n  \"intellectIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 4,\r\n      \"type\": \"Supply\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"The Scarlet Keys\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"09122\",\n  \"type\": \"Asset\",\n  \"slot\": \"Hand\",\n  \"class\": \"Neutral\",\n  \"cost\": 2,\n  \"level\": 3,\n  \"traits\": \"Item. Tool.\",\n  \"intellectIcons\": 1,\n  \"agilityIcons\": 1,\n  \"uses\": [\n    {\n      \"count\": 4,\n      \"type\": \"Supply\",\n      \"token\": \"resource\"\n    }\n  ],\n  \"cycle\": \"The Scarlet Keys\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -9615,7 +9615,7 @@
           },
           "Nickname": "Flashlight (3)",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"09122\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Hand\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 2,\r\n  \"level\": 3,\r\n  \"traits\": \"Item. Tool.\",\r\n  \"intellectIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 4,\r\n      \"type\": \"Supply\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"The Scarlet Keys\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"09122\",\n  \"type\": \"Asset\",\n  \"slot\": \"Hand\",\n  \"class\": \"Neutral\",\n  \"cost\": 2,\n  \"level\": 3,\n  \"traits\": \"Item. Tool.\",\n  \"intellectIcons\": 1,\n  \"agilityIcons\": 1,\n  \"uses\": [\n    {\n      \"count\": 4,\n      \"type\": \"Supply\",\n      \"token\": \"resource\"\n    }\n  ],\n  \"cycle\": \"The Scarlet Keys\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -9679,7 +9679,7 @@
       },
       "Nickname": "Guts (2)",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"60424\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Mystic\",\r\n  \"level\": 2,\r\n  \"traits\": \"Innate. Developed.\",\r\n  \"willpowerIcons\": 3,\r\n  \"cycle\": \"Investigator Packs\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"60424\",\n  \"type\": \"Skill\",\n  \"class\": \"Mystic\",\n  \"level\": 2,\n  \"traits\": \"Innate. Developed.\",\n  \"willpowerIcons\": 3,\n  \"cycle\": \"Investigator Packs\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -9740,7 +9740,7 @@
           },
           "Nickname": "Guts (2)",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"60424\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Mystic\",\r\n  \"level\": 2,\r\n  \"traits\": \"Innate. Developed.\",\r\n  \"willpowerIcons\": 3,\r\n  \"cycle\": \"Investigator Packs\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"60424\",\n  \"type\": \"Skill\",\n  \"class\": \"Mystic\",\n  \"level\": 2,\n  \"traits\": \"Innate. Developed.\",\n  \"willpowerIcons\": 3,\n  \"cycle\": \"Investigator Packs\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -9803,7 +9803,7 @@
       },
       "Nickname": "Perception (2)",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"60228\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Seeker\",\r\n  \"level\": 2,\r\n  \"traits\": \"Practiced. Expert.\",\r\n  \"intellectIcons\": 3,\r\n  \"cycle\": \"Investigator Packs\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"60228\",\n  \"type\": \"Skill\",\n  \"class\": \"Seeker\",\n  \"level\": 2,\n  \"traits\": \"Practiced. Expert.\",\n  \"intellectIcons\": 3,\n  \"cycle\": \"Investigator Packs\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -9864,7 +9864,7 @@
           },
           "Nickname": "Perception (2)",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"60228\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Seeker\",\r\n  \"level\": 2,\r\n  \"traits\": \"Practiced. Expert.\",\r\n  \"intellectIcons\": 3,\r\n  \"cycle\": \"Investigator Packs\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"60228\",\n  \"type\": \"Skill\",\n  \"class\": \"Seeker\",\n  \"level\": 2,\n  \"traits\": \"Practiced. Expert.\",\n  \"intellectIcons\": 3,\n  \"cycle\": \"Investigator Packs\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -9927,7 +9927,7 @@
       },
       "Nickname": "Read the Signs (2)",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"10101\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 2,\r\n  \"level\": 2,\r\n  \"traits\": \"Spell.\",\r\n  \"willpowerIcons\": 1,\r\n  \"intellectIcons\": 1,\r\n  \"wildIcons\": 1,\r\n  \"cycle\": \"The Feast of Hemlock Vale\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"10101\",\n  \"type\": \"Event\",\n  \"class\": \"Mystic\",\n  \"cost\": 2,\n  \"level\": 2,\n  \"traits\": \"Spell.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Feast of Hemlock Vale\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -9988,7 +9988,7 @@
           },
           "Nickname": "Read the Signs (2)",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"10101\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 2,\r\n  \"level\": 2,\r\n  \"traits\": \"Spell.\",\r\n  \"willpowerIcons\": 1,\r\n  \"intellectIcons\": 1,\r\n  \"wildIcons\": 1,\r\n  \"cycle\": \"The Feast of Hemlock Vale\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"10101\",\n  \"type\": \"Event\",\n  \"class\": \"Mystic\",\n  \"cost\": 2,\n  \"level\": 2,\n  \"traits\": \"Spell.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"wildIcons\": 1,\n  \"cycle\": \"The Feast of Hemlock Vale\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -10051,7 +10051,7 @@
       },
       "Nickname": "Lucky!",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"01080\",\r\n  \"alternate_ids\": [\r\n    \"01580\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Fortune.\",\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01080\",\n  \"alternate_ids\": [\n    \"01580\"\n  ],\n  \"type\": \"Event\",\n  \"class\": \"Survivor\",\n  \"cost\": 1,\n  \"level\": 0,\n  \"traits\": \"Fortune.\",\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -10112,7 +10112,7 @@
           },
           "Nickname": "Lucky!",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"01080\",\r\n  \"alternate_ids\": [\r\n    \"01580\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Fortune.\",\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01080\",\n  \"alternate_ids\": [\n    \"01580\"\n  ],\n  \"type\": \"Event\",\n  \"class\": \"Survivor\",\n  \"cost\": 1,\n  \"level\": 0,\n  \"traits\": \"Fortune.\",\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -10175,7 +10175,7 @@
       },
       "Nickname": "Cover Up",
       "Description": "Advanced",
-      "GMNotes": "{\r\n  \"id\": \"90031\",\r\n  \"type\": \"Treachery\",\r\n  \"class\": \"Neutral\",\r\n  \"traits\": \"Task.\",\r\n  \"weakness\": true,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 4,\r\n      \"type\": \"Clue\",\r\n      \"token\": \"clue\"\r\n    }\r\n  ],\r\n  \"cycle\": \"By the Book\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"90031\",\n  \"type\": \"Treachery\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Task.\",\n  \"weakness\": true,\n  \"uses\": [\n    {\n      \"count\": 4,\n      \"type\": \"Clue\",\n      \"token\": \"clue\"\n    }\n  ],\n  \"cycle\": \"By the Book\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -10236,7 +10236,7 @@
           },
           "Nickname": "Cover Up",
           "Description": "Advanced",
-          "GMNotes": "{\r\n  \"id\": \"90031\",\r\n  \"type\": \"Treachery\",\r\n  \"class\": \"Neutral\",\r\n  \"traits\": \"Task.\",\r\n  \"weakness\": true,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 4,\r\n      \"type\": \"Clue\",\r\n      \"token\": \"clue\"\r\n    }\r\n  ],\r\n  \"cycle\": \"By the Book\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"90031\",\n  \"type\": \"Treachery\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Task.\",\n  \"weakness\": true,\n  \"uses\": [\n    {\n      \"count\": 4,\n      \"type\": \"Clue\",\n      \"token\": \"clue\"\n    }\n  ],\n  \"cycle\": \"By the Book\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -10299,7 +10299,7 @@
       },
       "Nickname": "Guard Dog",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"01521\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Ally\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 3,\r\n  \"level\": 0,\r\n  \"traits\": \"Ally. Creature.\",\r\n  \"combatIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01521\",\n  \"type\": \"Asset\",\n  \"slot\": \"Ally\",\n  \"class\": \"Guardian\",\n  \"cost\": 3,\n  \"level\": 0,\n  \"traits\": \"Ally. Creature.\",\n  \"combatIcons\": 1,\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -10361,7 +10361,7 @@
           },
           "Nickname": "Guard Dog",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"01521\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Ally\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 3,\r\n  \"level\": 0,\r\n  \"traits\": \"Ally. Creature.\",\r\n  \"combatIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01521\",\n  \"type\": \"Asset\",\n  \"slot\": \"Ally\",\n  \"class\": \"Guardian\",\n  \"cost\": 3,\n  \"level\": 0,\n  \"traits\": \"Ally. Creature.\",\n  \"combatIcons\": 1,\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -10425,7 +10425,7 @@
       },
       "Nickname": "Scavenging (2)",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"06332\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 1,\r\n  \"level\": 2,\r\n  \"traits\": \"Talent.\",\r\n  \"intellectIcons\": 2,\r\n  \"cycle\": \"The Dream-Eaters\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"06332\",\n  \"type\": \"Asset\",\n  \"class\": \"Survivor\",\n  \"cost\": 1,\n  \"level\": 2,\n  \"traits\": \"Talent.\",\n  \"intellectIcons\": 2,\n  \"cycle\": \"The Dream-Eaters\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -10487,7 +10487,7 @@
           },
           "Nickname": "Scavenging (2)",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"06332\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 1,\r\n  \"level\": 2,\r\n  \"traits\": \"Talent.\",\r\n  \"intellectIcons\": 2,\r\n  \"cycle\": \"The Dream-Eaters\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"06332\",\n  \"type\": \"Asset\",\n  \"class\": \"Survivor\",\n  \"cost\": 1,\n  \"level\": 2,\n  \"traits\": \"Talent.\",\n  \"intellectIcons\": 2,\n  \"cycle\": \"The Dream-Eaters\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -10551,7 +10551,7 @@
       },
       "Nickname": "Holy Rosary",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"01059\",\r\n  \"alternate_ids\": [\r\n    \"01559\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Accessory\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Item. Charm.\",\r\n  \"willpowerIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01059\",\n  \"alternate_ids\": [\n    \"01559\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Accessory\",\n  \"class\": \"Mystic\",\n  \"cost\": 2,\n  \"level\": 0,\n  \"traits\": \"Item. Charm.\",\n  \"willpowerIcons\": 1,\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -10613,7 +10613,7 @@
           },
           "Nickname": "Holy Rosary",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"01059\",\r\n  \"alternate_ids\": [\r\n    \"01559\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Accessory\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Item. Charm.\",\r\n  \"willpowerIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01059\",\n  \"alternate_ids\": [\n    \"01559\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Accessory\",\n  \"class\": \"Mystic\",\n  \"cost\": 2,\n  \"level\": 0,\n  \"traits\": \"Item. Charm.\",\n  \"willpowerIcons\": 1,\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -10677,7 +10677,7 @@
       },
       "Nickname": "Guard Dog (2)",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"09034\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Ally\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 3,\r\n  \"level\": 2,\r\n  \"traits\": \"Ally. Creature.\",\r\n  \"willpowerIcons\": 1,\r\n  \"combatIcons\": 1,\r\n  \"cycle\": \"The Scarlet Keys\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"09034\",\n  \"type\": \"Asset\",\n  \"slot\": \"Ally\",\n  \"class\": \"Guardian\",\n  \"cost\": 3,\n  \"level\": 2,\n  \"traits\": \"Ally. Creature.\",\n  \"willpowerIcons\": 1,\n  \"combatIcons\": 1,\n  \"cycle\": \"The Scarlet Keys\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -10739,7 +10739,7 @@
           },
           "Nickname": "Guard Dog (2)",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"09034\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Ally\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 3,\r\n  \"level\": 2,\r\n  \"traits\": \"Ally. Creature.\",\r\n  \"willpowerIcons\": 1,\r\n  \"combatIcons\": 1,\r\n  \"cycle\": \"The Scarlet Keys\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"09034\",\n  \"type\": \"Asset\",\n  \"slot\": \"Ally\",\n  \"class\": \"Guardian\",\n  \"cost\": 3,\n  \"level\": 2,\n  \"traits\": \"Ally. Creature.\",\n  \"willpowerIcons\": 1,\n  \"combatIcons\": 1,\n  \"cycle\": \"The Scarlet Keys\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -10803,7 +10803,7 @@
       },
       "Nickname": "Arcane Initiate (3)",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"03271\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Ally\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 0,\r\n  \"level\": 3,\r\n  \"traits\": \"Ally. Sorcerer.\",\r\n  \"willpowerIcons\": 1,\r\n  \"combatIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 1,\r\n      \"type\": \"Doom\",\r\n      \"token\": \"doom\"\r\n    },\r\n    {\r\n      \"count\": 2,\r\n      \"type\": \"Horror\",\r\n      \"token\": \"horror\"\r\n    }\r\n  ],\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}",
+      "GMNotes": "{\n  \"id\": \"03271\",\n  \"type\": \"Asset\",\n  \"slot\": \"Ally\",\n  \"class\": \"Mystic\",\n  \"cost\": 0,\n  \"level\": 3,\n  \"traits\": \"Ally. Sorcerer.\",\n  \"willpowerIcons\": 1,\n  \"combatIcons\": 1,\n  \"uses\": [\n    {\n      \"count\": 1,\n      \"type\": \"Doom\",\n      \"token\": \"doom\"\n    },\n    {\n      \"count\": 2,\n      \"type\": \"Horror\",\n      \"token\": \"horror\"\n    }\n  ],\n  \"cycle\": \"The Path to Carcosa\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -10865,7 +10865,7 @@
           },
           "Nickname": "Arcane Initiate (3)",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"03271\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Ally\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 0,\r\n  \"level\": 3,\r\n  \"traits\": \"Ally. Sorcerer.\",\r\n  \"willpowerIcons\": 1,\r\n  \"combatIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 1,\r\n      \"type\": \"Doom\",\r\n      \"token\": \"doom\"\r\n    },\r\n    {\r\n      \"count\": 2,\r\n      \"type\": \"Horror\",\r\n      \"token\": \"horror\"\r\n    }\r\n  ],\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}",
+          "GMNotes": "{\n  \"id\": \"03271\",\n  \"type\": \"Asset\",\n  \"slot\": \"Ally\",\n  \"class\": \"Mystic\",\n  \"cost\": 0,\n  \"level\": 3,\n  \"traits\": \"Ally. Sorcerer.\",\n  \"willpowerIcons\": 1,\n  \"combatIcons\": 1,\n  \"uses\": [\n    {\n      \"count\": 1,\n      \"type\": \"Doom\",\n      \"token\": \"doom\"\n    },\n    {\n      \"count\": 2,\n      \"type\": \"Horror\",\n      \"token\": \"horror\"\n    }\n  ],\n  \"cycle\": \"The Path to Carcosa\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -10929,7 +10929,7 @@
       },
       "Nickname": "Fieldwork",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"03024\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Seeker\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Talent.\",\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"03024\",\n  \"type\": \"Asset\",\n  \"class\": \"Seeker\",\n  \"cost\": 2,\n  \"level\": 0,\n  \"traits\": \"Talent.\",\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Path to Carcosa\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -10991,7 +10991,7 @@
           },
           "Nickname": "Fieldwork",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"03024\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Seeker\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Talent.\",\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"03024\",\n  \"type\": \"Asset\",\n  \"class\": \"Seeker\",\n  \"cost\": 2,\n  \"level\": 0,\n  \"traits\": \"Talent.\",\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Path to Carcosa\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -11055,7 +11055,7 @@
       },
       "Nickname": "Prepared for the Worst (2)",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"09036\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 0,\r\n  \"level\": 2,\r\n  \"traits\": \"Tactic.\",\r\n  \"intellectIcons\": 1,\r\n  \"combatIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"The Scarlet Keys\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"09036\",\n  \"type\": \"Event\",\n  \"class\": \"Guardian\",\n  \"cost\": 0,\n  \"level\": 2,\n  \"traits\": \"Tactic.\",\n  \"intellectIcons\": 1,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Scarlet Keys\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -11116,7 +11116,7 @@
           },
           "Nickname": "Prepared for the Worst (2)",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"09036\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 0,\r\n  \"level\": 2,\r\n  \"traits\": \"Tactic.\",\r\n  \"intellectIcons\": 1,\r\n  \"combatIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"The Scarlet Keys\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"09036\",\n  \"type\": \"Event\",\n  \"class\": \"Guardian\",\n  \"cost\": 0,\n  \"level\": 2,\n  \"traits\": \"Tactic.\",\n  \"intellectIcons\": 1,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Scarlet Keys\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -11179,7 +11179,7 @@
       },
       "Nickname": "Uncage the Soul",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"03033\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Spirit.\",\r\n  \"willpowerIcons\": 2,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"03033\",\n  \"type\": \"Event\",\n  \"class\": \"Mystic\",\n  \"cost\": 0,\n  \"level\": 0,\n  \"traits\": \"Spirit.\",\n  \"willpowerIcons\": 2,\n  \"cycle\": \"The Path to Carcosa\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -11240,7 +11240,7 @@
           },
           "Nickname": "Uncage the Soul",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"03033\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Spirit.\",\r\n  \"willpowerIcons\": 2,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"03033\",\n  \"type\": \"Event\",\n  \"class\": \"Mystic\",\n  \"cost\": 0,\n  \"level\": 0,\n  \"traits\": \"Spirit.\",\n  \"willpowerIcons\": 2,\n  \"cycle\": \"The Path to Carcosa\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -11303,7 +11303,7 @@
       },
       "Nickname": "Fearless (2)",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"02268\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Mystic\",\r\n  \"level\": 2,\r\n  \"traits\": \"Innate. Developed.\",\r\n  \"willpowerIcons\": 2,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"02268\",\n  \"type\": \"Skill\",\n  \"class\": \"Mystic\",\n  \"level\": 2,\n  \"traits\": \"Innate. Developed.\",\n  \"willpowerIcons\": 2,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -11364,7 +11364,7 @@
           },
           "Nickname": "Fearless (2)",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"02268\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Mystic\",\r\n  \"level\": 2,\r\n  \"traits\": \"Innate. Developed.\",\r\n  \"willpowerIcons\": 2,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"02268\",\n  \"type\": \"Skill\",\n  \"class\": \"Mystic\",\n  \"level\": 2,\n  \"traits\": \"Innate. Developed.\",\n  \"willpowerIcons\": 2,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -11427,7 +11427,7 @@
       },
       "Nickname": "Cyclopean Hammer (5)",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"08093\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Hand x2\",\r\n  \"class\": \"Guardian|Mystic\",\r\n  \"cost\": 5,\r\n  \"level\": 5,\r\n  \"traits\": \"Item. Relic. Weapon. Melee.\",\r\n  \"willpowerIcons\": 2,\r\n  \"combatIcons\": 2,\r\n  \"cycle\": \"Edge of the Earth\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"08093\",\n  \"type\": \"Asset\",\n  \"slot\": \"Hand x2\",\n  \"class\": \"Guardian|Mystic\",\n  \"cost\": 5,\n  \"level\": 5,\n  \"traits\": \"Item. Relic. Weapon. Melee.\",\n  \"willpowerIcons\": 2,\n  \"combatIcons\": 2,\n  \"cycle\": \"Edge of the Earth\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -11489,7 +11489,7 @@
           },
           "Nickname": "Cyclopean Hammer (5)",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"08093\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Hand x2\",\r\n  \"class\": \"Guardian|Mystic\",\r\n  \"cost\": 5,\r\n  \"level\": 5,\r\n  \"traits\": \"Item. Relic. Weapon. Melee.\",\r\n  \"willpowerIcons\": 2,\r\n  \"combatIcons\": 2,\r\n  \"cycle\": \"Edge of the Earth\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"08093\",\n  \"type\": \"Asset\",\n  \"slot\": \"Hand x2\",\n  \"class\": \"Guardian|Mystic\",\n  \"cost\": 5,\n  \"level\": 5,\n  \"traits\": \"Item. Relic. Weapon. Melee.\",\n  \"willpowerIcons\": 2,\n  \"combatIcons\": 2,\n  \"cycle\": \"Edge of the Earth\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -11553,7 +11553,7 @@
       },
       "Nickname": "Scavenging",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"01573\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Talent.\",\r\n  \"intellectIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01573\",\n  \"type\": \"Asset\",\n  \"class\": \"Survivor\",\n  \"cost\": 1,\n  \"level\": 0,\n  \"traits\": \"Talent.\",\n  \"intellectIcons\": 1,\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -11615,7 +11615,7 @@
           },
           "Nickname": "Scavenging",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"01573\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Talent.\",\r\n  \"intellectIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01573\",\n  \"type\": \"Asset\",\n  \"class\": \"Survivor\",\n  \"cost\": 1,\n  \"level\": 0,\n  \"traits\": \"Talent.\",\n  \"intellectIcons\": 1,\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -11679,7 +11679,7 @@
       },
       "Nickname": "Crack the Case",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"05110\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Seeker\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Insight.\",\r\n  \"intellectIcons\": 1,\r\n  \"cycle\": \"The Circle Undone\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"05110\",\n  \"type\": \"Event\",\n  \"class\": \"Seeker\",\n  \"cost\": 0,\n  \"level\": 0,\n  \"traits\": \"Insight.\",\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Circle Undone\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -11740,7 +11740,7 @@
           },
           "Nickname": "Crack the Case",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"05110\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Seeker\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Insight.\",\r\n  \"intellectIcons\": 1,\r\n  \"cycle\": \"The Circle Undone\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"05110\",\n  \"type\": \"Event\",\n  \"class\": \"Seeker\",\n  \"cost\": 0,\n  \"level\": 0,\n  \"traits\": \"Insight.\",\n  \"intellectIcons\": 1,\n  \"cycle\": \"The Circle Undone\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -11803,7 +11803,7 @@
       },
       "Nickname": "Knife",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"01086\",\r\n  \"alternate_ids\": [\r\n    \"01586\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Hand\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Item. Weapon. Melee.\",\r\n  \"combatIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01086\",\n  \"alternate_ids\": [\n    \"01586\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Hand\",\n  \"class\": \"Neutral\",\n  \"cost\": 1,\n  \"level\": 0,\n  \"traits\": \"Item. Weapon. Melee.\",\n  \"combatIcons\": 1,\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -11865,7 +11865,7 @@
           },
           "Nickname": "Knife",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"01086\",\r\n  \"alternate_ids\": [\r\n    \"01586\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Hand\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Item. Weapon. Melee.\",\r\n  \"combatIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01086\",\n  \"alternate_ids\": [\n    \"01586\"\n  ],\n  \"type\": \"Asset\",\n  \"slot\": \"Hand\",\n  \"class\": \"Neutral\",\n  \"cost\": 1,\n  \"level\": 0,\n  \"traits\": \"Item. Weapon. Melee.\",\n  \"combatIcons\": 1,\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -11929,7 +11929,7 @@
       },
       "Nickname": "Shortcut",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"02022\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Seeker\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Insight. Tactic.\",\r\n  \"willpowerIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"02022\",\n  \"type\": \"Event\",\n  \"class\": \"Seeker\",\n  \"cost\": 0,\n  \"level\": 0,\n  \"traits\": \"Insight. Tactic.\",\n  \"willpowerIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -11990,7 +11990,7 @@
           },
           "Nickname": "Shortcut",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"02022\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Seeker\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Insight. Tactic.\",\r\n  \"willpowerIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"02022\",\n  \"type\": \"Event\",\n  \"class\": \"Seeker\",\n  \"cost\": 0,\n  \"level\": 0,\n  \"traits\": \"Insight. Tactic.\",\n  \"willpowerIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Dunwich Legacy\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -12053,7 +12053,7 @@
       },
       "Nickname": "\"Watch this!\"",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"03233\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Rogue\",\r\n  \"level\": 0,\r\n  \"traits\": \"Gambit.\",\r\n  \"willpowerIcons\": 1,\r\n  \"combatIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"03233\",\n  \"type\": \"Skill\",\n  \"class\": \"Rogue\",\n  \"level\": 0,\n  \"traits\": \"Gambit.\",\n  \"willpowerIcons\": 1,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Path to Carcosa\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -12114,7 +12114,7 @@
           },
           "Nickname": "\"Watch this!\"",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"03233\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Rogue\",\r\n  \"level\": 0,\r\n  \"traits\": \"Gambit.\",\r\n  \"willpowerIcons\": 1,\r\n  \"combatIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"03233\",\n  \"type\": \"Skill\",\n  \"class\": \"Rogue\",\n  \"level\": 0,\n  \"traits\": \"Gambit.\",\n  \"willpowerIcons\": 1,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Path to Carcosa\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -12177,7 +12177,7 @@
       },
       "Nickname": "Daisy's Tote Bag",
       "Description": "Advanced",
-      "GMNotes": "{\r\n  \"id\": \"90002\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 2,\r\n  \"traits\": \"Item.\",\r\n  \"willpowerIcons\": 1,\r\n  \"intellectIcons\": 1,\r\n  \"wildIcons\": 2,\r\n  \"cycle\": \"Read or Die\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"90002\",\n  \"type\": \"Asset\",\n  \"class\": \"Neutral\",\n  \"cost\": 2,\n  \"traits\": \"Item.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"wildIcons\": 2,\n  \"cycle\": \"Read or Die\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -12238,7 +12238,7 @@
           },
           "Nickname": "Daisy's Tote Bag",
           "Description": "Advanced",
-          "GMNotes": "{\r\n  \"id\": \"90002\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 2,\r\n  \"traits\": \"Item.\",\r\n  \"willpowerIcons\": 1,\r\n  \"intellectIcons\": 1,\r\n  \"wildIcons\": 2,\r\n  \"cycle\": \"Read or Die\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"90002\",\n  \"type\": \"Asset\",\n  \"class\": \"Neutral\",\n  \"cost\": 2,\n  \"traits\": \"Item.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 1,\n  \"wildIcons\": 2,\n  \"cycle\": \"Read or Die\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -12301,7 +12301,7 @@
       },
       "Nickname": "Leather Coat (1)",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"60521\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Body\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 0,\r\n  \"level\": 1,\r\n  \"traits\": \"Item. Armor.\",\r\n  \"combatIcons\": 1,\r\n  \"cycle\": \"Investigator Packs\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"60521\",\n  \"type\": \"Asset\",\n  \"slot\": \"Body\",\n  \"class\": \"Survivor\",\n  \"cost\": 0,\n  \"level\": 1,\n  \"traits\": \"Item. Armor.\",\n  \"combatIcons\": 1,\n  \"cycle\": \"Investigator Packs\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -12363,7 +12363,7 @@
           },
           "Nickname": "Leather Coat (1)",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"60521\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Body\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 0,\r\n  \"level\": 1,\r\n  \"traits\": \"Item. Armor.\",\r\n  \"combatIcons\": 1,\r\n  \"cycle\": \"Investigator Packs\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"60521\",\n  \"type\": \"Asset\",\n  \"slot\": \"Body\",\n  \"class\": \"Survivor\",\n  \"cost\": 0,\n  \"level\": 1,\n  \"traits\": \"Item. Armor.\",\n  \"combatIcons\": 1,\n  \"cycle\": \"Investigator Packs\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,
@@ -12427,7 +12427,7 @@
       },
       "Nickname": "Elusive",
       "Description": "",
-      "GMNotes": "{\r\n  \"id\": \"01050\",\r\n  \"alternate_ids\": [\r\n    \"01550\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Rogue\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Tactic.\",\r\n  \"intellectIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+      "GMNotes": "{\n  \"id\": \"01050\",\n  \"alternate_ids\": [\n    \"01550\"\n  ],\n  \"type\": \"Event\",\n  \"class\": \"Rogue\",\n  \"cost\": 2,\n  \"level\": 0,\n  \"traits\": \"Tactic.\",\n  \"intellectIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"Core\"\n}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -12488,7 +12488,7 @@
           },
           "Nickname": "Elusive",
           "Description": "",
-          "GMNotes": "{\r\n  \"id\": \"01050\",\r\n  \"alternate_ids\": [\r\n    \"01550\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Rogue\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Tactic.\",\r\n  \"intellectIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
+          "GMNotes": "{\n  \"id\": \"01050\",\n  \"alternate_ids\": [\n    \"01550\"\n  ],\n  \"type\": \"Event\",\n  \"class\": \"Rogue\",\n  \"cost\": 2,\n  \"level\": 0,\n  \"traits\": \"Tactic.\",\n  \"intellectIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"Core\"\n}",
           "AltLookAngle": {
             "x": 0.0,
             "y": 0.0,

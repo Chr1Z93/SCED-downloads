@@ -37,20 +37,20 @@ def build_saved_object(input_file):
         "go",
         "run",
         "main.go",
-        "--moddir=C:/git/SCED",
-        "--bonusdir=C:/git/SCED-downloads",
+        "--moddir=C:\\git\\SCED",
+        "--bonusdir=C:\\git\\SCED-downloads",
         f"--objin={input_file}",
         f"--objout={output_file}",
         "--savedobj",
     ]
 
     # Execute from the correct directory
-    subprocess.run(cmd, cwd="C:/git/TTSModManager")
+    subprocess.run(cmd, cwd="C:\\git\\TTSModManager")
 
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        print("Usage: python build.py <input_file>", file=sys.stderr)
+        print("Usage: python build_saved_object.py <input_file>", file=sys.stderr)
         sys.exit(1)
 
     build_saved_object(sys.argv[1])

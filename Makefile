@@ -22,3 +22,7 @@ init:
 # Build the project
 build:
 	python build.py
+
+# Minify the output
+minify:
+	python minify.py
