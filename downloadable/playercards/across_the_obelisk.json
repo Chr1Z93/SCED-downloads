@@ -65,9 +65,269 @@
     "Order": 0
   },
   "LuaScript": "-- Utility memory bag by Directsun\n-- Version 2.5.2\n-- Fork of Memory Bag 2.0 by MrStump\n\nfunction updateSave()\n    local data_to_save = {[\"ml\"]=memoryList}\n    saved_data = JSON.encode(data_to_save)\n    self.script_state = saved_data\nend\n\nfunction combineMemoryFromBagsWithin()\n  local bagObjList = self.getObjects()\n  for _, bagObj in ipairs(bagObjList) do\n    local data = bagObj.lua_script_state\n      if data ~= nil then\n        local j = JSON.decode(data)\n        if j ~= nil and j.ml ~= nil then\n          for guid, entry in pairs(j.ml) do\n            memoryList[guid] = entry\n          end\n        end\n      end\n    end\nend\n\nfunction updateMemoryWithMoves()\n    memoryList = memoryListBackup\n    --get the first transposed object's coordinates\n    local obj = getObjectFromGUID(moveGuid)\n\n    -- p1 is where needs to go, p2 is where it was\n    local refObjPos = memoryList[moveGuid].pos\n    local deltaPos = findOffsetDistance(obj.getPosition(), refObjPos, nil)\n    local movedRotation = obj.getRotation()\n    for guid, entry in pairs(memoryList) do\n        memoryList[guid].pos.x = entry.pos.x - deltaPos.x\n        memoryList[guid].pos.y = entry.pos.y - deltaPos.y\n        memoryList[guid].pos.z = entry.pos.z - deltaPos.z\n        -- memoryList[guid].rot.x = movedRotation.x\n        -- memoryList[guid].rot.y = movedRotation.y\n        -- memoryList[guid].rot.z = movedRotation.z\n    end\n\n    --theList[obj.getGUID()] = {\n    --    pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\n    --    rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\n    --    lock=obj.getLock()\n    --}\n    moveList = {}\nend\n\nfunction onload(saved_data)\n    fresh = true\n    if saved_data ~= \"\" then\n        local loaded_data = JSON.decode(saved_data)\n        --Set up information off of loaded_data\n        memoryList = loaded_data.ml\n    else\n        --Set up information for if there is no saved saved data\n        memoryList = {}\n    end\n\n    moveList = {}\n    moveGuid = nil\n\n    if next(memoryList) == nil then\n        createSetupButton()\n    else\n        fresh = false\n        createMemoryActionButtons()\n    end\nend\n\n\n--Beginning Setup\n\n\n--Make setup button\nfunction createSetupButton()\n    self.createButton({\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\n        position={0,0.1,-2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\nend\n\n--Triggered by Transpose button\nfunction buttonClick_transpose()\n    moveGuid = nil\n    broadcastToAll(\"Select one object and move it- all objects will move relative to the new location\", {0.75, 0.75, 1})\n    memoryListBackup = duplicateTable(memoryList)\n    memoryList = {}\n    moveList = {}\n    self.clearButtons()\n    createButtonsOnAllObjects(true)\n    createSetupActionButtons(true)\nend\n\n--Triggered by setup button,\nfunction buttonClick_setup()\n    memoryListBackup = duplicateTable(memoryList)\n    memoryList = {}\n    self.clearButtons()\n    createButtonsOnAllObjects(false)\n    createSetupActionButtons(false)\nend\n\nfunction getAllObjectsInMemory()\n  local objTable = {}\n  local curObj = {}\n\n  for guid in pairs(memoryListBackup) do\n    curObj = getObjectFromGUID(guid)\n    table.insert(objTable, curObj)\n  end\n\n  return objTable\n  -- return getAllObjects()\nend\n\n--Creates selection buttons on objects\nfunction createButtonsOnAllObjects(move)\n    local howManyButtons = 0\n\n    local objsToHaveButtons = {}\n    if move == true then\n      objsToHaveButtons = getAllObjectsInMemory()\n    else\n      objsToHaveButtons = getAllObjects()\n    end\n\n    for _, obj in ipairs(objsToHaveButtons) do\n        if obj ~= self then\n            local dummyIndex = howManyButtons\n            --On a normal bag, the button positions aren't the same size as the bag.\n            globalScaleFactor = 1 * 1/self.getScale().x\n            --Super sweet math to set button positions\n            local selfPos = self.getPosition()\n            local objPos = obj.getPosition()\n            local deltaPos = findOffsetDistance(selfPos, objPos, obj)\n            local objPos = rotateLocalCoordinates(deltaPos, self)\n            objPos.x = -objPos.x * globalScaleFactor\n            objPos.y = objPos.y * globalScaleFactor + 2\n            objPos.z = objPos.z * globalScaleFactor * 0.9\n            --Offset rotation of bag\n            local rot = self.getRotation()\n            rot.y = -rot.y + 180\n            --Create function\n            local funcName = \"selectButton_\" .. howManyButtons\n            local func = function() buttonClick_selection(dummyIndex, obj, move) end\n            local color = {0.75,0.25,0.25,0.6}\n            local colorMove = {0,0,1,0.6}\n            if move == true then\n              color = colorMove\n            end\n            self.setVar(funcName, func)\n            self.createButton({\n                click_function=funcName, function_owner=self,\n                position=objPos, rotation=rot, height=500, width=500,\n                color=color,\n            })\n            howManyButtons = howManyButtons + 1\n        end\n    end\nend\n\n--Creates submit and cancel buttons\nfunction createSetupActionButtons(move)\n    self.createButton({\n        label=\"Cancel\", click_function=\"buttonClick_cancel\", function_owner=self,\n      position={-0.6,0.1,-2.1}, rotation={0,0,0}, height=220, width=550,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n\n    self.createButton({\n        label=\"Submit\", click_function=\"buttonClick_submit\", function_owner=self,\n        position={-0.6,0.3,-2.5}, rotation={0,0,0}, height=220, width=550,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n\n    if move == false then\n      self.createButton({\n          label=\"Add\", click_function=\"buttonClick_add\", function_owner=self,\n          position={0.6,0.3,-2.1}, rotation={0,0,0}, height=220, width=550,\n          font_size=130, color={0,0,0}, font_color={0.25,1,0.25}\n      })\n\n        if fresh == false then\n            self.createButton({\n                label=\"Set New\", click_function=\"buttonClick_setNew\", function_owner=self,\n                position={0.6,0.3,-2.9}, rotation={0,0,0}, height=220, width=550,\n                font_size=130, color={0,0,0}, font_color={0.75,0.75,1}\n            })\n            self.createButton({\n                label=\"Remove\", click_function=\"buttonClick_remove\", function_owner=self,\n                position={0.6,0.3,-2.5}, rotation={0,0,0}, height=220, width=550,\n                font_size=130, color={0,0,0}, font_color={1,0.25,0.25}\n            })\n        end\n    end\n\n    self.createButton({\n        label=\"Reset\", click_function=\"buttonClick_reset\", function_owner=self,\n        position={-0.6,0.3,-2.9}, rotation={0,0,0}, height=220, width=550,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\nend\n\n\n--During Setup\n\n\n--Checks or unchecks buttons\nfunction buttonClick_selection(index, obj, move)\n    local colorMove = {0,0,1,0.6}\n    local color = {0,1,0,0.6}\n\n    previousGuid = selectedGuid\n    selectedGuid = obj.getGUID()\n\n    theList = memoryList\n    if move == true then\n       theList = moveList\n       if previousGuid ~= nil and previousGuid ~= selectedGuid then\n         local prevObj = getObjectFromGUID(previousGuid)\n         prevObj.highlightOff()\n         self.editButton({index=previousIndex, color=colorMove})\n         theList[previousGuid] = nil\n       end\n       previousIndex = index\n    end\n\n    if theList[selectedGuid] == nil then\n        self.editButton({index=index, color=color})\n        --Adding pos/rot to memory table\n        local pos, rot = obj.getPosition(), obj.getRotation()\n        --I need to add it like this or it won't save due to indexing issue\n        theList[obj.getGUID()] = {\n            pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\n            rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\n            lock=obj.getLock()\n        }\n        obj.highlightOn({0,1,0})\n    else\n      color = {0.75,0.25,0.25,0.6}\n      if move == true then\n        color = colorMove\n      end\n        self.editButton({index=index, color=color})\n        theList[obj.getGUID()] = nil\n        obj.highlightOff()\n    end\nend\n\n--Cancels selection process\nfunction buttonClick_cancel()\n    memoryList = memoryListBackup\n    moveList = {}\n    self.clearButtons()\n    if next(memoryList) == nil then\n        createSetupButton()\n    else\n        createMemoryActionButtons()\n    end\n    removeAllHighlights()\n    broadcastToAll(\"Selection Canceled\", {1,1,1})\n    moveGuid = nil\nend\n\n--Saves selections\nfunction buttonClick_submit()\n    fresh = false\n    if next(moveList) ~= nil then\n        for guid in pairs(moveList) do\n            moveGuid = guid\n        end\n        if memoryListBackup[moveGuid] == nil then\n            broadcastToAll(\"Item selected for moving is not already in memory\", {1, 0.25, 0.25})\n        else\n            broadcastToAll(\"Moving all items in memory relative to new objects position!\", {0.75, 0.75, 1})\n            self.clearButtons()\n            createMemoryActionButtons()\n            local count = 0\n            for guid in pairs(moveList) do\n                moveGuid = guid\n                count = count + 1\n                local obj = getObjectFromGUID(guid)\n                if obj ~= nil then obj.highlightOff() end\n            end\n            updateMemoryWithMoves()\n            updateSave()\n            buttonClick_place()\n        end\n    elseif next(memoryList) == nil and moveGuid == nil then\n      memoryList = memoryListBackup\n      broadcastToAll(\"No selections made.\", {0.75, 0.25, 0.25})\n    end\n    combineMemoryFromBagsWithin()\n    self.clearButtons()\n    createMemoryActionButtons()\n    local count = 0\n    for guid in pairs(memoryList) do\n        count = count + 1\n        local obj = getObjectFromGUID(guid)\n        if obj ~= nil then obj.highlightOff() end\n    end\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\n    updateSave()\n    moveGuid = nil\nend\n\nfunction combineTables(first_table, second_table)\n  for k,v in pairs(second_table) do first_table[k] = v end\nend\n\nfunction buttonClick_add()\n    fresh = false\n    combineTables(memoryList, memoryListBackup)\n    broadcastToAll(\"Adding internal bags and selections to existing memory\", {0.25, 0.75, 0.25})\n    combineMemoryFromBagsWithin()\n    self.clearButtons()\n    createMemoryActionButtons()\n    local count = 0\n    for guid in pairs(memoryList) do\n        count = count + 1\n        local obj = getObjectFromGUID(guid)\n        if obj ~= nil then obj.highlightOff() end\n    end\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\n    updateSave()\nend\n\nfunction buttonClick_remove()\n        broadcastToAll(\"Removing Selected Entries From Memory\", {1.0, 0.25, 0.25})\n        self.clearButtons()\n        createMemoryActionButtons()\n        local count = 0\n        for guid in pairs(memoryList) do\n            count = count + 1\n            memoryListBackup[guid] = nil\n            local obj = getObjectFromGUID(guid)\n            if obj ~= nil then obj.highlightOff() end\n        end\n        broadcastToAll(count..\" Objects Removed\", {1,1,1})\n        memoryList = memoryListBackup\n        updateSave()\nend\n\nfunction buttonClick_setNew()\n    broadcastToAll(\"Setting new position relative to items in memory\", {0.75, 0.75, 1})\n    self.clearButtons()\n    createMemoryActionButtons()\n    local count = 0\n    for _, obj in ipairs(getAllObjects()) do\n        guid = obj.guid\n        if memoryListBackup[guid] ~= nil then\n            count = count + 1\n            memoryListBackup[guid].pos = obj.getPosition()\n            memoryListBackup[guid].rot = obj.getRotation()\n            memoryListBackup[guid].lock = obj.getLock()\n        end\n    end\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\n    memoryList = memoryListBackup\n    updateSave()\nend\n\n--Resets bag to starting status\nfunction buttonClick_reset()\n    fresh = true\n    memoryList = {}\n    self.clearButtons()\n    createSetupButton()\n    removeAllHighlights()\n    broadcastToAll(\"Tool Reset\", {1,1,1})\n    updateSave()\nend\n\n\n--After Setup\n\n\n--Creates recall and place buttons\nfunction createMemoryActionButtons()\n    self.createButton({\n        label=\"Place\", click_function=\"buttonClick_place\", function_owner=self,\n        position={0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n    self.createButton({\n        label=\"Recall\", click_function=\"buttonClick_recall\", function_owner=self,\n        position={-0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n    self.createButton({\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\n        position={0,0.1,-2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n---    self.createButton({\n---      label=\"Move\", click_function=\"buttonClick_transpose\", function_owner=self,\n---      position={-2.8,0.3,0}, rotation={0,0,0}, height=350, width=800,\n---      font_size=250, color={0,0,0}, font_color={0.75,0.75,1}\n---    })\nend\n\n--Sends objects from bag/table to their saved position/rotation\nfunction buttonClick_place()\n    local bagObjList = self.getObjects()\n    for guid, entry in pairs(memoryList) do\n        local obj = getObjectFromGUID(guid)\n        --If obj is out on the table, move it to the saved pos/rot\n        if obj ~= nil then\n            obj.setPositionSmooth(entry.pos)\n            obj.setRotationSmooth(entry.rot)\n            obj.setLock(entry.lock)\n        else\n            --If obj is inside of the bag\n            for _, bagObj in ipairs(bagObjList) do\n                if bagObj.guid == guid then\n                    local item = self.takeObject({\n                        guid=guid, position=entry.pos, rotation=entry.rot, smooth=false\n                    })\n                    item.setLock(entry.lock)\n                    break\n                end\n            end\n        end\n    end\n    broadcastToAll(\"Objects Placed\", {1,1,1})\nend\n\n--Recalls objects to bag from table\nfunction buttonClick_recall()\n    for guid, entry in pairs(memoryList) do\n        local obj = getObjectFromGUID(guid)\n        if obj ~= nil then self.putObject(obj) end\n    end\n    broadcastToAll(\"Objects Recalled\", {1,1,1})\nend\n\n\n--Utility functions\n\n\n--Find delta (difference) between 2 x/y/z coordinates\nfunction findOffsetDistance(p1, p2, obj)\n    local yOffset = 0\n    if obj ~= nil then\n        local bounds = obj.getBounds()\n        yOffset = (bounds.size.y - bounds.offset.y)\n    end\n    local deltaPos = {}\n    deltaPos.x = (p2.x-p1.x)\n    deltaPos.y = (p2.y-p1.y) + yOffset\n    deltaPos.z = (p2.z-p1.z)\n    return deltaPos\nend\n\n--Used to rotate a set of coordinates by an angle\nfunction rotateLocalCoordinates(desiredPos, obj)\n\tlocal objPos, objRot = obj.getPosition(), obj.getRotation()\n    local angle = math.rad(objRot.y)\n\tlocal x = desiredPos.x * math.cos(angle) - desiredPos.z * math.sin(angle)\n\tlocal z = desiredPos.x * math.sin(angle) + desiredPos.z * math.cos(angle)\n\t--return {x=objPos.x+x, y=objPos.y+desiredPos.y, z=objPos.z+z}\n    return {x=x, y=desiredPos.y, z=z}\nend\n\nfunction rotateMyCoordinates(desiredPos, obj)\n\tlocal angle = math.rad(obj.getRotation().y)\n  local x = desiredPos.x * math.sin(angle)\n\tlocal z = desiredPos.z * math.cos(angle)\n    return {x=x, y=desiredPos.y, z=z}\nend\n\n--Coroutine delay, in seconds\nfunction wait(time)\n    local start = os.time()\n    repeat coroutine.yield(0) until os.time() > start + time\nend\n\n--Duplicates a table (needed to prevent it making reference to the same objects)\nfunction duplicateTable(oldTable)\n    local newTable = {}\n    for k, v in pairs(oldTable) do\n        newTable[k] = v\n    end\n    return newTable\nend\n\n--Moves scripted highlight from all objects\nfunction removeAllHighlights()\n    for _, obj in ipairs(getAllObjects()) do\n        obj.highlightOff()\n    end\nend\n\n--Round number (num) to the Nth decimal (dec)\nfunction round(num, dec)\n  local mult = 10^(dec or 0)\n  return math.floor(num * mult + 0.5) / mult\nend",
-  "LuaScriptState": "{\"ml\":{\"0bab7b\":{\"lock\":false,\"pos\":{\"x\":69.3188018798828,\"y\":1.49510383605957,\"z\":-16.8729000091553},\"rot\":{\"x\":1.27518561043871E-07,\"y\":269.99951171875,\"z\":-1.45289493502787E-06}},\"1a562e\":{\"lock\":false,\"pos\":{\"x\":69.3252029418945,\"y\":1.49510371685028,\"z\":-31.8729000091553},\"rot\":{\"x\":1.21199491331936E-07,\"y\":270.002014160156,\"z\":3.24004622598295E-06}},\"1c522b\":{\"lock\":false,\"pos\":{\"x\":48.3036003112793,\"y\":1.49510383605957,\"z\":18.1180953979492},\"rot\":{\"x\":4.33555911172334E-08,\"y\":270.000091552734,\"z\":-1.1858671769005E-06}},\"32cd3a\":{\"lock\":false,\"pos\":{\"x\":69.3218994140625,\"y\":1.49510383605957,\"z\":-24.3729000091553},\"rot\":{\"x\":-1.27768222668578E-08,\"y\":270.001403808594,\"z\":-1.37477820771892E-06}},\"610efd\":{\"lock\":false,\"pos\":{\"x\":58.8069000244141,\"y\":1.49510359764099,\"z\":10.6225996017456},\"rot\":{\"x\":-2.91288665721368E-06,\"y\":269.999145507813,\"z\":-1.24119696920388E-06}},\"66f3a4\":{\"lock\":false,\"pos\":{\"x\":55.3241004943848,\"y\":1.51687169075012,\"z\":-29.3789005279541},\"rot\":{\"x\":4.09931487865833E-07,\"y\":270.0087890625,\"z\":-6.74564759606255E-08}},\"6bcaba\":{\"lock\":false,\"pos\":{\"x\":69.3038024902344,\"y\":1.49510383605957,\"z\":18.1271953582764},\"rot\":{\"x\":-3.77786797400859E-08,\"y\":270.000091552734,\"z\":-1.40417864713527E-06}},\"73bc75\":{\"lock\":false,\"pos\":{\"x\":48.3069000244141,\"y\":1.49510383605957,\"z\":10.6181001663208},\"rot\":{\"x\":-1.30742678905449E-08,\"y\":269.999206542969,\"z\":-1.22721678508242E-06}},\"b3fd17\":{\"lock\":false,\"pos\":{\"x\":58.8218994140625,\"y\":1.49510383605957,\"z\":-24.3773994445801},\"rot\":{\"x\":-7.48173345499481E-09,\"y\":269.999938964844,\"z\":-1.5125427808016E-06}},\"b75b15\":{\"lock\":false,\"pos\":{\"x\":48.3101005554199,\"y\":1.49510371685028,\"z\":3.11809968948364},\"rot\":{\"x\":-1.91370460811413E-07,\"y\":269.999938964844,\"z\":-1.99153328139801E-06}},\"bf1bde\":{\"lock\":false,\"pos\":{\"x\":48.3003997802734,\"y\":1.49510383605957,\"z\":25.6181964874268},\"rot\":{\"x\":9.07294719354468E-08,\"y\":269.998992919922,\"z\":-1.31662511648756E-06}},\"d9711f\":{\"lock\":false,\"pos\":{\"x\":44.8026008605957,\"y\":1.51205766201019,\"z\":20.6165924072266},\"rot\":{\"x\":-3.98500112908096E-08,\"y\":269.998931884766,\"z\":-1.68380620380049E-06}},\"e00001\":{\"lock\":false,\"pos\":{\"x\":65.8058013916016,\"y\":1.49510383605957,\"z\":13.1255941390991},\"rot\":{\"x\":3.02547604746906E-08,\"y\":269.999206542969,\"z\":-5.39785958153516E-07}},\"e00002\":{\"lock\":false,\"pos\":{\"x\":65.8071975708008,\"y\":1.49510383605957,\"z\":10.6254987716675},\"rot\":{\"x\":-3.58278278156376E-08,\"y\":269.997985839844,\"z\":-5.99717679961032E-07}},\"e00003\":{\"lock\":false,\"pos\":{\"x\":69.3069000244141,\"y\":1.49510383605957,\"z\":10.6270999908447},\"rot\":{\"x\":2.01892504492207E-07,\"y\":269.999908447266,\"z\":-7.69001644584932E-07}},\"e00004\":{\"lock\":false,\"pos\":{\"x\":69.3058013916016,\"y\":1.49510371685028,\"z\":13.1270990371704},\"rot\":{\"x\":-4.25595878539298E-08,\"y\":270.004699707031,\"z\":3.66477109992047E-07}},\"e00005\":{\"lock\":false,\"pos\":{\"x\":69.3155975341797,\"y\":1.49510371685028,\"z\":-9.37290000915527},\"rot\":{\"x\":8.53484323215525E-08,\"y\":269.998809814453,\"z\":-1.35494781261514E-06}},\"e00006\":{\"lock\":false,\"pos\":{\"x\":69.3089981079102,\"y\":1.49510383605957,\"z\":5.62709951400757},\"rot\":{\"x\":3.99392064309723E-07,\"y\":270.008392333984,\"z\":3.75063848423451E-07}},\"e00007\":{\"lock\":false,\"pos\":{\"x\":65.8109970092773,\"y\":1.49510383605957,\"z\":3.12559962272644},\"rot\":{\"x\":-2.73786984195112E-08,\"y\":269.999694824219,\"z\":-6.52562903269427E-07}},\"e00008\":{\"lock\":false,\"pos\":{\"x\":65.8090972900391,\"y\":1.49510383605957,\"z\":5.62559986114502},\"rot\":{\"x\":-1.63730476288038E-07,\"y\":269.999786376953,\"z\":-6.74273508138867E-07}},\"e00009\":{\"lock\":false,\"pos\":{\"x\":69.3102035522461,\"y\":1.49510383605957,\"z\":3.12719941139221},\"rot\":{\"x\":4.76927475290267E-08,\"y\":270,\"z\":-9.50195953919319E-07}},\"e0000a\":{\"lock\":false,\"pos\":{\"x\":69.3004989624023,\"y\":1.49510383605957,\"z\":25.6271953582764},\"rot\":{\"x\":6.11231385505562E-08,\"y\":269.999389648438,\"z\":-1.69931900018128E-06}},\"e0000b\":{\"lock\":false,\"pos\":{\"x\":65.8007965087891,\"y\":1.49510383605957,\"z\":25.6254959106445},\"rot\":{\"x\":5.64334996511207E-08,\"y\":269.997772216797,\"z\":-5.99359623265627E-07}},\"e0000c\":{\"lock\":false,\"pos\":{\"x\":65.8002014160156,\"y\":1.49510371685028,\"z\":28.1255989074707},\"rot\":{\"x\":2.33724470888319E-08,\"y\":269.997985839844,\"z\":1.90938499144977E-06}},\"e0000d\":{\"lock\":false,\"pos\":{\"x\":58.8101005554199,\"y\":1.49510371685028,\"z\":3.12259984016418},\"rot\":{\"x\":-4.21401665562371E-07,\"y\":270.001007080078,\"z\":-1.8359655769018E-06}},\"e0000e\":{\"lock\":false,\"pos\":{\"x\":69.2994003295898,\"y\":1.49510383605957,\"z\":28.1270980834961},\"rot\":{\"x\":7.39799546067843E-08,\"y\":269.999206542969,\"z\":2.76286613143384E-07}},\"e0000f\":{\"lock\":false,\"pos\":{\"x\":58.8154983520508,\"y\":1.49510383605957,\"z\":-9.37740039825439},\"rot\":{\"x\":2.07963367415687E-07,\"y\":270.000579833984,\"z\":-9.63174329626781E-07}},\"e00010\":{\"lock\":false,\"pos\":{\"x\":69.3025970458984,\"y\":1.49510383605957,\"z\":20.6270942687988},\"rot\":{\"x\":3.43012409587118E-08,\"y\":269.982788085938,\"z\":-1.2652269560931E-06}},\"e00011\":{\"lock\":false,\"pos\":{\"x\":65.8039016723633,\"y\":1.49510383605957,\"z\":18.1254959106445},\"rot\":{\"x\":6.14958253208897E-08,\"y\":269.999786376953,\"z\":-5.98550855102076E-07}},\"e00012\":{\"lock\":false,\"pos\":{\"x\":65.8183975219727,\"y\":1.49510383605957,\"z\":20.6400966644287},\"rot\":{\"x\":5.25540357898535E-08,\"y\":269.999389648438,\"z\":-4.92028391363419E-07}},\"e00013\":{\"lock\":false,\"pos\":{\"x\":58.8003997802734,\"y\":1.49510383605957,\"z\":25.6226959228516},\"rot\":{\"x\":2.34622604011747E-07,\"y\":270.001892089844,\"z\":-1.40019994887552E-06}},\"e00014\":{\"lock\":false,\"pos\":{\"x\":58.8251991271973,\"y\":1.49510383605957,\"z\":-31.8775005340576},\"rot\":{\"x\":9.47921350302749E-08,\"y\":270.00048828125,\"z\":3.24279699270846E-06}},\"e00015\":{\"lock\":false,\"pos\":{\"x\":58.8036994934082,\"y\":1.49510371685028,\"z\":18.1226978302002},\"rot\":{\"x\":6.37524664170996E-08,\"y\":269.999786376953,\"z\":-1.24334223983169E-06}},\"e00016\":{\"lock\":false,\"pos\":{\"x\":65.8143997192383,\"y\":1.49510383605957,\"z\":-6.87440013885498},\"rot\":{\"x\":-1.44913300914595E-07,\"y\":270.000366210938,\"z\":1.82872224741004E-06}},\"e00017\":{\"lock\":false,\"pos\":{\"x\":65.8156967163086,\"y\":1.49510383605957,\"z\":-9.3744010925293},\"rot\":{\"x\":2.3022737494216E-08,\"y\":270.000701904297,\"z\":-4.90214688397828E-07}},\"e00019\":{\"lock\":false,\"pos\":{\"x\":69.3143997192383,\"y\":1.49510359764099,\"z\":-6.87290000915527},\"rot\":{\"x\":-3.2931941973402E-07,\"y\":270.000213623047,\"z\":2.76236988838718E-07}},\"e0001b\":{\"lock\":false,\"pos\":{\"x\":69.3175964355469,\"y\":1.49510383605957,\"z\":-14.3729000091553},\"rot\":{\"x\":-1.24901447406955E-07,\"y\":270.000854492188,\"z\":3.58560072299952E-07}},\"e0001c\":{\"lock\":false,\"pos\":{\"x\":65.8187026977539,\"y\":1.49510383605957,\"z\":-16.8743991851807},\"rot\":{\"x\":-1.87372850568579E-09,\"y\":270.00048828125,\"z\":-5.16916372816922E-07}},\"e0001d\":{\"lock\":false,\"pos\":{\"x\":65.818000793457,\"y\":1.49510371685028,\"z\":-14.3745002746582},\"rot\":{\"x\":3.53323130752869E-08,\"y\":270.000061035156,\"z\":-3.14401802370412E-07}},\"e00020\":{\"lock\":false,\"pos\":{\"x\":69.3240966796875,\"y\":1.49510383605957,\"z\":-29.3729000091553},\"rot\":{\"x\":-2.7196795926443E-08,\"y\":270.000213623047,\"z\":-1.23546215036185E-06}},\"e00021\":{\"lock\":false,\"pos\":{\"x\":65.9243011474609,\"y\":1.49510383605957,\"z\":-31.8791007995605},\"rot\":{\"x\":5.75802516777912E-09,\"y\":270.002502441406,\"z\":-5.29665612702956E-07}},\"e00022\":{\"lock\":false,\"pos\":{\"x\":65.8243026733398,\"y\":1.49510383605957,\"z\":-29.3745002746582},\"rot\":{\"x\":2.31112338155981E-08,\"y\":270.004089355469,\"z\":-5.82266125093156E-07}},\"e00025\":{\"lock\":false,\"pos\":{\"x\":69.32080078125,\"y\":1.49510383605957,\"z\":-21.8729000091553},\"rot\":{\"x\":-1.03740951828968E-07,\"y\":269.999694824219,\"z\":-5.02396403589955E-07}},\"e00026\":{\"lock\":false,\"pos\":{\"x\":65.8208999633789,\"y\":1.49510383605957,\"z\":-21.8743991851807},\"rot\":{\"x\":-2.83814642898506E-08,\"y\":270.000793457031,\"z\":-5.36929974259692E-07}},\"e00027\":{\"lock\":false,\"pos\":{\"x\":65.8228988647461,\"y\":1.49510383605957,\"z\":-24.3743991851807},\"rot\":{\"x\":1.7401323049171E-08,\"y\":270.00048828125,\"z\":-5.66653454825428E-07}},\"e0002b\":{\"lock\":false,\"pos\":{\"x\":48.3143997192383,\"y\":1.49510383605957,\"z\":-6.88190031051636},\"rot\":{\"x\":-3.34473924112899E-07,\"y\":270,\"z\":-5.0924415972986E-07}},\"e0002c\":{\"lock\":false,\"pos\":{\"x\":44.8154983520508,\"y\":1.49510383605957,\"z\":-9.38339996337891},\"rot\":{\"x\":1.50664732245787E-07,\"y\":270,\"z\":-3.62658312269559E-07}},\"e0002d\":{\"lock\":false,\"pos\":{\"x\":44.8143997192383,\"y\":1.49510383605957,\"z\":-6.88340044021606},\"rot\":{\"x\":3.11378833828257E-08,\"y\":270,\"z\":-5.30090233041847E-07}},\"e00030\":{\"lock\":false,\"pos\":{\"x\":44.8003997802734,\"y\":1.49510383605957,\"z\":25.6164970397949},\"rot\":{\"x\":-2.00523029292299E-08,\"y\":270.003295898438,\"z\":-5.10379265961092E-07}},\"e00031\":{\"lock\":false,\"pos\":{\"x\":44.7994003295898,\"y\":1.49510383605957,\"z\":28.1165962219238},\"rot\":{\"x\":-5.33176489625475E-08,\"y\":270.002685546875,\"z\":-5.32799788288685E-07}},\"e00033\":{\"lock\":false,\"pos\":{\"x\":48.2993011474609,\"y\":1.49510383605957,\"z\":28.1177940368652},\"rot\":{\"x\":-1.45285961039576E-08,\"y\":270.003295898438,\"z\":3.15704028253094E-07}},\"e00035\":{\"lock\":false,\"pos\":{\"x\":48.3058013916016,\"y\":1.49510383605957,\"z\":13.1180934906006},\"rot\":{\"x\":-3.18997422255052E-07,\"y\":269.996368408203,\"z\":-3.88811571383485E-07}},\"e00036\":{\"lock\":false,\"pos\":{\"x\":44.8069000244141,\"y\":1.49510383605957,\"z\":10.6165990829468},\"rot\":{\"x\":-1.96420124609631E-08,\"y\":269.999908447266,\"z\":-5.38674726158206E-07}},\"e00037\":{\"lock\":false,\"pos\":{\"x\":44.8058013916016,\"y\":1.49510383605957,\"z\":13.1165952682495},\"rot\":{\"x\":3.6021475580128E-07,\"y\":270.000366210938,\"z\":-4.5370720158644E-07}},\"e0003a\":{\"lock\":false,\"pos\":{\"x\":48.3089981079102,\"y\":1.49510383605957,\"z\":5.61819982528687},\"rot\":{\"x\":-6.33657236903673E-07,\"y\":269.996887207031,\"z\":2.85382355968977E-07}},\"e0003b\":{\"lock\":false,\"pos\":{\"x\":44.8101005554199,\"y\":1.49510383605957,\"z\":3.11659955978394},\"rot\":{\"x\":-3.78414775070723E-08,\"y\":269.998413085938,\"z\":-5.02005832458963E-07}},\"e0003c\":{\"lock\":false,\"pos\":{\"x\":44.8089981079102,\"y\":1.49510383605957,\"z\":5.61659955978394},\"rot\":{\"x\":-5.09722781316668E-07,\"y\":269.998504638672,\"z\":-8.17718159851211E-07}},\"e0003f\":{\"lock\":false,\"pos\":{\"x\":48.3026008605957,\"y\":1.49510383605957,\"z\":20.6180934906006},\"rot\":{\"x\":5.3246136388907E-08,\"y\":269.996887207031,\"z\":3.04384258242862E-07}},\"e00041\":{\"lock\":false,\"pos\":{\"x\":44.8036994934082,\"y\":1.49510383605957,\"z\":18.1165962219238},\"rot\":{\"x\":7.25483744190569E-08,\"y\":269.99951171875,\"z\":-6.37812320292142E-07}},\"e00045\":{\"lock\":false,\"pos\":{\"x\":55.3058013916016,\"y\":1.49510383605957,\"z\":13.1210956573486},\"rot\":{\"x\":8.08268154628422E-08,\"y\":270,\"z\":-4.97307496516441E-07}},\"e00046\":{\"lock\":false,\"pos\":{\"x\":55.3069000244141,\"y\":1.49510383605957,\"z\":10.6211004257202},\"rot\":{\"x\":3.68001053629996E-07,\"y\":269.999755859375,\"z\":-4.95279550705163E-07}},\"e00048\":{\"lock\":false,\"pos\":{\"x\":58.8058013916016,\"y\":1.49510383605957,\"z\":13.1225938796997},\"rot\":{\"x\":-2.6636706706995E-07,\"y\":269.999969482422,\"z\":-4.40259498191153E-07}},\"e0004a\":{\"lock\":false,\"pos\":{\"x\":58.8089981079102,\"y\":1.49510383605957,\"z\":5.62260007858276},\"rot\":{\"x\":-3.87210945973493E-07,\"y\":270,\"z\":-4.31388201604932E-07}},\"e0004b\":{\"lock\":false,\"pos\":{\"x\":55.3101005554199,\"y\":1.49510383605957,\"z\":3.1210994720459},\"rot\":{\"x\":1.48285606016429E-08,\"y\":270,\"z\":-6.11470511557854E-07}},\"e0004c\":{\"lock\":false,\"pos\":{\"x\":55.3089981079102,\"y\":1.49510383605957,\"z\":5.6210994720459},\"rot\":{\"x\":-1.11046647433E-08,\"y\":270,\"z\":-5.20411902016349E-07}},\"e0004f\":{\"lock\":false,\"pos\":{\"x\":58.7994003295898,\"y\":1.49510383605957,\"z\":28.122594833374},\"rot\":{\"x\":-6.06185723839303E-09,\"y\":270.000061035156,\"z\":-5.0556371888888E-07}},\"e00050\":{\"lock\":false,\"pos\":{\"x\":55.2994003295898,\"y\":1.49510383605957,\"z\":28.1210956573486},\"rot\":{\"x\":4.63581883991537E-08,\"y\":269.999938964844,\"z\":-5.99081829477655E-07}},\"e00051\":{\"lock\":false,\"pos\":{\"x\":55.3004989624023,\"y\":1.49510383605957,\"z\":25.6210956573486},\"rot\":{\"x\":4.27658655155483E-08,\"y\":269.999938964844,\"z\":-6.68802499603771E-07}},\"e00054\":{\"lock\":false,\"pos\":{\"x\":58.8026008605957,\"y\":1.49510383605957,\"z\":20.622594833374},\"rot\":{\"x\":1.70374434560472E-08,\"y\":269.999694824219,\"z\":-1.21008122277999E-06}},\"e00055\":{\"lock\":false,\"pos\":{\"x\":55.3026008605957,\"y\":1.49510383605957,\"z\":20.6210956573486},\"rot\":{\"x\":6.61359962350616E-08,\"y\":269.999938964844,\"z\":-6.34010461908474E-07}},\"e00056\":{\"lock\":false,\"pos\":{\"x\":55.3036994934082,\"y\":1.49510383605957,\"z\":18.1210956573486},\"rot\":{\"x\":-4.0466577644338E-08,\"y\":269.999786376953,\"z\":-4.94876417178602E-07}},\"e0005a\":{\"lock\":false,\"pos\":{\"x\":55.3186988830566,\"y\":1.49510383605957,\"z\":-16.8789005279541},\"rot\":{\"x\":-3.0121086069812E-07,\"y\":269.999908447266,\"z\":-5.27162171692908E-07}},\"e0005b\":{\"lock\":false,\"pos\":{\"x\":55.3176002502441,\"y\":1.49510383605957,\"z\":-14.3789005279541},\"rot\":{\"x\":-3.48233832880851E-08,\"y\":269.999908447266,\"z\":-5.35665094503202E-07}},\"e0005d\":{\"lock\":false,\"pos\":{\"x\":58.8176002502441,\"y\":1.49510383605957,\"z\":-14.3774013519287},\"rot\":{\"x\":-8.36477020982329E-09,\"y\":270,\"z\":2.84961231500347E-07}},\"e0005f\":{\"lock\":false,\"pos\":{\"x\":58.8208999633789,\"y\":1.49510383605957,\"z\":-21.8775005340576},\"rot\":{\"x\":-1.43492172810511E-07,\"y\":270.000854492188,\"z\":-1.13378644073237E-06}},\"e00060\":{\"lock\":false,\"pos\":{\"x\":55.3218994140625,\"y\":1.49510383605957,\"z\":-24.3789005279541},\"rot\":{\"x\":1.26828307855931E-08,\"y\":270.00048828125,\"z\":-5.61194269721454E-07}},\"e00061\":{\"lock\":false,\"pos\":{\"x\":55.3208999633789,\"y\":1.49510383605957,\"z\":-21.8789005279541},\"rot\":{\"x\":-1.0391559612799E-08,\"y\":270,\"z\":-5.04303386605898E-07}},\"e00064\":{\"lock\":false,\"pos\":{\"x\":58.8143997192383,\"y\":1.49510383605957,\"z\":-6.87740087509155},\"rot\":{\"x\":-3.52334232900375E-08,\"y\":269.999938964844,\"z\":-1.3196616919231E-06}},\"e00065\":{\"lock\":false,\"pos\":{\"x\":55.3143997192383,\"y\":1.49510383605957,\"z\":-6.8789005279541},\"rot\":{\"x\":1.5600264191562E-08,\"y\":269.999786376953,\"z\":-5.27303427588777E-07}},\"e00066\":{\"lock\":false,\"pos\":{\"x\":55.3154983520508,\"y\":1.49510383605957,\"z\":-9.3789005279541},\"rot\":{\"x\":-1.57351536245187E-07,\"y\":269.999786376953,\"z\":-6.48736261155136E-07}},\"e00069\":{\"lock\":false,\"pos\":{\"x\":58.8238983154297,\"y\":1.49510383605957,\"z\":-29.377799987793},\"rot\":{\"x\":5.20878167264982E-08,\"y\":270.005401611328,\"z\":-1.29771171941684E-06}},\"e0006a\":{\"lock\":false,\"pos\":{\"x\":55.3251991271973,\"y\":1.49510383605957,\"z\":-31.8789005279541},\"rot\":{\"x\":1.85299118271587E-08,\"y\":270.014404296875,\"z\":-5.44935915058886E-07}},\"eb8a5f\":{\"lock\":false,\"pos\":{\"x\":48.3154983520508,\"y\":1.49510383605957,\"z\":-9.3818998336792},\"rot\":{\"x\":-3.89823036073267E-08,\"y\":270,\"z\":-1.24216910535324E-06}},\"fc3310\":{\"lock\":false,\"pos\":{\"x\":58.8186988830566,\"y\":1.49510383605957,\"z\":-16.8773994445801},\"rot\":{\"x\":-3.30946647864039E-08,\"y\":270.000061035156,\"z\":-1.27611951938889E-06}}}}",
+  "LuaScriptState": "{\"ml\":{\"0bab7b\":{\"lock\":false,\"pos\":{\"x\":69.3188018798828,\"y\":1.49510383605957,\"z\":-16.8729000091553},\"rot\":{\"x\":1.27518561043871E-07,\"y\":269.99951171875,\"z\":-1.45289493502787E-06}},\"1a562e\":{\"lock\":false,\"pos\":{\"x\":69.3252029418945,\"y\":1.49510371685028,\"z\":-31.8729000091553},\"rot\":{\"x\":1.21199491331936E-07,\"y\":270.002014160156,\"z\":3.24004622598295E-06}},\"1c522b\":{\"lock\":false,\"pos\":{\"x\":48.3036003112793,\"y\":1.49510383605957,\"z\":18.1180953979492},\"rot\":{\"x\":4.33555911172334E-08,\"y\":270.000091552734,\"z\":-1.1858671769005E-06}},\"32cd3a\":{\"lock\":false,\"pos\":{\"x\":69.3218994140625,\"y\":1.49510383605957,\"z\":-24.3729000091553},\"rot\":{\"x\":-1.27768222668578E-08,\"y\":270.001403808594,\"z\":-1.37477820771892E-06}},\"610efd\":{\"lock\":false,\"pos\":{\"x\":58.8069000244141,\"y\":1.49510359764099,\"z\":10.6225996017456},\"rot\":{\"x\":-2.91288665721368E-06,\"y\":269.999145507813,\"z\":-1.24119696920388E-06}},\"66f3a4\":{\"lock\":false,\"pos\":{\"x\":55.3241004943848,\"y\":1.51687169075012,\"z\":-29.3789005279541},\"rot\":{\"x\":4.09931487865833E-07,\"y\":270.0087890625,\"z\":-6.74564759606255E-08}},\"6bcaba\":{\"lock\":false,\"pos\":{\"x\":69.3038024902344,\"y\":1.49510383605957,\"z\":18.1271953582764},\"rot\":{\"x\":-3.77786797400859E-08,\"y\":270.000091552734,\"z\":-1.40417864713527E-06}},\"73bc75\":{\"lock\":false,\"pos\":{\"x\":48.3069000244141,\"y\":1.49510383605957,\"z\":10.6181001663208},\"rot\":{\"x\":-1.30742678905449E-08,\"y\":269.999206542969,\"z\":-1.22721678508242E-06}},\"b3fd17\":{\"lock\":false,\"pos\":{\"x\":58.8218994140625,\"y\":1.49510383605957,\"z\":-24.3773994445801},\"rot\":{\"x\":-7.48173345499481E-09,\"y\":269.999938964844,\"z\":-1.5125427808016E-06}},\"b75b15\":{\"lock\":false,\"pos\":{\"x\":48.3101005554199,\"y\":1.49510371685028,\"z\":3.11809968948364},\"rot\":{\"x\":-1.91370460811413E-07,\"y\":269.999938964844,\"z\":-1.99153328139801E-06}},\"bf1bde\":{\"lock\":false,\"pos\":{\"x\":48.3003997802734,\"y\":1.49510383605957,\"z\":25.6181964874268},\"rot\":{\"x\":9.07294719354468E-08,\"y\":269.998992919922,\"z\":-1.31662511648756E-06}},\"d9711f\":{\"lock\":false,\"pos\":{\"x\":44.8026,\"y\":1.5169,\"z\":20.6166},\"rot\":{\"x\":0,\"y\":269.9989,\"z\":0}},\"e00001\":{\"lock\":false,\"pos\":{\"x\":65.8058013916016,\"y\":1.49510383605957,\"z\":13.1255941390991},\"rot\":{\"x\":3.02547604746906E-08,\"y\":269.999206542969,\"z\":-5.39785958153516E-07}},\"e00002\":{\"lock\":false,\"pos\":{\"x\":65.8071975708008,\"y\":1.49510383605957,\"z\":10.6254987716675},\"rot\":{\"x\":-3.58278278156376E-08,\"y\":269.997985839844,\"z\":-5.99717679961032E-07}},\"e00003\":{\"lock\":false,\"pos\":{\"x\":69.3069000244141,\"y\":1.49510383605957,\"z\":10.6270999908447},\"rot\":{\"x\":2.01892504492207E-07,\"y\":269.999908447266,\"z\":-7.69001644584932E-07}},\"e00004\":{\"lock\":false,\"pos\":{\"x\":69.3058013916016,\"y\":1.49510371685028,\"z\":13.1270990371704},\"rot\":{\"x\":-4.25595878539298E-08,\"y\":270.004699707031,\"z\":3.66477109992047E-07}},\"e00005\":{\"lock\":false,\"pos\":{\"x\":69.3155975341797,\"y\":1.49510371685028,\"z\":-9.37290000915527},\"rot\":{\"x\":8.53484323215525E-08,\"y\":269.998809814453,\"z\":-1.35494781261514E-06}},\"e00006\":{\"lock\":false,\"pos\":{\"x\":69.3089981079102,\"y\":1.49510383605957,\"z\":5.62709951400757},\"rot\":{\"x\":3.99392064309723E-07,\"y\":270.008392333984,\"z\":3.75063848423451E-07}},\"e00007\":{\"lock\":false,\"pos\":{\"x\":65.8109970092773,\"y\":1.49510383605957,\"z\":3.12559962272644},\"rot\":{\"x\":-2.73786984195112E-08,\"y\":269.999694824219,\"z\":-6.52562903269427E-07}},\"e00008\":{\"lock\":false,\"pos\":{\"x\":65.8090972900391,\"y\":1.49510383605957,\"z\":5.62559986114502},\"rot\":{\"x\":-1.63730476288038E-07,\"y\":269.999786376953,\"z\":-6.74273508138867E-07}},\"e00009\":{\"lock\":false,\"pos\":{\"x\":69.3102035522461,\"y\":1.49510383605957,\"z\":3.12719941139221},\"rot\":{\"x\":4.76927475290267E-08,\"y\":270,\"z\":-9.50195953919319E-07}},\"e0000a\":{\"lock\":false,\"pos\":{\"x\":69.3004989624023,\"y\":1.49510383605957,\"z\":25.6271953582764},\"rot\":{\"x\":6.11231385505562E-08,\"y\":269.999389648438,\"z\":-1.69931900018128E-06}},\"e0000b\":{\"lock\":false,\"pos\":{\"x\":65.8007965087891,\"y\":1.49510383605957,\"z\":25.6254959106445},\"rot\":{\"x\":5.64334996511207E-08,\"y\":269.997772216797,\"z\":-5.99359623265627E-07}},\"e0000c\":{\"lock\":false,\"pos\":{\"x\":65.8002014160156,\"y\":1.49510371685028,\"z\":28.1255989074707},\"rot\":{\"x\":2.33724470888319E-08,\"y\":269.997985839844,\"z\":1.90938499144977E-06}},\"e0000d\":{\"lock\":false,\"pos\":{\"x\":58.8101005554199,\"y\":1.49510371685028,\"z\":3.12259984016418},\"rot\":{\"x\":-4.21401665562371E-07,\"y\":270.001007080078,\"z\":-1.8359655769018E-06}},\"e0000e\":{\"lock\":false,\"pos\":{\"x\":69.2994003295898,\"y\":1.49510383605957,\"z\":28.1270980834961},\"rot\":{\"x\":7.39799546067843E-08,\"y\":269.999206542969,\"z\":2.76286613143384E-07}},\"e0000f\":{\"lock\":false,\"pos\":{\"x\":58.8154983520508,\"y\":1.49510383605957,\"z\":-9.37740039825439},\"rot\":{\"x\":2.07963367415687E-07,\"y\":270.000579833984,\"z\":-9.63174329626781E-07}},\"e00010\":{\"lock\":false,\"pos\":{\"x\":69.3025970458984,\"y\":1.49510383605957,\"z\":20.6270942687988},\"rot\":{\"x\":3.43012409587118E-08,\"y\":269.982788085938,\"z\":-1.2652269560931E-06}},\"e00011\":{\"lock\":false,\"pos\":{\"x\":65.8039016723633,\"y\":1.49510383605957,\"z\":18.1254959106445},\"rot\":{\"x\":6.14958253208897E-08,\"y\":269.999786376953,\"z\":-5.98550855102076E-07}},\"e00012\":{\"lock\":false,\"pos\":{\"x\":65.8183975219727,\"y\":1.49510383605957,\"z\":20.6400966644287},\"rot\":{\"x\":5.25540357898535E-08,\"y\":269.999389648438,\"z\":-4.92028391363419E-07}},\"e00013\":{\"lock\":false,\"pos\":{\"x\":58.8003997802734,\"y\":1.49510383605957,\"z\":25.6226959228516},\"rot\":{\"x\":2.34622604011747E-07,\"y\":270.001892089844,\"z\":-1.40019994887552E-06}},\"e00014\":{\"lock\":false,\"pos\":{\"x\":58.8251991271973,\"y\":1.49510383605957,\"z\":-31.8775005340576},\"rot\":{\"x\":9.47921350302749E-08,\"y\":270.00048828125,\"z\":3.24279699270846E-06}},\"e00015\":{\"lock\":false,\"pos\":{\"x\":58.8036994934082,\"y\":1.49510371685028,\"z\":18.1226978302002},\"rot\":{\"x\":6.37524664170996E-08,\"y\":269.999786376953,\"z\":-1.24334223983169E-06}},\"e00016\":{\"lock\":false,\"pos\":{\"x\":65.8143997192383,\"y\":1.49510383605957,\"z\":-6.87440013885498},\"rot\":{\"x\":-1.44913300914595E-07,\"y\":270.000366210938,\"z\":1.82872224741004E-06}},\"e00017\":{\"lock\":false,\"pos\":{\"x\":65.8156967163086,\"y\":1.49510383605957,\"z\":-9.3744010925293},\"rot\":{\"x\":2.3022737494216E-08,\"y\":270.000701904297,\"z\":-4.90214688397828E-07}},\"e00019\":{\"lock\":false,\"pos\":{\"x\":69.3143997192383,\"y\":1.49510359764099,\"z\":-6.87290000915527},\"rot\":{\"x\":-3.2931941973402E-07,\"y\":270.000213623047,\"z\":2.76236988838718E-07}},\"e0001b\":{\"lock\":false,\"pos\":{\"x\":69.3175964355469,\"y\":1.49510383605957,\"z\":-14.3729000091553},\"rot\":{\"x\":-1.24901447406955E-07,\"y\":270.000854492188,\"z\":3.58560072299952E-07}},\"e0001c\":{\"lock\":false,\"pos\":{\"x\":65.8187026977539,\"y\":1.49510383605957,\"z\":-16.8743991851807},\"rot\":{\"x\":-1.87372850568579E-09,\"y\":270.00048828125,\"z\":-5.16916372816922E-07}},\"e0001d\":{\"lock\":false,\"pos\":{\"x\":65.818000793457,\"y\":1.49510371685028,\"z\":-14.3745002746582},\"rot\":{\"x\":3.53323130752869E-08,\"y\":270.000061035156,\"z\":-3.14401802370412E-07}},\"e00020\":{\"lock\":false,\"pos\":{\"x\":69.3240966796875,\"y\":1.49510383605957,\"z\":-29.3729000091553},\"rot\":{\"x\":-2.7196795926443E-08,\"y\":270.000213623047,\"z\":-1.23546215036185E-06}},\"e00021\":{\"lock\":false,\"pos\":{\"x\":65.9243011474609,\"y\":1.49510383605957,\"z\":-31.8791007995605},\"rot\":{\"x\":5.75802516777912E-09,\"y\":270.002502441406,\"z\":-5.29665612702956E-07}},\"e00022\":{\"lock\":false,\"pos\":{\"x\":65.8243026733398,\"y\":1.49510383605957,\"z\":-29.3745002746582},\"rot\":{\"x\":2.31112338155981E-08,\"y\":270.004089355469,\"z\":-5.82266125093156E-07}},\"e00025\":{\"lock\":false,\"pos\":{\"x\":69.32080078125,\"y\":1.49510383605957,\"z\":-21.8729000091553},\"rot\":{\"x\":-1.03740951828968E-07,\"y\":269.999694824219,\"z\":-5.02396403589955E-07}},\"e00026\":{\"lock\":false,\"pos\":{\"x\":65.8208999633789,\"y\":1.49510383605957,\"z\":-21.8743991851807},\"rot\":{\"x\":-2.83814642898506E-08,\"y\":270.000793457031,\"z\":-5.36929974259692E-07}},\"e00027\":{\"lock\":false,\"pos\":{\"x\":65.8228988647461,\"y\":1.49510383605957,\"z\":-24.3743991851807},\"rot\":{\"x\":1.7401323049171E-08,\"y\":270.00048828125,\"z\":-5.66653454825428E-07}},\"e0002b\":{\"lock\":false,\"pos\":{\"x\":48.3143997192383,\"y\":1.49510383605957,\"z\":-6.88190031051636},\"rot\":{\"x\":-3.34473924112899E-07,\"y\":270,\"z\":-5.0924415972986E-07}},\"e0002c\":{\"lock\":false,\"pos\":{\"x\":44.8154983520508,\"y\":1.49510383605957,\"z\":-9.38339996337891},\"rot\":{\"x\":1.50664732245787E-07,\"y\":270,\"z\":-3.62658312269559E-07}},\"e00030\":{\"lock\":false,\"pos\":{\"x\":44.8003997802734,\"y\":1.49510383605957,\"z\":25.6164970397949},\"rot\":{\"x\":-2.00523029292299E-08,\"y\":270.003295898438,\"z\":-5.10379265961092E-07}},\"e00031\":{\"lock\":false,\"pos\":{\"x\":44.7994003295898,\"y\":1.49510383605957,\"z\":28.1165962219238},\"rot\":{\"x\":-5.33176489625475E-08,\"y\":270.002685546875,\"z\":-5.32799788288685E-07}},\"e00033\":{\"lock\":false,\"pos\":{\"x\":48.2993011474609,\"y\":1.49510383605957,\"z\":28.1177940368652},\"rot\":{\"x\":-1.45285961039576E-08,\"y\":270.003295898438,\"z\":3.15704028253094E-07}},\"e00035\":{\"lock\":false,\"pos\":{\"x\":48.3058013916016,\"y\":1.49510383605957,\"z\":13.1180934906006},\"rot\":{\"x\":-3.18997422255052E-07,\"y\":269.996368408203,\"z\":-3.88811571383485E-07}},\"e00036\":{\"lock\":false,\"pos\":{\"x\":44.8069000244141,\"y\":1.49510383605957,\"z\":10.6165990829468},\"rot\":{\"x\":-1.96420124609631E-08,\"y\":269.999908447266,\"z\":-5.38674726158206E-07}},\"e00037\":{\"lock\":false,\"pos\":{\"x\":44.8058013916016,\"y\":1.49510383605957,\"z\":13.1165952682495},\"rot\":{\"x\":3.6021475580128E-07,\"y\":270.000366210938,\"z\":-4.5370720158644E-07}},\"e0003a\":{\"lock\":false,\"pos\":{\"x\":48.3089981079102,\"y\":1.49510383605957,\"z\":5.61819982528687},\"rot\":{\"x\":-6.33657236903673E-07,\"y\":269.996887207031,\"z\":2.85382355968977E-07}},\"e0003b\":{\"lock\":false,\"pos\":{\"x\":44.8101005554199,\"y\":1.49510383605957,\"z\":3.11659955978394},\"rot\":{\"x\":-3.78414775070723E-08,\"y\":269.998413085938,\"z\":-5.02005832458963E-07}},\"e0003c\":{\"lock\":false,\"pos\":{\"x\":44.8089981079102,\"y\":1.49510383605957,\"z\":5.61659955978394},\"rot\":{\"x\":-5.09722781316668E-07,\"y\":269.998504638672,\"z\":-8.17718159851211E-07}},\"e0003f\":{\"lock\":false,\"pos\":{\"x\":48.3026008605957,\"y\":1.49510383605957,\"z\":20.6180934906006},\"rot\":{\"x\":5.3246136388907E-08,\"y\":269.996887207031,\"z\":3.04384258242862E-07}},\"e00041\":{\"lock\":false,\"pos\":{\"x\":44.8036994934082,\"y\":1.49510383605957,\"z\":18.1165962219238},\"rot\":{\"x\":7.25483744190569E-08,\"y\":269.99951171875,\"z\":-6.37812320292142E-07}},\"e00045\":{\"lock\":false,\"pos\":{\"x\":55.3058013916016,\"y\":1.49510383605957,\"z\":13.1210956573486},\"rot\":{\"x\":8.08268154628422E-08,\"y\":270,\"z\":-4.97307496516441E-07}},\"e00046\":{\"lock\":false,\"pos\":{\"x\":55.3069000244141,\"y\":1.49510383605957,\"z\":10.6211004257202},\"rot\":{\"x\":3.68001053629996E-07,\"y\":269.999755859375,\"z\":-4.95279550705163E-07}},\"e00048\":{\"lock\":false,\"pos\":{\"x\":58.8058013916016,\"y\":1.49510383605957,\"z\":13.1225938796997},\"rot\":{\"x\":-2.6636706706995E-07,\"y\":269.999969482422,\"z\":-4.40259498191153E-07}},\"e0004a\":{\"lock\":false,\"pos\":{\"x\":58.8089981079102,\"y\":1.49510383605957,\"z\":5.62260007858276},\"rot\":{\"x\":-3.87210945973493E-07,\"y\":270,\"z\":-4.31388201604932E-07}},\"e0004b\":{\"lock\":false,\"pos\":{\"x\":55.3101005554199,\"y\":1.49510383605957,\"z\":3.1210994720459},\"rot\":{\"x\":1.48285606016429E-08,\"y\":270,\"z\":-6.11470511557854E-07}},\"e0004c\":{\"lock\":false,\"pos\":{\"x\":55.3089981079102,\"y\":1.49510383605957,\"z\":5.6210994720459},\"rot\":{\"x\":-1.11046647433E-08,\"y\":270,\"z\":-5.20411902016349E-07}},\"e0004f\":{\"lock\":false,\"pos\":{\"x\":58.7994003295898,\"y\":1.49510383605957,\"z\":28.122594833374},\"rot\":{\"x\":-6.06185723839303E-09,\"y\":270.000061035156,\"z\":-5.0556371888888E-07}},\"e00050\":{\"lock\":false,\"pos\":{\"x\":55.2994003295898,\"y\":1.49510383605957,\"z\":28.1210956573486},\"rot\":{\"x\":4.63581883991537E-08,\"y\":269.999938964844,\"z\":-5.99081829477655E-07}},\"e00051\":{\"lock\":false,\"pos\":{\"x\":55.3004989624023,\"y\":1.49510383605957,\"z\":25.6210956573486},\"rot\":{\"x\":4.27658655155483E-08,\"y\":269.999938964844,\"z\":-6.68802499603771E-07}},\"e00054\":{\"lock\":false,\"pos\":{\"x\":58.8026008605957,\"y\":1.49510383605957,\"z\":20.622594833374},\"rot\":{\"x\":1.70374434560472E-08,\"y\":269.999694824219,\"z\":-1.21008122277999E-06}},\"e00055\":{\"lock\":false,\"pos\":{\"x\":55.3026008605957,\"y\":1.49510383605957,\"z\":20.6210956573486},\"rot\":{\"x\":6.61359962350616E-08,\"y\":269.999938964844,\"z\":-6.34010461908474E-07}},\"e00056\":{\"lock\":false,\"pos\":{\"x\":55.3036994934082,\"y\":1.49510383605957,\"z\":18.1210956573486},\"rot\":{\"x\":-4.0466577644338E-08,\"y\":269.999786376953,\"z\":-4.94876417178602E-07}},\"e0005a\":{\"lock\":false,\"pos\":{\"x\":55.3186988830566,\"y\":1.49510383605957,\"z\":-16.8789005279541},\"rot\":{\"x\":-3.0121086069812E-07,\"y\":269.999908447266,\"z\":-5.27162171692908E-07}},\"e0005b\":{\"lock\":false,\"pos\":{\"x\":55.3176002502441,\"y\":1.49510383605957,\"z\":-14.3789005279541},\"rot\":{\"x\":-3.48233832880851E-08,\"y\":269.999908447266,\"z\":-5.35665094503202E-07}},\"e0005d\":{\"lock\":false,\"pos\":{\"x\":58.8176002502441,\"y\":1.49510383605957,\"z\":-14.3774013519287},\"rot\":{\"x\":-8.36477020982329E-09,\"y\":270,\"z\":2.84961231500347E-07}},\"e0005f\":{\"lock\":false,\"pos\":{\"x\":58.8208999633789,\"y\":1.49510383605957,\"z\":-21.8775005340576},\"rot\":{\"x\":-1.43492172810511E-07,\"y\":270.000854492188,\"z\":-1.13378644073237E-06}},\"e00060\":{\"lock\":false,\"pos\":{\"x\":55.3218994140625,\"y\":1.49510383605957,\"z\":-24.3789005279541},\"rot\":{\"x\":1.26828307855931E-08,\"y\":270.00048828125,\"z\":-5.61194269721454E-07}},\"e00061\":{\"lock\":false,\"pos\":{\"x\":55.3208999633789,\"y\":1.49510383605957,\"z\":-21.8789005279541},\"rot\":{\"x\":-1.0391559612799E-08,\"y\":270,\"z\":-5.04303386605898E-07}},\"e00064\":{\"lock\":false,\"pos\":{\"x\":58.8143997192383,\"y\":1.49510383605957,\"z\":-6.87740087509155},\"rot\":{\"x\":-3.52334232900375E-08,\"y\":269.999938964844,\"z\":-1.3196616919231E-06}},\"e00065\":{\"lock\":false,\"pos\":{\"x\":55.3143997192383,\"y\":1.49510383605957,\"z\":-6.8789005279541},\"rot\":{\"x\":1.5600264191562E-08,\"y\":269.999786376953,\"z\":-5.27303427588777E-07}},\"e00066\":{\"lock\":false,\"pos\":{\"x\":55.3154983520508,\"y\":1.49510383605957,\"z\":-9.3789005279541},\"rot\":{\"x\":-1.57351536245187E-07,\"y\":269.999786376953,\"z\":-6.48736261155136E-07}},\"e00069\":{\"lock\":false,\"pos\":{\"x\":58.8238983154297,\"y\":1.49510383605957,\"z\":-29.377799987793},\"rot\":{\"x\":5.20878167264982E-08,\"y\":270.005401611328,\"z\":-1.29771171941684E-06}},\"e0006a\":{\"lock\":false,\"pos\":{\"x\":55.3251991271973,\"y\":1.49510383605957,\"z\":-31.8789005279541},\"rot\":{\"x\":1.85299118271587E-08,\"y\":270.014404296875,\"z\":-5.44935915058886E-07}},\"e7d3ca\":{\"lock\":false,\"pos\":{\"x\":44.8406,\"y\":1.5265,\"z\":-6.8528},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"eb8a5f\":{\"lock\":false,\"pos\":{\"x\":48.3154983520508,\"y\":1.49510383605957,\"z\":-9.3818998336792},\"rot\":{\"x\":-3.89823036073267E-08,\"y\":270,\"z\":-1.24216910535324E-06}},\"fc3310\":{\"lock\":false,\"pos\":{\"x\":58.8186988830566,\"y\":1.49510383605957,\"z\":-16.8773994445801},\"rot\":{\"x\":-3.30946647864039E-08,\"y\":270.000061035156,\"z\":-1.27611951938889E-06}}}}",
   "XmlUI": "",
   "ContainedObjects": [
+    {
+      "GUID": "d9711f",
+      "Name": "Deck",
+      "Transform": {
+        "posX": 44.8026,
+        "posY": 1.51687169,
+        "posZ": 20.6165924,
+        "rotX": 2.989322E-08,
+        "rotY": 269.998932,
+        "rotZ": -7.33949E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "",
+      "Description": "",
+      "GMNotes": "",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": false,
+      "SidewaysCard": false,
+      "DeckIDs": [
+        103700,
+        103700,
+        6612500
+      ],
+      "CustomDeck": {
+        "1037": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427770459567033/BD2C5F75CA3953153F465B0CEE5096DDB4B649B0/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        },
+        "66125": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427770459568138/9A36C60A98ED148A406EBAA8A0A26E29A84136FA/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": "",
+      "ContainedObjects": [
+        {
+          "GUID": "e00040",
+          "Name": "Card",
+          "Transform": {
+            "posX": 44.802597,
+            "posY": 1.85632122,
+            "posZ": 20.6165676,
+            "rotX": 0.00157840492,
+            "rotY": 269.998871,
+            "rotZ": 359.984558,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Black Talons",
+          "Description": "",
+          "GMNotes": "{\"id\":\"ATO29\",\"type\":\"Skill\",\"class\":\"Rogue\",\"traits\":\"Practiced. Expert.\",\"level\":0,\"wildIcons\":3,\"TtsZoopGuid\":\"ATO29\"}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 103700,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "1037": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427770459721816/754196B99F0A569B8335E41E66E4FC1467AEDC69/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "bd01eb",
+          "Name": "Card",
+          "Transform": {
+            "posX": 44.802597,
+            "posY": 1.8915242,
+            "posZ": 20.61657,
+            "rotX": 359.9437,
+            "rotY": 269.99884,
+            "rotZ": 359.9643,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Black Talons",
+          "Description": "",
+          "GMNotes": "{\"id\":\"ATO29\",\"type\":\"Skill\",\"class\":\"Rogue\",\"traits\":\"Practiced. Expert.\",\"level\":0,\"wildIcons\":3,\"TtsZoopGuid\":\"ATO29\"}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 103700,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "1037": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427770459721816/754196B99F0A569B8335E41E66E4FC1467AEDC69/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "847489",
+          "Name": "Card",
+          "Transform": {
+            "posX": 44.61409,
+            "posY": 1.57071209,
+            "posZ": 20.57586,
+            "rotX": 0.00101993466,
+            "rotY": 270.0,
+            "rotZ": -0.000303446577,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Subterfuge",
+          "Description": "",
+          "GMNotes": "{\"id\":\"ATO91\",\"type\":\"Asset\",\"class\":\"Rogue\",\"traits\":\"Talent. Trick.\",\"permanent\":true,\"uses\":[{\"count\":0,\"token\":\"resource\",\"type\":\"Secret\"}],\"TtsZoopGuid\":\"ATO91\"}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "Asset",
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 6612500,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "66125": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427770459568138/9A36C60A98ED148A406EBAA8A0A26E29A84136FA/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        }
+      ]
+    },
     {
       "GUID": "0bab7b",
       "Name": "Card",
@@ -75,9 +335,9 @@
         "posX": 69.3188,
         "posY": 1.49510384,
         "posZ": -16.8729,
-        "rotX": 1.86774784E-07,
+        "rotX": 1.4204187E-07,
         "rotY": 269.9995,
-        "rotZ": -2.39450429E-07,
+        "rotZ": -3.73884546E-07,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
@@ -137,9 +397,9 @@
         "posX": 69.3252,
         "posY": 1.49510384,
         "posZ": -31.8729,
-        "rotX": -1.754757E-07,
+        "rotX": -9.676489E-08,
         "rotY": 270.002,
-        "rotZ": 7.158393E-07,
+        "rotZ": 7.60321257E-07,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
@@ -199,9 +459,9 @@
         "posX": 48.3036,
         "posY": 1.49510384,
         "posZ": 18.1180954,
-        "rotX": -1.0324203E-07,
+        "rotX": -1.64220722E-07,
         "rotY": 270.000061,
-        "rotZ": 1.46054031E-08,
+        "rotZ": -1.5240056E-07,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
@@ -261,9 +521,9 @@
         "posX": 69.3219,
         "posY": 1.49510384,
         "posZ": -24.3729,
-        "rotX": -2.333002E-07,
+        "rotX": -1.6638009E-07,
         "rotY": 270.0014,
-        "rotZ": 1.02656678E-07,
+        "rotZ": 2.11394465E-07,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
@@ -323,9 +583,9 @@
         "posX": 58.8069,
         "posY": 1.49510384,
         "posZ": 10.6226,
-        "rotX": -4.07849967E-08,
+        "rotX": -3.713048E-07,
         "rotY": 269.999146,
-        "rotZ": -1.15190772E-08,
+        "rotZ": -2.68726637E-07,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
@@ -385,9 +645,9 @@
         "posX": 55.3241,
         "posY": 1.51687169,
         "posZ": -29.3789,
-        "rotX": 8.54016946E-08,
+        "rotX": 1.3222369E-07,
         "rotY": 270.0088,
-        "rotZ": -6.377117E-08,
+        "rotZ": -6.411544E-08,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -653,9 +913,9 @@
         "posX": 69.3038,
         "posY": 1.49510384,
         "posZ": 18.1271954,
-        "rotX": -2.335072E-07,
+        "rotX": -1.9113287E-07,
         "rotY": 270.000061,
-        "rotZ": 4.68314852E-07,
+        "rotZ": 1.33128879E-07,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
@@ -715,9 +975,9 @@
         "posX": 48.3069,
         "posY": 1.49510384,
         "posZ": 10.6181,
-        "rotX": 1.01489043E-07,
+        "rotX": 6.005152E-08,
         "rotY": 269.9992,
-        "rotZ": -3.028522E-07,
+        "rotZ": -5.634854E-07,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
@@ -777,9 +1037,9 @@
         "posX": 58.8219,
         "posY": 1.49510384,
         "posZ": -24.3774,
-        "rotX": 1.814209E-07,
+        "rotX": 8.292139E-08,
         "rotY": 269.999939,
-        "rotZ": -3.24351078E-07,
+        "rotZ": -5.36369555E-07,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
@@ -839,9 +1099,9 @@
         "posX": 48.3101,
         "posY": 1.49510384,
         "posZ": 3.11809969,
-        "rotX": 1.03571454E-08,
+        "rotX": 2.56234145E-08,
         "rotY": 269.999939,
-        "rotZ": -2.736487E-07,
+        "rotZ": -7.361836E-07,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
@@ -901,9 +1161,9 @@
         "posX": 48.3004,
         "posY": 1.49510384,
         "posZ": 25.6181965,
-        "rotX": -1.0345795E-07,
+        "rotX": -6.370683E-08,
         "rotY": 269.999,
-        "rotZ": 6.782393E-09,
+        "rotZ": -3.31641644E-07,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
@@ -957,203 +1217,15 @@
       "XmlUI": ""
     },
     {
-      "GUID": "d9711f",
-      "Name": "Deck",
-      "Transform": {
-        "posX": 44.8026,
-        "posY": 1.51205766,
-        "posZ": 20.6165924,
-        "rotX": -7.530303E-08,
-        "rotY": 269.998932,
-        "rotZ": 4.82534E-09,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "",
-      "Description": "",
-      "GMNotes": "",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "Tags": [
-        "PlayerCard"
-      ],
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": false,
-      "SidewaysCard": false,
-      "DeckIDs": [
-        103700,
-        103700
-      ],
-      "CustomDeck": {
-        "1037": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427226176580998/2EB7B21FD7A255B9DBE9E66F297880976F94710E/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": "",
-      "ContainedObjects": [
-        {
-          "GUID": "e00040",
-          "Name": "Card",
-          "Transform": {
-            "posX": 44.802597,
-            "posY": 1.85632122,
-            "posZ": 20.6165676,
-            "rotX": 0.00157840492,
-            "rotY": 269.998871,
-            "rotZ": 359.984558,
-            "scaleX": 1.0,
-            "scaleY": 1.0,
-            "scaleZ": 1.0
-          },
-          "Nickname": "Black Talons",
-          "Description": "",
-          "GMNotes": "{\"id\":\"ATO29\",\"type\":\"Skill\",\"class\":\"Rogue\",\"traits\":\"Practiced. Expert.\",\"level\":0,\"wildIcons\":3,\"TtsZoopGuid\":\"ATO29\"}",
-          "AltLookAngle": {
-            "x": 0.0,
-            "y": 0.0,
-            "z": 0.0
-          },
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "Tags": [
-            "PlayerCard"
-          ],
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
-          "CardID": 103700,
-          "SidewaysCard": false,
-          "CustomDeck": {
-            "1037": {
-              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427226176580998/2EB7B21FD7A255B9DBE9E66F297880976F94710E/",
-              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": false,
-              "Type": 0
-            }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
-        },
-        {
-          "GUID": "bd01eb",
-          "Name": "Card",
-          "Transform": {
-            "posX": 44.802597,
-            "posY": 1.8915242,
-            "posZ": 20.61657,
-            "rotX": 359.9437,
-            "rotY": 269.99884,
-            "rotZ": 359.9643,
-            "scaleX": 1.0,
-            "scaleY": 1.0,
-            "scaleZ": 1.0
-          },
-          "Nickname": "Black Talons",
-          "Description": "",
-          "GMNotes": "{\"id\":\"ATO29\",\"type\":\"Skill\",\"class\":\"Rogue\",\"traits\":\"Practiced. Expert.\",\"level\":0,\"wildIcons\":3,\"TtsZoopGuid\":\"ATO29\"}",
-          "AltLookAngle": {
-            "x": 0.0,
-            "y": 0.0,
-            "z": 0.0
-          },
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "Tags": [
-            "PlayerCard"
-          ],
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
-          "CardID": 103700,
-          "SidewaysCard": false,
-          "CustomDeck": {
-            "1037": {
-              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427226176580998/2EB7B21FD7A255B9DBE9E66F297880976F94710E/",
-              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": false,
-              "Type": 0
-            }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
-        }
-      ]
-    },
-    {
       "GUID": "e00001",
       "Name": "Card",
       "Transform": {
         "posX": 65.8058,
         "posY": 1.49510384,
         "posZ": 13.1255941,
-        "rotX": 5.304291E-10,
+        "rotX": -1.44902605E-08,
         "rotY": 269.9992,
-        "rotZ": 3.948483E-08,
+        "rotZ": -7.79814542E-08,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -1213,9 +1285,9 @@
         "posX": 65.8072,
         "posY": 1.49510384,
         "posZ": 10.6254988,
-        "rotX": -2.15107349E-07,
+        "rotX": -2.08357633E-07,
         "rotY": 269.998,
-        "rotZ": 2.534018E-07,
+        "rotZ": 5.49067423E-08,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -1275,9 +1347,9 @@
         "posX": 69.3069,
         "posY": 1.49510384,
         "posZ": 10.6271,
-        "rotX": -3.095527E-07,
+        "rotX": -2.009902E-07,
         "rotY": 269.999939,
-        "rotZ": 7.027754E-08,
+        "rotZ": 3.733538E-08,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
@@ -1337,9 +1409,9 @@
         "posX": 69.3058,
         "posY": 1.49510384,
         "posZ": 13.127099,
-        "rotX": 2.08700683E-08,
+        "rotX": 5.09719627E-08,
         "rotY": 270.0047,
-        "rotZ": -1.68887169E-07,
+        "rotZ": -1.05448358E-07,
         "scaleX": 0.8214286,
         "scaleY": 1.0,
         "scaleZ": 0.8214286
@@ -1399,9 +1471,9 @@
         "posX": 69.3156,
         "posY": 1.49510384,
         "posZ": -9.3729,
-        "rotX": 3.53644339E-07,
+        "rotX": 2.77248432E-07,
         "rotY": 269.9988,
-        "rotZ": -8.357317E-07,
+        "rotZ": -8.12786652E-07,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
@@ -1461,9 +1533,9 @@
         "posX": 69.309,
         "posY": 1.49510384,
         "posZ": 5.62709951,
-        "rotX": -7.138112E-08,
+        "rotX": 1.760942E-07,
         "rotY": 270.0084,
-        "rotZ": 1.29623663E-08,
+        "rotZ": 4.37994E-08,
         "scaleX": 0.8214286,
         "scaleY": 1.0,
         "scaleZ": 0.8214286
@@ -1523,9 +1595,9 @@
         "posX": 65.811,
         "posY": 1.49510384,
         "posZ": 3.12559938,
-        "rotX": -1.03790505E-07,
+        "rotX": -1.57054089E-07,
         "rotY": 269.9997,
-        "rotZ": -1.10842335E-09,
+        "rotZ": -1.97556986E-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -1584,9 +1656,9 @@
         "posX": 65.8091,
         "posY": 1.49510384,
         "posZ": 5.6256,
-        "rotX": -4.07430818E-08,
+        "rotX": -1.15301546E-07,
         "rotY": 269.9998,
-        "rotZ": -9.35965758E-08,
+        "rotZ": -2.26767241E-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -1645,9 +1717,9 @@
         "posX": 69.3102,
         "posY": 1.49510384,
         "posZ": 3.12719941,
-        "rotX": 9.256464E-08,
+        "rotX": -3.30938917E-07,
         "rotY": 270.0,
-        "rotZ": -3.91468518E-07,
+        "rotZ": 3.463624E-07,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
@@ -1707,9 +1779,9 @@
         "posX": 69.3005,
         "posY": 1.49510384,
         "posZ": 25.6271954,
-        "rotX": -8.957246E-09,
+        "rotX": -6.754536E-08,
         "rotY": 269.9994,
-        "rotZ": -1.56458011E-08,
+        "rotZ": 1.64081328E-07,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
@@ -1769,9 +1841,9 @@
         "posX": 65.8008,
         "posY": 1.49510384,
         "posZ": 25.6254959,
-        "rotX": 1.9769405E-07,
+        "rotX": 1.51936248E-07,
         "rotY": 269.997742,
-        "rotZ": -2.43061947E-07,
+        "rotZ": -2.88850373E-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -1830,9 +1902,9 @@
         "posX": 65.8002,
         "posY": 1.49510384,
         "posZ": 28.1255989,
-        "rotX": -7.407757E-08,
+        "rotX": -4.18909458E-08,
         "rotY": 269.998,
-        "rotZ": -1.28053131E-07,
+        "rotZ": 2.199235E-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -1892,9 +1964,9 @@
         "posX": 58.8101,
         "posY": 1.49510384,
         "posZ": 3.12259984,
-        "rotX": -1.61359509E-07,
+        "rotX": -1.54441679E-07,
         "rotY": 270.001,
-        "rotZ": 4.70847169E-07,
+        "rotZ": -9.774424E-09,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
@@ -1954,9 +2026,9 @@
         "posX": 69.2994,
         "posY": 1.49510384,
         "posZ": 28.1270981,
-        "rotX": -1.45374E-08,
+        "rotX": -6.92783964E-09,
         "rotY": 269.9992,
-        "rotZ": -1.93634492E-07,
+        "rotZ": -1.14228605E-07,
         "scaleX": 0.8214286,
         "scaleY": 1.0,
         "scaleZ": 0.8214286
@@ -2016,9 +2088,9 @@
         "posX": 58.8155,
         "posY": 1.49510384,
         "posZ": -9.3774,
-        "rotX": -7.951067E-09,
+        "rotX": 4.92701E-09,
         "rotY": 270.00058,
-        "rotZ": 3.51008964E-08,
+        "rotZ": -1.66766938E-07,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
@@ -2078,9 +2150,9 @@
         "posX": 69.3026,
         "posY": 1.49510384,
         "posZ": 20.6270943,
-        "rotX": 1.73908788E-07,
+        "rotX": 2.41360823E-07,
         "rotY": 269.9828,
-        "rotZ": -2.53745416E-08,
+        "rotZ": -1.60200557E-07,
         "scaleX": 0.8214286,
         "scaleY": 1.0,
         "scaleZ": 0.8214286
@@ -2140,9 +2212,9 @@
         "posX": 65.8039,
         "posY": 1.49510384,
         "posZ": 18.1254959,
-        "rotX": 1.74088882E-07,
+        "rotX": 1.4592338E-07,
         "rotY": 269.9998,
-        "rotZ": -1.14123466E-07,
+        "rotZ": -2.567532E-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -2201,9 +2273,9 @@
         "posX": 65.8184,
         "posY": 1.49510384,
         "posZ": 20.6400967,
-        "rotX": 1.105029E-07,
+        "rotX": 6.660628E-08,
         "rotY": 269.9994,
-        "rotZ": 1.40019182E-07,
+        "rotZ": 3.22356186E-09,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -2264,9 +2336,9 @@
         "posX": 58.8004,
         "posY": 1.49510384,
         "posZ": 25.6226959,
-        "rotX": 4.75047E-07,
+        "rotX": 3.98589833E-07,
         "rotY": 270.0019,
-        "rotZ": -3.72413041E-07,
+        "rotZ": -4.52500785E-07,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
@@ -2326,9 +2398,9 @@
         "posX": 58.8252,
         "posY": 1.49510384,
         "posZ": -31.8775,
-        "rotX": 2.33517042E-07,
+        "rotX": 2.39225642E-07,
         "rotY": 270.0005,
-        "rotZ": -1.311456E-07,
+        "rotZ": 6.24277448E-07,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
@@ -2388,9 +2460,9 @@
         "posX": 58.8037,
         "posY": 1.49510384,
         "posZ": 18.1226978,
-        "rotX": 2.576736E-07,
+        "rotX": 2.00264537E-07,
         "rotY": 269.9998,
-        "rotZ": -6.906608E-07,
+        "rotZ": -7.228088E-07,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
@@ -2450,9 +2522,9 @@
         "posX": 65.8144,
         "posY": 1.49510384,
         "posZ": -6.8744,
-        "rotX": -1.98424246E-08,
+        "rotX": -4.299494E-08,
         "rotY": 270.000366,
-        "rotZ": 1.2238938E-07,
+        "rotZ": 4.40107243E-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -2511,9 +2583,9 @@
         "posX": 65.8157,
         "posY": 1.49510384,
         "posZ": -9.374401,
-        "rotX": 1.00431038E-07,
+        "rotX": 1.59272062E-07,
         "rotY": 270.0007,
-        "rotZ": 5.34705578E-08,
+        "rotZ": -1.40591311E-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -2572,9 +2644,9 @@
         "posX": 69.3144,
         "posY": 1.49510384,
         "posZ": -6.8729,
-        "rotX": -3.1397343E-07,
+        "rotX": -3.10102052E-07,
         "rotY": 270.0002,
-        "rotZ": 9.153181E-08,
+        "rotZ": 1.55955064E-07,
         "scaleX": 0.8214286,
         "scaleY": 1.0,
         "scaleZ": 0.8214286
@@ -2634,9 +2706,9 @@
         "posX": 69.3176,
         "posY": 1.49510384,
         "posZ": -14.3729,
-        "rotX": -1.40191119E-07,
+        "rotX": -1.16194848E-07,
         "rotY": 270.000854,
-        "rotZ": 8.973319E-08,
+        "rotZ": 1.64336114E-07,
         "scaleX": 0.8214286,
         "scaleY": 1.0,
         "scaleZ": 0.8214286
@@ -2696,9 +2768,9 @@
         "posX": 65.8187,
         "posY": 1.49510384,
         "posZ": -16.8744,
-        "rotX": -8.854546E-08,
+        "rotX": -6.445465E-08,
         "rotY": 270.0005,
-        "rotZ": 7.631944E-08,
+        "rotZ": -2.129923E-08,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -2758,9 +2830,9 @@
         "posX": 65.818,
         "posY": 1.49510384,
         "posZ": -14.3745,
-        "rotX": 2.31808244E-07,
+        "rotX": 1.33644434E-07,
         "rotY": 270.000061,
-        "rotZ": -2.19591939E-07,
+        "rotZ": -1.046063E-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -2820,9 +2892,9 @@
         "posX": 69.3241,
         "posY": 1.49510384,
         "posZ": -29.3729,
-        "rotX": -7.966147E-08,
+        "rotX": -2.11736136E-07,
         "rotY": 270.0002,
-        "rotZ": -1.49078872E-07,
+        "rotZ": -3.51378475E-07,
         "scaleX": 0.8214286,
         "scaleY": 1.0,
         "scaleZ": 0.8214286
@@ -2882,9 +2954,9 @@
         "posX": 65.9243,
         "posY": 1.49510384,
         "posZ": -31.8791,
-        "rotX": -9.803577E-08,
+        "rotX": -6.629887E-08,
         "rotY": 270.0025,
-        "rotZ": 1.45027812E-08,
+        "rotZ": -1.15188321E-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -2943,9 +3015,9 @@
         "posX": 65.8243,
         "posY": 1.49510384,
         "posZ": -29.3745,
-        "rotX": -7.3371794E-08,
+        "rotX": -2.18959819E-08,
         "rotY": 270.0041,
-        "rotZ": -1.30997435E-07,
+        "rotZ": -2.08141472E-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -3005,9 +3077,9 @@
         "posX": 69.3208,
         "posY": 1.49510384,
         "posZ": -21.8729,
-        "rotX": -8.439473E-08,
+        "rotX": -5.95175749E-08,
         "rotY": 269.9997,
-        "rotZ": -4.30978773E-08,
+        "rotZ": -1.1726096E-07,
         "scaleX": 0.8214286,
         "scaleY": 1.0,
         "scaleZ": 0.8214286
@@ -3067,9 +3139,9 @@
         "posX": 65.8209,
         "posY": 1.49510384,
         "posZ": -21.8744,
-        "rotX": -1.41789513E-07,
+        "rotX": -8.45475441E-08,
         "rotY": 270.0008,
-        "rotZ": -4.505683E-08,
+        "rotZ": -1.35837709E-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -3128,9 +3200,9 @@
         "posX": 65.8229,
         "posY": 1.49510384,
         "posZ": -24.3744,
-        "rotX": 2.59551847E-08,
+        "rotX": 3.81788752E-08,
         "rotY": 270.0005,
-        "rotZ": -2.01332142E-07,
+        "rotZ": -2.09900961E-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -3189,16 +3261,16 @@
         "posX": 48.3144,
         "posY": 1.49510384,
         "posZ": -6.8819,
-        "rotX": -5.810038E-07,
-        "rotY": 269.999969,
-        "rotZ": 9.14719251E-08,
+        "rotX": -9.800033E-07,
+        "rotY": 270.0,
+        "rotZ": -1.40157269E-07,
         "scaleX": 0.8214286,
         "scaleY": 1.0,
         "scaleZ": 0.8214286
       },
       "Nickname": "Heiner",
       "Description": "The Sentinel",
-      "GMNotes": "{\"id\":\"ATO63\",\"type\":\"Investigator\",\"class\":\"Neutral\",\"traits\":\"Construct.\",\"agilityIcons\":2,\"combatIcons\":4,\"intellectIcons\":4,\"willpowerIcons\":2,\"TtsZoopGuid\":\"ATO63\",\"extraToken\":\"Reaction\",\"signatures\":[{\"ATO64\":1,\"ATO65\":1}]}",
+      "GMNotes": "{\"id\":\"ATO63\",\"type\":\"Investigator\",\"class\":\"Neutral\",\"traits\":\"Construct.\",\"agilityIcons\":3,\"combatIcons\":3,\"intellectIcons\":3,\"willpowerIcons\":3,\"TtsZoopGuid\":\"ATO63\",\"signatures\":[{\"ATO64\":1,\"ATO65\":1,\"ATO87\":1,\"ATO88\":1,\"ATO89\":1,\"ATO90\":1}]}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -3231,8 +3303,8 @@
       "SidewaysCard": false,
       "CustomDeck": {
         "1024": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427226176584271/6ADE56C6514C9F13B16EFE105A14ED60DD022A8F/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/25427226176584304/2233D2DDCAA6E752DDC305246F06F1C04C63C835/",
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427770454995280/AAEFEA8254F620E89C4F8E07A951712285C68B65/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/25427770454995348/D1BC36C59CCAF625A7D8601987B3E0C1FC2D817E/",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -3251,9 +3323,9 @@
         "posX": 44.8155,
         "posY": 1.49510384,
         "posZ": -9.3834,
-        "rotX": 1.11293922E-07,
+        "rotX": 5.21158441E-08,
         "rotY": 270.0,
-        "rotZ": -6.508672E-08,
+        "rotZ": -1.95656085E-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -3292,69 +3364,7 @@
       "SidewaysCard": false,
       "CustomDeck": {
         "1025": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427226176584367/588163E1948A7362A7E0B8920EE20B20AD1001D7/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
-    },
-    {
-      "GUID": "e0002d",
-      "Name": "Card",
-      "Transform": {
-        "posX": 44.8144,
-        "posY": 1.49510384,
-        "posZ": -6.88340044,
-        "rotX": 1.0407387E-07,
-        "rotY": 269.999969,
-        "rotZ": -4.22983319E-08,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Steel Forge",
-      "Description": "",
-      "GMNotes": "{\"id\":\"ATO64\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Talent.\",\"permanent\":true,\"uses\":[{\"count\":0,\"token\":\"resource\",\"type\":\"Charge\"}],\"TtsZoopGuid\":\"ATO64\"}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "Tags": [
-        "Asset",
-        "PlayerCard"
-      ],
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
-      "CardID": 102600,
-      "SidewaysCard": false,
-      "CustomDeck": {
-        "1026": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427226176584430/39341A47C69F653FB2B9BE63ADF76FC6A501E6CF/",
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427770454995217/304EF4238C2C7BD12315E70485AD4A92929F655B/",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -3374,9 +3384,9 @@
         "posX": 44.8004,
         "posY": 1.49510384,
         "posZ": 25.616497,
-        "rotX": 9.746485E-08,
+        "rotX": -3.50951339E-08,
         "rotY": 270.0033,
-        "rotZ": -2.12193513E-07,
+        "rotZ": -1.39627531E-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -3435,9 +3445,9 @@
         "posX": 44.7994,
         "posY": 1.49510384,
         "posZ": 28.1165962,
-        "rotX": -2.2205279E-07,
+        "rotX": -1.92093069E-07,
         "rotY": 270.0027,
-        "rotZ": 1.05272044E-07,
+        "rotZ": 5.857373E-10,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -3496,9 +3506,9 @@
         "posX": 48.2993,
         "posY": 1.49510384,
         "posZ": 28.117794,
-        "rotX": -2.39949429E-07,
+        "rotX": -1.19896285E-07,
         "rotY": 270.0033,
-        "rotZ": 5.589325E-08,
+        "rotZ": 9.927569E-08,
         "scaleX": 0.8214286,
         "scaleY": 1.0,
         "scaleZ": 0.8214286
@@ -3558,9 +3568,9 @@
         "posX": 48.3058,
         "posY": 1.49510384,
         "posZ": 13.1180935,
-        "rotX": 1.219946E-07,
+        "rotX": 1.68413177E-08,
         "rotY": 269.996368,
-        "rotZ": -3.12002356E-07,
+        "rotZ": -3.45342215E-07,
         "scaleX": 0.8214286,
         "scaleY": 1.0,
         "scaleZ": 0.8214286
@@ -3620,9 +3630,9 @@
         "posX": 44.8069,
         "posY": 1.49510384,
         "posZ": 10.6165991,
-        "rotX": 1.13293908E-08,
+        "rotX": 9.075871E-08,
         "rotY": 269.999939,
-        "rotZ": 1.39793627E-07,
+        "rotZ": -7.418798E-08,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -3681,9 +3691,9 @@
         "posX": 44.8058,
         "posY": 1.49510384,
         "posZ": 13.1165953,
-        "rotX": -1.1318452E-07,
+        "rotX": -3.07840176E-09,
         "rotY": 270.000366,
-        "rotZ": 2.9915887E-07,
+        "rotZ": 7.292719E-08,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -3742,9 +3752,9 @@
         "posX": 48.309,
         "posY": 1.49510384,
         "posZ": 5.6182,
-        "rotX": -7.629427E-08,
+        "rotX": -2.99976051E-07,
         "rotY": 269.9969,
-        "rotZ": 1.24149835E-07,
+        "rotZ": 2.30806208E-07,
         "scaleX": 0.8214286,
         "scaleY": 1.0,
         "scaleZ": 0.8214286
@@ -3804,9 +3814,9 @@
         "posX": 44.8101,
         "posY": 1.49510384,
         "posZ": 3.11659956,
-        "rotX": -1.34822116E-07,
+        "rotX": -1.07799927E-07,
         "rotY": 269.9984,
-        "rotZ": 9.676776E-08,
+        "rotZ": -9.476202E-09,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -3865,9 +3875,9 @@
         "posX": 44.809,
         "posY": 1.49510384,
         "posZ": 5.61659956,
-        "rotX": 7.26285236E-08,
+        "rotX": -9.172877E-08,
         "rotY": 269.9985,
-        "rotZ": -7.59322E-08,
+        "rotZ": -2.618146E-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -3927,16 +3937,16 @@
         "posX": 48.3026,
         "posY": 1.49510384,
         "posZ": 20.6180935,
-        "rotX": -7.922232E-08,
+        "rotX": 1.55063411E-08,
         "rotY": 269.9969,
-        "rotZ": 1.84337934E-09,
+        "rotZ": 5.087887E-08,
         "scaleX": 0.8214286,
         "scaleY": 1.0,
         "scaleZ": 0.8214286
       },
       "Nickname": "Thuls",
       "Description": "The Assassin",
-      "GMNotes": "{\"id\":\"ATO28\",\"type\":\"Investigator\",\"class\":\"Rogue\",\"traits\":\"Hunter.\",\"agilityIcons\":5,\"combatIcons\":2,\"intellectIcons\":3,\"willpowerIcons\":2,\"TtsZoopGuid\":\"ATO28\",\"signatures\":[{\"ATO29\":2,\"ATO30\":1}]}",
+      "GMNotes": "{\"id\":\"ATO28\",\"type\":\"Investigator\",\"class\":\"Rogue\",\"traits\":\"Hunter.\",\"agilityIcons\":5,\"combatIcons\":2,\"intellectIcons\":3,\"willpowerIcons\":2,\"TtsZoopGuid\":\"ATO28\",\"signatures\":[{\"ATO29\":2,\"ATO91\":1,\"ATO30\":1}]}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -3969,8 +3979,8 @@
       "SidewaysCard": false,
       "CustomDeck": {
         "1036": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427226176585177/6B28A8CFB0E15C4B4A55BC34FDFC89EBAF399980/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/25427226176585294/373FC80DE20F17B97D16F78044A02358DC951705/",
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427770459877717/FB089483881F25311D54019704838EEBFFE13B95/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/25427770459871331/22D2BC21027C5A42013F3EDCD3000A7CC27F7174/",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -3989,9 +3999,9 @@
         "posX": 44.8037,
         "posY": 1.49510384,
         "posZ": 18.1165962,
-        "rotX": 5.575703E-10,
+        "rotX": 2.81465233E-08,
         "rotY": 269.9995,
-        "rotZ": -2.04007065E-07,
+        "rotZ": -2.689763E-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -4050,9 +4060,9 @@
         "posX": 55.3058,
         "posY": 1.49510384,
         "posZ": 13.1210957,
-        "rotX": 8.04122848E-08,
+        "rotX": 5.18334744E-08,
         "rotY": 270.0,
-        "rotZ": -9.804944E-08,
+        "rotZ": -3.041715E-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -4111,9 +4121,9 @@
         "posX": 55.3069,
         "posY": 1.49510384,
         "posZ": 10.6211,
-        "rotX": 6.36797948E-09,
+        "rotX": 7.543655E-08,
         "rotY": 269.999756,
-        "rotZ": 1.65033327E-07,
+        "rotZ": 5.690938E-08,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -4172,9 +4182,9 @@
         "posX": 58.8058,
         "posY": 1.49510384,
         "posZ": 13.1225939,
-        "rotX": -2.274869E-07,
+        "rotX": -1.5157822E-07,
         "rotY": 269.999969,
-        "rotZ": 1.59073146E-08,
+        "rotZ": -1.33120679E-07,
         "scaleX": 0.8214286,
         "scaleY": 1.0,
         "scaleZ": 0.8214286
@@ -4234,9 +4244,9 @@
         "posX": 58.809,
         "posY": 1.49510384,
         "posZ": 5.6226,
-        "rotX": 4.992602E-07,
-        "rotY": 269.999969,
-        "rotZ": 3.76368E-08,
+        "rotX": -3.35275319E-09,
+        "rotY": 270.0,
+        "rotZ": -9.923939E-08,
         "scaleX": 0.8214286,
         "scaleY": 1.0,
         "scaleZ": 0.8214286
@@ -4295,10 +4305,10 @@
       "Transform": {
         "posX": 55.3101,
         "posY": 1.49510384,
-        "posZ": 3.1211,
-        "rotX": -1.43089469E-08,
+        "posZ": 3.12109947,
+        "rotX": -1.43212034E-07,
         "rotY": 270.0,
-        "rotZ": 3.7281464E-07,
+        "rotZ": -2.23661925E-08,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -4357,9 +4367,9 @@
         "posX": 55.309,
         "posY": 1.49510384,
         "posZ": 5.62109947,
-        "rotX": -7.4829E-08,
+        "rotX": -1.289602E-07,
         "rotY": 270.0,
-        "rotZ": 1.06486588E-07,
+        "rotZ": 1.37012366E-08,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -4419,9 +4429,9 @@
         "posX": 58.7994,
         "posY": 1.49510384,
         "posZ": 28.1225948,
-        "rotX": -6.27010053E-08,
+        "rotX": -6.789334E-08,
         "rotY": 270.000061,
-        "rotZ": 1.07656E-07,
+        "rotZ": 1.21325092E-08,
         "scaleX": 0.8214286,
         "scaleY": 1.0,
         "scaleZ": 0.8214286
@@ -4481,16 +4491,16 @@
         "posX": 55.2994,
         "posY": 1.49510384,
         "posZ": 28.1210957,
-        "rotX": -7.002673E-08,
+        "rotX": -4.003704E-08,
         "rotY": 269.999939,
-        "rotZ": -2.40063542E-07,
+        "rotZ": -3.20250564E-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
       },
       "Nickname": "Energizer",
       "Description": "",
-      "GMNotes": "{\"id\":\"ATO14\",\"type\":\"Asset\",\"class\":\"Seeker\",\"traits\":\"Talent.\",\"cost\":3,\"intellectIcons\":2,\"TtsZoopGuid\":\"ATO14\"}",
+      "GMNotes": "{\"id\":\"ATO14\",\"type\":\"Asset\",\"class\":\"Seeker\",\"traits\":\"Talent.\",\"cost\":2,\"intellectIcons\":2,\"TtsZoopGuid\":\"ATO14\"}",
       "AltLookAngle": {
         "x": 0.0,
         "y": 0.0,
@@ -4523,7 +4533,7 @@
       "SidewaysCard": false,
       "CustomDeck": {
         "1046": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427226176585938/56D8FCEE7E11BA857F5EC4D85C8F6B2C7A7935F3/",
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25428404422872452/5A82FA8BB6A6C11F9D7CAA9DCA2EBF9E700926DE/",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -4543,9 +4553,9 @@
         "posX": 55.3005,
         "posY": 1.49510384,
         "posZ": 25.6210957,
-        "rotX": -7.737652E-08,
+        "rotX": -4.376278E-08,
         "rotY": 269.999939,
-        "rotZ": -2.13798472E-07,
+        "rotZ": -3.29964223E-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -4604,9 +4614,9 @@
         "posX": 58.8026,
         "posY": 1.49510384,
         "posZ": 20.6225948,
-        "rotX": 6.42031228E-09,
+        "rotX": -2.96900069E-08,
         "rotY": 269.9997,
-        "rotZ": 8.971531E-08,
+        "rotZ": -1.4349979E-07,
         "scaleX": 0.8214286,
         "scaleY": 1.0,
         "scaleZ": 0.8214286
@@ -4666,9 +4676,9 @@
         "posX": 55.3026,
         "posY": 1.49510384,
         "posZ": 20.6210957,
-        "rotX": -9.03547246E-08,
+        "rotX": -4.17923864E-08,
         "rotY": 269.999939,
-        "rotZ": -2.45699539E-07,
+        "rotZ": -3.30505372E-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -4727,9 +4737,9 @@
         "posX": 55.3037,
         "posY": 1.49510384,
         "posZ": 18.1210957,
-        "rotX": -2.4215754E-07,
+        "rotX": -1.50859421E-07,
         "rotY": 269.9998,
-        "rotZ": 2.59911843E-07,
+        "rotZ": 9.006631E-09,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -4788,9 +4798,9 @@
         "posX": 55.3187,
         "posY": 1.49510384,
         "posZ": -16.8789,
-        "rotX": 3.894399E-08,
+        "rotX": -5.62272451E-09,
         "rotY": 269.999939,
-        "rotZ": -1.14515338E-07,
+        "rotZ": -1.81166229E-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -4849,9 +4859,9 @@
         "posX": 55.3176,
         "posY": 1.49510384,
         "posZ": -14.3789005,
-        "rotX": 3.907999E-08,
+        "rotX": 1.01761074E-07,
         "rotY": 269.999939,
-        "rotZ": 1.05394818E-07,
+        "rotZ": -9.07050364E-08,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -4910,9 +4920,9 @@
         "posX": 58.8176,
         "posY": 1.49510384,
         "posZ": -14.3774014,
-        "rotX": -2.63338737E-08,
+        "rotX": -1.55937112E-08,
         "rotY": 270.0,
-        "rotZ": -8.816563E-08,
+        "rotZ": -3.19932525E-08,
         "scaleX": 0.8214286,
         "scaleY": 1.0,
         "scaleZ": 0.8214286
@@ -4972,9 +4982,9 @@
         "posX": 58.8209,
         "posY": 1.49510384,
         "posZ": -21.8775,
-        "rotX": -1.30802377E-07,
+        "rotX": -1.10552875E-07,
         "rotY": 270.000854,
-        "rotZ": 3.90488673E-08,
+        "rotZ": -1.81887671E-07,
         "scaleX": 0.8214286,
         "scaleY": 1.0,
         "scaleZ": 0.8214286
@@ -5034,9 +5044,9 @@
         "posX": 55.3219,
         "posY": 1.49510384,
         "posZ": -24.3789,
-        "rotX": -1.06304107E-07,
+        "rotX": -1.82072917E-08,
         "rotY": 270.0005,
-        "rotZ": 1.06594946E-07,
+        "rotZ": -5.992361E-08,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -5095,9 +5105,9 @@
         "posX": 55.3209,
         "posY": 1.49510384,
         "posZ": -21.8789,
-        "rotX": -7.418388E-08,
+        "rotX": -5.26539061E-08,
         "rotY": 270.0,
-        "rotZ": 1.71958661E-07,
+        "rotZ": 2.78978565E-08,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -5157,9 +5167,9 @@
         "posX": 58.8144,
         "posY": 1.49510384,
         "posZ": -6.877401,
-        "rotX": 1.0459874E-07,
+        "rotX": 5.711415E-08,
         "rotY": 269.999939,
-        "rotZ": -5.422359E-09,
+        "rotZ": -3.04423452E-07,
         "scaleX": 0.8214286,
         "scaleY": 1.0,
         "scaleZ": 0.8214286
@@ -5219,9 +5229,9 @@
         "posX": 55.3144,
         "posY": 1.49510384,
         "posZ": -6.87890053,
-        "rotX": -3.62171733E-08,
+        "rotX": -4.4545323E-09,
         "rotY": 269.9998,
-        "rotZ": -1.38953482E-07,
+        "rotZ": -1.70220872E-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -5260,7 +5270,7 @@
       "SidewaysCard": false,
       "CustomDeck": {
         "1058": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427226176586936/F5FCF7AC057AD73C0695857BBD38A3D1432779D3/",
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25428404422872991/AEDC523309DAB063F589A2F0C0D76BB1E4F93DAE/",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -5280,9 +5290,9 @@
         "posX": 55.3155,
         "posY": 1.49510384,
         "posZ": -9.378901,
-        "rotX": -1.5164E-08,
+        "rotX": -7.03141154E-08,
         "rotY": 269.9998,
-        "rotZ": -1.243124E-07,
+        "rotZ": -1.80963227E-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -5341,9 +5351,9 @@
         "posX": 58.8239,
         "posY": 1.49510384,
         "posZ": -29.3778,
-        "rotX": 6.83665746E-08,
+        "rotX": 7.87578855E-08,
         "rotY": 270.0054,
-        "rotZ": -2.69198779E-07,
+        "rotZ": -4.5398852E-07,
         "scaleX": 0.8214286,
         "scaleY": 1.0,
         "scaleZ": 0.8214286
@@ -5383,7 +5393,7 @@
       "SidewaysCard": false,
       "CustomDeck": {
         "1060": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427226176587052/8736BCC4278FD39E7D9194FFCFFCB82494B47FFE/",
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427770459912277/248A695DB58172F4272A2606526317E3EC34D3C6/",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/25427226176788392/7AB8DA23696CC1E1FFBA2008CD6912016D4AB2EE/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -5403,9 +5413,9 @@
         "posX": 55.3252,
         "posY": 1.49510384,
         "posZ": -31.8789,
-        "rotX": 1.28562725E-08,
+        "rotX": 1.87464764E-08,
         "rotY": 270.0144,
-        "rotZ": -1.01853267E-07,
+        "rotZ": -2.010375E-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -5458,15 +5468,431 @@
       "XmlUI": ""
     },
     {
+      "GUID": "e7d3ca",
+      "Name": "Deck",
+      "Transform": {
+        "posX": 44.8406,
+        "posY": 1.52649987,
+        "posZ": -6.8528,
+        "rotX": 6.620847E-08,
+        "rotY": 270.0,
+        "rotZ": 2.84399757E-08,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "",
+      "Description": "",
+      "GMNotes": "",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": false,
+      "SidewaysCard": false,
+      "DeckIDs": [
+        6612400,
+        6612200,
+        6612100,
+        6612300,
+        102600
+      ],
+      "CustomDeck": {
+        "66124": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427770454994722/DB01D6B2D254039E23FD1F768E52B26FC397330C/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        },
+        "66122": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427770454994673/44A491ABF4720B933222B4746CB4CC7D4A65421A/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        },
+        "66121": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427770454994617/5EE2A63FB243242E903CD9E3180781786BFDF8E3/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        },
+        "66123": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427770454994578/74BB3B864CB1BB067AFBF2A64B9D946C647FFF01/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        },
+        "1026": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427770454995383/DF3FA2FD761523EF5302AD9222143C4AE483540F/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": "",
+      "ContainedObjects": [
+        {
+          "GUID": "207d0e",
+          "Name": "Card",
+          "Transform": {
+            "posX": 44.8907,
+            "posY": 1.49512327,
+            "posZ": -19.85,
+            "rotX": -0.00012949892,
+            "rotY": 270.0,
+            "rotZ": 0.00119721179,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Defense Mastery",
+          "Description": "Reinforce",
+          "GMNotes": "{\"id\":\"ATO90\",\"type\":\"Asset\",\"class\":\"Rogue\",\"traits\":\"Talent.\",\"agilityIcons\":1,\"TtsZoopGuid\":\"ATO90\"}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "Asset",
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 6612400,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "66124": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427770454994722/DB01D6B2D254039E23FD1F768E52B26FC397330C/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "18b94e",
+          "Name": "Card",
+          "Transform": {
+            "posX": 44.9522858,
+            "posY": 1.53115058,
+            "posZ": -19.7687874,
+            "rotX": 359.991821,
+            "rotY": 270.0,
+            "rotZ": 359.986084,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Defense Mastery",
+          "Description": "Fortify",
+          "GMNotes": "{\"id\":\"ATO89\",\"type\":\"Asset\",\"class\":\"Guardian\",\"traits\":\"Talent.\",\"combatIcons\":1,\"TtsZoopGuid\":\"ATO89\"}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "Asset",
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 6612200,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "66122": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427770454994673/44A491ABF4720B933222B4746CB4CC7D4A65421A/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "3e799b",
+          "Name": "Card",
+          "Transform": {
+            "posX": 44.9490242,
+            "posY": 1.57074034,
+            "posZ": -19.4827652,
+            "rotX": -0.000291618257,
+            "rotY": 270.0,
+            "rotZ": -0.000627555,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Defense Mastery",
+          "Description": "Insulate",
+          "GMNotes": "{\"id\":\"ATO88\",\"type\":\"Asset\",\"class\":\"Seeker\",\"traits\":\"Talent.\",\"intellectIcons\":1,\"TtsZoopGuid\":\"ATO88\"}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "Asset",
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 6612100,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "66121": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427770454994617/5EE2A63FB243242E903CD9E3180781786BFDF8E3/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "2c7654",
+          "Name": "Card",
+          "Transform": {
+            "posX": 45.0953751,
+            "posY": 1.580346,
+            "posZ": -19.3942814,
+            "rotX": 0.00018291139,
+            "rotY": 270.0,
+            "rotZ": -0.000778369431,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Defense Mastery",
+          "Description": "Courage",
+          "GMNotes": "{\"id\":\"ATO87\",\"type\":\"Asset\",\"class\":\"Mystic\",\"traits\":\"Talent.\",\"willpowerIcons\":1,\"TtsZoopGuid\":\"ATO87\"}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "Asset",
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 6612300,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "66123": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427770454994578/74BB3B864CB1BB067AFBF2A64B9D946C647FFF01/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "e0002d",
+          "Name": "Card",
+          "Transform": {
+            "posX": 44.8144,
+            "posY": 1.49500632,
+            "posZ": -6.883403,
+            "rotX": 0.00105761667,
+            "rotY": 269.999969,
+            "rotZ": 180.006592,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Steel Forge",
+          "Description": "",
+          "GMNotes": "{\"id\":\"ATO64\",\"type\":\"Asset\",\"class\":\"Survivor\",\"traits\":\"Talent.\",\"permanent\":true,\"TtsZoopGuid\":\"ATO64\"}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "Asset",
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 102600,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "1026": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427770454995383/DF3FA2FD761523EF5302AD9222143C4AE483540F/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        }
+      ]
+    },
+    {
       "GUID": "eb8a5f",
       "Name": "Card",
       "Transform": {
         "posX": 48.3155,
         "posY": 1.49510384,
         "posZ": -9.3819,
-        "rotX": -3.19087867E-08,
+        "rotX": -1.57549167E-07,
         "rotY": 270.0,
-        "rotZ": -2.95443385E-07,
+        "rotZ": -3.93902326E-07,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
@@ -5506,8 +5932,8 @@
       "SidewaysCard": false,
       "CustomDeck": {
         "66109": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427226176587246/C73F999B73D007BDE273A08B6D7ED7204983CBAB/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/25427226176587278/9F766E30989540DD54D367273066688E8DB31B49/",
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/25427770454996814/F72CA03A696D9E6C55D1E89B45BEC4EE86945202/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/25427770454996932/F323833597B99400713BA7B1E9D4AA8DA5FCFB36/",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -5526,9 +5952,9 @@
         "posX": 58.8187,
         "posY": 1.49510384,
         "posZ": -16.8774,
-        "rotX": 2.18140258E-07,
+        "rotX": 2.8223198E-07,
         "rotY": 270.000061,
-        "rotZ": -2.24264724E-07,
+        "rotZ": -7.849874E-07,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
