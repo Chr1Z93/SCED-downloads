@@ -1,0 +1,262 @@
+-- Campaign Log: The Feast of Hemlock Vale (Page 2)
+
+-- set this to true while editing and false when you have finished
+local disableSave       = false
+local buttonFontColor   = { 0, 0, 0 }
+local buttonColor       = { 1, 1, 1 }
+local buttonScale       = { 0.13, 0.13, 0.13 }
+local defaultButtonData = {
+  checkbox = {},
+  counter = {},
+  textbox = {
+    -- Madre
+    {
+      pos = { -0.69, 0.11, -1.58 },
+      rot = { 0, -3, 0 }
+    },
+    -- Leah
+    {
+      pos = { 0.765, 0.11, -1.545 },
+      rot = { 0, 3, 0 }
+    },
+    -- Simeon
+    {
+      pos = { -0.7, 0.11, -0.66 },
+      rot = { 0, -1, 0 }
+    },
+    -- William
+    {
+      pos = { 0.82, 0.11, -0.6 },
+      rot = { 0, -2, 0 }
+    },
+    -- River
+    {
+      pos = { -0.63, 0.11, 0.455 },
+      rot = { 0, 0, 0 }
+    },
+    -- Gideon
+    {
+      pos = { 0.79, 0.11, 0.365 },
+      rot = { 0, 0, 0 }
+    },
+    -- Judith
+    {
+      pos = { -0.78, 0.11, 1.54 },
+      rot = { 0, -1, 0 }
+    },
+    -- Theo
+    {
+      pos = { 0.585, 0.11, 1.22 },
+      rot = { 0, 2, 0 }
+    }
+  }
+}
+
+local cb_unicode = {}
+
+function updateSave() self.script_state = onSave() end
+
+function onSave() return JSON.encode(ref_buttonData) end
+
+-- startup procedure
+function onLoad(saved_data)
+  if disableSave == true then saved_data = "" end
+  if saved_data ~= "" then
+    local loaded_data = JSON.decode(saved_data)
+    ref_buttonData = loaded_data
+  else
+    -- default settings for all boxes
+    for _, entry in ipairs(defaultButtonData.textbox) do
+      if entry.noDefault == true then break end
+      entry.label = "Click to type"
+      entry.value = ""
+      entry.width = 3250
+      entry.font_size = 215
+      if entry.rows == nil then entry.rows = 9 end
+    end
+
+    -- checkboxes for relationship level
+    local rlPos = {
+      madre   = {
+        startPos = Vector(-0.64, 0.06, -1.23),
+        boxCount = 6
+      },
+      leah    = {
+        startPos = Vector(0.82, 0.06, -1.194),
+        boxCount = 6
+      },
+      simeon  = {
+        startPos = Vector(-0.61, 0.06, -0.32),
+        boxCount = 6
+      },
+      william = {
+        startPos = Vector(0.945, 0.06, -0.265),
+        boxCount = 6
+      },
+      river   = {
+        startPos = Vector(-0.67, 0.06, 0.805),
+        boxCount = 6
+      },
+      gideon  = {
+        startPos = Vector(0.89, 0.06, 0.7),
+        boxCount = 6
+      },
+      judith  = {
+        startPos = Vector(-0.772, 0.06, 1.88),
+        boxCount = 7
+      },
+      theo    = {
+        startPos = Vector(0.475, 0.06, 1.56),
+        boxCount = 7
+      }
+    }
+    for _, char in pairs(rlPos) do
+      for i = 0, (char.boxCount - 1) do
+        local random_degree = math.random(-5, 5)
+        local random_size = math.random(90, 110)
+        local cb_tbl = {
+          pos = { char.startPos.x + i * 0.0657, char.startPos.y, char.startPos.z },
+          rot = { 0, 3 + random_degree, 0 },
+          size = 250 * random_size / 100,
+          state = false
+        }
+        table.insert(defaultButtonData.checkbox, cb_tbl)
+      end
+    end
+
+    ref_buttonData = defaultButtonData
+  end
+
+  math.randomseed(112)
+  local choices = { 10007, 10008 }
+  for i = 1, 50 do
+    table.insert(cb_unicode, choices[math.random(1, #choices)])
+  end
+
+  spawnedButtonCount = 0
+  createCheckbox()
+  createCounter()
+  createTextbox()
+end
+
+-- click functions for buttons
+-- checks or unchecks the given box
+function click_checkbox(tableIndex, buttonIndex)
+  local state = ref_buttonData.checkbox[tableIndex].state
+  ref_buttonData.checkbox[tableIndex].state = not state
+  self.editButton({
+    index = buttonIndex,
+    label = (state and "" or string.char(cb_unicode[buttonIndex + 1]))
+  })
+  updateSave()
+end
+
+-- applies value to given counter display
+function click_counter(tableIndex, buttonIndex, amount)
+  ref_buttonData.counter[tableIndex].value = ref_buttonData.counter[tableIndex].value + amount
+  self.editButton({ index = buttonIndex, label = ref_buttonData.counter[tableIndex].value })
+  updateSave()
+end
+
+-- updates saved value for given text box
+function click_textbox(i, value, selected)
+  if selected == false then
+    ref_buttonData.textbox[i].value = value
+    updateSave()
+  end
+end
+
+-- makes checkboxes
+function createCheckbox()
+  for i, data in ipairs(ref_buttonData.checkbox) do
+    local buttonIndex = spawnedButtonCount
+    local funcName = "checkbox" .. i
+    self.setVar(funcName, function() click_checkbox(i, buttonIndex) end)
+    self.createButton({
+      label          = data.state and string.char(cb_unicode[buttonIndex + 1]) or "",
+      click_function = funcName,
+      function_owner = self,
+      position       = data.pos,
+      rotation       = data.rot or { 0, 0, 0 },
+      height         = data.size,
+      width          = data.size,
+      font_size      = data.size,
+      scale          = buttonScale,
+      color          = { 1, 1, 1, 0 },
+      font_color     = { 0, 0, 0, 97 }
+    })
+    spawnedButtonCount = spawnedButtonCount + 1
+  end
+end
+
+-- makes counters
+function createCounter()
+  for i, data in ipairs(ref_buttonData.counter) do
+    -- common parameters
+    local size                      = 400
+    local offsetDistance            = 3 / 4 * size * buttonScale[1] * 0.002
+    local buttonParameters          = {}
+    buttonParameters.function_owner = self
+    buttonParameters.scale          = buttonScale
+    buttonParameters.color          = buttonColor
+    buttonParameters.font_color     = buttonFontColor
+
+    -- sets up display
+    local displayNumber             = spawnedButtonCount
+    buttonParameters.label          = data.value
+    buttonParameters.click_function = "click_none"
+    buttonParameters.position       = data.pos
+    buttonParameters.height         = 0
+    buttonParameters.width          = 0
+    buttonParameters.font_size      = size
+    self.createButton(buttonParameters)
+    spawnedButtonCount = spawnedButtonCount + 1
+
+    -- sets up add 1
+    local funcName = "counterAdd" .. i
+    local func = function() click_counter(i, displayNumber, 1) end
+    self.setVar(funcName, func)
+
+    buttonParameters.label          = "+"
+    buttonParameters.click_function = funcName
+    buttonParameters.position       = { data.pos[1] + offsetDistance, data.pos[2], data.pos[3] - 0.005 }
+    buttonParameters.height         = size * 0.55
+    buttonParameters.width          = size * 0.55
+    buttonParameters.font_size      = size * 0.55
+    self.createButton(buttonParameters)
+    spawnedButtonCount = spawnedButtonCount + 1
+
+    -- sets up subtract 1
+    local funcName = "counterSub" .. i
+    local func = function() click_counter(i, displayNumber, -1) end
+    self.setVar(funcName, func)
+
+    buttonParameters.label          = "-"
+    buttonParameters.click_function = funcName
+    buttonParameters.position       = { data.pos[1] - offsetDistance, data.pos[2], data.pos[3] - 0.005 }
+    self.createButton(buttonParameters)
+    spawnedButtonCount = spawnedButtonCount + 1
+  end
+end
+
+function createTextbox()
+  for i, data in ipairs(ref_buttonData.textbox) do
+    local funcName = "textbox" .. i
+    self.setVar(funcName, function(_, _, val, sel) click_textbox(i, val, sel) end)
+    self.createInput({
+      input_function = funcName,
+      function_owner = self,
+      label          = data.label,
+      alignment      = 2,
+      position       = data.pos,
+      rotation       = data.rot or { 0, 0, 0 },
+      scale          = buttonScale,
+      width          = data.width,
+      height         = (data.font_size * data.rows) + 40,
+      font_size      = data.font_size,
+      color          = buttonColor,
+      font_color     = buttonFontColor,
+      value          = data.value
+    })
+  end
+end
