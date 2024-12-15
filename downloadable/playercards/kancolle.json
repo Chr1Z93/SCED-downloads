@@ -1,0 +1,1823 @@
+{
+  "GUID": "81d579",
+  "Name": "Custom_Model_Bag",
+  "Transform": {
+    "posX": 33.6923523,
+    "posY": 1.48554039,
+    "posZ": -2.9888165,
+    "rotX": -1.19469371E-06,
+    "rotY": 270.0071,
+    "rotZ": 6.65813377E-06,
+    "scaleX": 1.0,
+    "scaleY": 0.14,
+    "scaleZ": 1.0
+  },
+  "Nickname": "Kancolle Investigator Pack",
+  "Description": "",
+  "GMNotes": "",
+  "AltLookAngle": {
+    "x": 0.0,
+    "y": 0.0,
+    "z": 0.0
+  },
+  "ColorDiffuse": {
+    "r": 1.0,
+    "g": 1.0,
+    "b": 1.0
+  },
+  "Tags": [
+    "CampaignBox"
+  ],
+  "LayoutGroupSortIndex": 0,
+  "Value": 0,
+  "Locked": false,
+  "Grid": true,
+  "Snap": true,
+  "IgnoreFoW": false,
+  "MeasureMovement": false,
+  "DragSelectable": true,
+  "Autoraise": true,
+  "Sticky": true,
+  "Tooltip": true,
+  "GridProjection": false,
+  "HideWhenFaceDown": false,
+  "Hands": false,
+  "MaterialIndex": -1,
+  "MeshIndex": -1,
+  "CustomMesh": {
+    "MeshURL": "https://raw.githubusercontent.com/RobMayer/TTSLibrary/master/advboxes/core_h_MSH.obj",
+    "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/49072302460153049/2D2DB1859C16F466BC16E8415C077C578F1742B9/",
+    "NormalURL": "",
+    "ColliderURL": "https://raw.githubusercontent.com/RobMayer/TTSLibrary/master/advboxes/core_h_COL.obj",
+    "Convex": true,
+    "MaterialIndex": 3,
+    "TypeIndex": 6,
+    "CustomShader": {
+      "SpecularColor": {
+        "r": 1.0,
+        "g": 1.0,
+        "b": 1.0
+      },
+      "SpecularIntensity": 0.0,
+      "SpecularSharpness": 2.0,
+      "FresnelStrength": 0.0
+    },
+    "CastShadows": true
+  },
+  "Bag": {
+    "Order": 0
+  },
+  "LuaScript": "-- Utility memory bag by Directsun\r\n-- Version 2.5.2\r\n-- Fork of Memory Bag 2.0 by MrStump\r\n\r\nfunction updateSave()\r\n    local data_to_save = {[\"ml\"]=memoryList}\r\n    saved_data = JSON.encode(data_to_save)\r\n    self.script_state = saved_data\r\nend\r\n\r\nfunction combineMemoryFromBagsWithin()\r\n  local bagObjList = self.getObjects()\r\n  for _, bagObj in ipairs(bagObjList) do\r\n    local data = bagObj.lua_script_state\r\n      if data ~= nil then\r\n        local j = JSON.decode(data)\r\n        if j ~= nil and j.ml ~= nil then\r\n          for guid, entry in pairs(j.ml) do\r\n            memoryList[guid] = entry\r\n          end\r\n        end\r\n      end\r\n    end\r\nend\r\n\r\nfunction updateMemoryWithMoves()\r\n    memoryList = memoryListBackup\r\n    --get the first transposed object's coordinates\r\n    local obj = getObjectFromGUID(moveGuid)\r\n\r\n    -- p1 is where needs to go, p2 is where it was\r\n    local refObjPos = memoryList[moveGuid].pos\r\n    local deltaPos = findOffsetDistance(obj.getPosition(), refObjPos, nil)\r\n    local movedRotation = obj.getRotation()\r\n    for guid, entry in pairs(memoryList) do\r\n        memoryList[guid].pos.x = entry.pos.x - deltaPos.x\r\n        memoryList[guid].pos.y = entry.pos.y - deltaPos.y\r\n        memoryList[guid].pos.z = entry.pos.z - deltaPos.z\r\n        -- memoryList[guid].rot.x = movedRotation.x\r\n        -- memoryList[guid].rot.y = movedRotation.y\r\n        -- memoryList[guid].rot.z = movedRotation.z\r\n    end\r\n\r\n    --theList[obj.getGUID()] = {\r\n    --    pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\r\n    --    rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\r\n    --    lock=obj.getLock()\r\n    --}\r\n    moveList = {}\r\nend\r\n\r\nfunction onload(saved_data)\r\n    fresh = true\r\n    if saved_data ~= \"\" then\r\n        local loaded_data = JSON.decode(saved_data)\r\n        --Set up information off of loaded_data\r\n        memoryList = loaded_data.ml\r\n    else\r\n        --Set up information for if there is no saved saved data\r\n        memoryList = {}\r\n    end\r\n\r\n    moveList = {}\r\n    moveGuid = nil\r\n\r\n    if next(memoryList) == nil then\r\n        createSetupButton()\r\n    else\r\n        fresh = false\r\n        createMemoryActionButtons()\r\n    end\r\nend\r\n\r\n\r\n--Beginning Setup\r\n\r\n\r\n--Make setup button\r\nfunction createSetupButton()\r\n    self.createButton({\r\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\r\n        position={0,0.1,-6}, rotation={0,0,0}, height=500, width=1200,\r\n        font_size=350, color={0,0,0}, font_color={1,1,1}\r\n    })\r\nend\r\n\r\n--Triggered by Transpose button\r\nfunction buttonClick_transpose()\r\n    moveGuid = nil\r\n    broadcastToAll(\"Select one object and move it- all objects will move relative to the new location\", {0.75, 0.75, 1})\r\n    memoryListBackup = duplicateTable(memoryList)\r\n    memoryList = {}\r\n    moveList = {}\r\n    self.clearButtons()\r\n    createButtonsOnAllObjects(true)\r\n    createSetupActionButtons(true)\r\nend\r\n\r\n--Triggered by setup button,\r\nfunction buttonClick_setup()\r\n    memoryListBackup = duplicateTable(memoryList)\r\n    memoryList = {}\r\n    self.clearButtons()\r\n    createButtonsOnAllObjects(false)\r\n    createSetupActionButtons(false)\r\nend\r\n\r\nfunction getAllObjectsInMemory()\r\n  local objTable = {}\r\n  local curObj = {}\r\n\r\n  for guid in pairs(memoryListBackup) do\r\n    curObj = getObjectFromGUID(guid)\r\n    table.insert(objTable, curObj)\r\n  end\r\n\r\n  return objTable\r\n  -- return getAllObjects()\r\nend\r\n\r\n--Creates selection buttons on objects\r\nfunction createButtonsOnAllObjects(move)\r\n    local howManyButtons = 0\r\n\r\n    local objsToHaveButtons = {}\r\n    if move == true then\r\n      objsToHaveButtons = getAllObjectsInMemory()\r\n    else\r\n      objsToHaveButtons = getAllObjects()\r\n    end\r\n\r\n    for _, obj in ipairs(objsToHaveButtons) do\r\n        if obj ~= self then\r\n            local dummyIndex = howManyButtons\r\n            --On a normal bag, the button positions aren't the same size as the bag.\r\n            globalScaleFactor = 1 * 1/self.getScale().x\r\n            --Super sweet math to set button positions\r\n            local selfPos = self.getPosition()\r\n            local objPos = obj.getPosition()\r\n            local deltaPos = findOffsetDistance(selfPos, objPos, obj)\r\n            local objPos = rotateLocalCoordinates(deltaPos, self)\r\n            objPos.x = -objPos.x * globalScaleFactor\r\n            objPos.y = objPos.y * globalScaleFactor + 4\r\n            objPos.z = objPos.z * globalScaleFactor\r\n            --Offset rotation of bag\r\n            local rot = self.getRotation()\r\n            rot.y = -rot.y + 180\r\n            --Create function\r\n            local funcName = \"selectButton_\" .. howManyButtons\r\n            local func = function() buttonClick_selection(dummyIndex, obj, move) end\r\n            local color = {0.75,0.25,0.25,0.6}\r\n            local colorMove = {0,0,1,0.6}\r\n            if move == true then\r\n              color = colorMove\r\n            end\r\n            self.setVar(funcName, func)\r\n            self.createButton({\r\n                click_function=funcName, function_owner=self,\r\n                position=objPos, rotation=rot, height=1000, width=1000,\r\n                color=color,\r\n            })\r\n            howManyButtons = howManyButtons + 1\r\n        end\r\n    end\r\nend\r\n\r\n--Creates submit and cancel buttons\r\nfunction createSetupActionButtons(move)\r\n    self.createButton({\r\n        label=\"Cancel\", click_function=\"buttonClick_cancel\", function_owner=self,\r\n      position={-1.25,0.1,-6}, rotation={0,0,0}, height=500, width=1200,\r\n        font_size=350, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n\r\n    self.createButton({\r\n        label=\"Submit\", click_function=\"buttonClick_submit\", function_owner=self,\r\n        position={-1.25,0.3,-7}, rotation={0,0,0}, height=500, width=1200,\r\n        font_size=350, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n\r\n    if move == false then\r\n      self.createButton({\r\n          label=\"Add\", click_function=\"buttonClick_add\", function_owner=self,\r\n          position={1.25,0.3,-6}, rotation={0,0,0}, height=500, width=1200,\r\n          font_size=350, color={0,0,0}, font_color={0.25,1,0.25}\r\n      })\r\n\r\n        if fresh == false then\r\n            self.createButton({\r\n                label=\"Set New\", click_function=\"buttonClick_setNew\", function_owner=self,\r\n                position={1.25,0.3,-8}, rotation={0,0,0}, height=500, width=1200,\r\n                font_size=350, color={0,0,0}, font_color={0.75,0.75,1}\r\n            })\r\n            self.createButton({\r\n                label=\"Remove\", click_function=\"buttonClick_remove\", function_owner=self,\r\n                position={1.25,0.3,-7}, rotation={0,0,0}, height=500, width=1200,\r\n                font_size=350, color={0,0,0}, font_color={1,0.25,0.25}\r\n            })\r\n        end\r\n    end\r\n\r\n    self.createButton({\r\n        label=\"Reset\", click_function=\"buttonClick_reset\", function_owner=self,\r\n        position={-1.25,0.3,-8}, rotation={0,0,0}, height=500, width=1200,\r\n        font_size=350, color={0,0,0}, font_color={1,1,1}\r\n    })\r\nend\r\n\r\n\r\n--During Setup\r\n\r\n\r\n--Checks or unchecks buttons\r\nfunction buttonClick_selection(index, obj, move)\r\n    local colorMove = {0,0,1,0.6}\r\n    local color = {0,1,0,0.6}\r\n\r\n    previousGuid = selectedGuid\r\n    selectedGuid = obj.getGUID()\r\n\r\n    theList = memoryList\r\n    if move == true then\r\n       theList = moveList\r\n       if previousGuid ~= nil and previousGuid ~= selectedGuid then\r\n         local prevObj = getObjectFromGUID(previousGuid)\r\n         prevObj.highlightOff()\r\n         self.editButton({index=previousIndex, color=colorMove})\r\n         theList[previousGuid] = nil\r\n       end\r\n       previousIndex = index\r\n    end\r\n\r\n    if theList[selectedGuid] == nil then\r\n        self.editButton({index=index, color=color})\r\n        --Adding pos/rot to memory table\r\n        local pos, rot = obj.getPosition(), obj.getRotation()\r\n        --I need to add it like this or it won't save due to indexing issue\r\n        theList[obj.getGUID()] = {\r\n            pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\r\n            rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\r\n            lock=obj.getLock()\r\n        }\r\n        obj.highlightOn({0,1,0})\r\n    else\r\n      color = {0.75,0.25,0.25,0.6}\r\n      if move == true then\r\n        color = colorMove\r\n      end\r\n        self.editButton({index=index, color=color})\r\n        theList[obj.getGUID()] = nil\r\n        obj.highlightOff()\r\n    end\r\nend\r\n\r\n--Cancels selection process\r\nfunction buttonClick_cancel()\r\n    memoryList = memoryListBackup\r\n    moveList = {}\r\n    self.clearButtons()\r\n    if next(memoryList) == nil then\r\n        createSetupButton()\r\n    else\r\n        createMemoryActionButtons()\r\n    end\r\n    removeAllHighlights()\r\n    broadcastToAll(\"Selection Canceled\", {1,1,1})\r\n    moveGuid = nil\r\nend\r\n\r\n--Saves selections\r\nfunction buttonClick_submit()\r\n    fresh = false\r\n    if next(moveList) ~= nil then\r\n        for guid in pairs(moveList) do\r\n            moveGuid = guid\r\n        end\r\n        if memoryListBackup[moveGuid] == nil then\r\n            broadcastToAll(\"Item selected for moving is not already in memory\", {1, 0.25, 0.25})\r\n        else\r\n            broadcastToAll(\"Moving all items in memory relative to new objects position!\", {0.75, 0.75, 1})\r\n            self.clearButtons()\r\n            createMemoryActionButtons()\r\n            local count = 0\r\n            for guid in pairs(moveList) do\r\n                moveGuid = guid\r\n                count = count + 1\r\n                local obj = getObjectFromGUID(guid)\r\n                if obj ~= nil then obj.highlightOff() end\r\n            end\r\n            updateMemoryWithMoves()\r\n            updateSave()\r\n            buttonClick_place()\r\n        end\r\n    elseif next(memoryList) == nil and moveGuid == nil then\r\n      memoryList = memoryListBackup\r\n      broadcastToAll(\"No selections made.\", {0.75, 0.25, 0.25})\r\n    end\r\n    combineMemoryFromBagsWithin()\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for guid in pairs(memoryList) do\r\n        count = count + 1\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then obj.highlightOff() end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    updateSave()\r\n    moveGuid = nil\r\nend\r\n\r\nfunction combineTables(first_table, second_table)\r\n  for k,v in pairs(second_table) do first_table[k] = v end\r\nend\r\n\r\nfunction buttonClick_add()\r\n    fresh = false\r\n    combineTables(memoryList, memoryListBackup)\r\n    broadcastToAll(\"Adding internal bags and selections to existing memory\", {0.25, 0.75, 0.25})\r\n    combineMemoryFromBagsWithin()\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for guid in pairs(memoryList) do\r\n        count = count + 1\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then obj.highlightOff() end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    updateSave()\r\nend\r\n\r\nfunction buttonClick_remove()\r\n        broadcastToAll(\"Removing Selected Entries From Memory\", {1.0, 0.25, 0.25})\r\n        self.clearButtons()\r\n        createMemoryActionButtons()\r\n        local count = 0\r\n        for guid in pairs(memoryList) do\r\n            count = count + 1\r\n            memoryListBackup[guid] = nil\r\n            local obj = getObjectFromGUID(guid)\r\n            if obj ~= nil then obj.highlightOff() end\r\n        end\r\n        broadcastToAll(count..\" Objects Removed\", {1,1,1})\r\n        memoryList = memoryListBackup\r\n        updateSave()\r\nend\r\n\r\nfunction buttonClick_setNew()\r\n    broadcastToAll(\"Setting new position relative to items in memory\", {0.75, 0.75, 1})\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for _, obj in ipairs(getAllObjects()) do\r\n        guid = obj.guid\r\n        if memoryListBackup[guid] ~= nil then\r\n            count = count + 1\r\n            memoryListBackup[guid].pos = obj.getPosition()\r\n            memoryListBackup[guid].rot = obj.getRotation()\r\n            memoryListBackup[guid].lock = obj.getLock()\r\n        end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    memoryList = memoryListBackup\r\n    updateSave()\r\nend\r\n\r\n--Resets bag to starting status\r\nfunction buttonClick_reset()\r\n    fresh = true\r\n    memoryList = {}\r\n    self.clearButtons()\r\n    createSetupButton()\r\n    removeAllHighlights()\r\n    broadcastToAll(\"Tool Reset\", {1,1,1})\r\n    updateSave()\r\nend\r\n\r\n\r\n--After Setup\r\n\r\n\r\n--Creates recall and place buttons\r\nfunction createMemoryActionButtons()\r\n    self.createButton({\r\n        label=\"Place\", click_function=\"buttonClick_place\", function_owner=self,\r\n        position={1.35,1,6}, rotation={0,0,0}, height=500, width=1200,\r\n        font_size=350, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n    self.createButton({\r\n        label=\"Recall\", click_function=\"buttonClick_recall\", function_owner=self,\r\n        position={-1.25,1,6}, rotation={0,0,0}, height=500, width=1200,\r\n        font_size=350, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n    self.createButton({\r\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\r\n        position={0,0.1,-6}, rotation={0,0,0}, height=500, width=1200,\r\n        font_size=350, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n---    self.createButton({\r\n---      label=\"Move\", click_function=\"buttonClick_transpose\", function_owner=self,\r\n---      position={-2.8,0.3,0}, rotation={0,0,0}, height=350, width=800,\r\n---      font_size=250, color={0,0,0}, font_color={0.75,0.75,1}\r\n---    })\r\nend\r\n\r\n--Sends objects from bag/table to their saved position/rotation\r\nfunction buttonClick_place()\r\n    local bagObjList = self.getObjects()\r\n    for guid, entry in pairs(memoryList) do\r\n        local obj = getObjectFromGUID(guid)\r\n        --If obj is out on the table, move it to the saved pos/rot\r\n        if obj ~= nil then\r\n            obj.setPositionSmooth(entry.pos)\r\n            obj.setRotationSmooth(entry.rot)\r\n            obj.setLock(entry.lock)\r\n        else\r\n            --If obj is inside of the bag\r\n            for _, bagObj in ipairs(bagObjList) do\r\n                if bagObj.guid == guid then\r\n                    local item = self.takeObject({\r\n                        guid=guid, position=entry.pos, rotation=entry.rot, smooth=false\r\n                    })\r\n                    item.setLock(entry.lock)\r\n                    break\r\n                end\r\n            end\r\n        end\r\n    end\r\n    broadcastToAll(\"Objects Placed\", {1,1,1})\r\nend\r\n\r\n--Recalls objects to bag from table\r\nfunction buttonClick_recall()\r\n    for guid, entry in pairs(memoryList) do\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then self.putObject(obj) end\r\n    end\r\n    broadcastToAll(\"Objects Recalled\", {1,1,1})\r\nend\r\n\r\n\r\n--Utility functions\r\n\r\n\r\n--Find delta (difference) between 2 x/y/z coordinates\r\nfunction findOffsetDistance(p1, p2, obj)\r\n    local yOffset = 0\r\n    if obj ~= nil then\r\n        local bounds = obj.getBounds()\r\n        yOffset = (bounds.size.y - bounds.offset.y)\r\n    end\r\n    local deltaPos = {}\r\n    deltaPos.x = (p2.x-p1.x)\r\n    deltaPos.y = (p2.y-p1.y) + yOffset\r\n    deltaPos.z = (p2.z-p1.z)\r\n    return deltaPos\r\nend\r\n\r\n--Used to rotate a set of coordinates by an angle\r\nfunction rotateLocalCoordinates(desiredPos, obj)\r\n\tlocal objPos, objRot = obj.getPosition(), obj.getRotation()\r\n    local angle = math.rad(objRot.y)\r\n\tlocal x = desiredPos.x * math.cos(angle) - desiredPos.z * math.sin(angle)\r\n\tlocal z = desiredPos.x * math.sin(angle) + desiredPos.z * math.cos(angle)\r\n\t--return {x=objPos.x+x, y=objPos.y+desiredPos.y, z=objPos.z+z}\r\n    return {x=x, y=desiredPos.y, z=z}\r\nend\r\n\r\nfunction rotateMyCoordinates(desiredPos, obj)\r\n\tlocal angle = math.rad(obj.getRotation().y)\r\n  local x = desiredPos.x * math.sin(angle)\r\n\tlocal z = desiredPos.z * math.cos(angle)\r\n    return {x=x, y=desiredPos.y, z=z}\r\nend\r\n\r\n--Coroutine delay, in seconds\r\nfunction wait(time)\r\n    local start = os.time()\r\n    repeat coroutine.yield(0) until os.time() > start + time\r\nend\r\n\r\n--Duplicates a table (needed to prevent it making reference to the same objects)\r\nfunction duplicateTable(oldTable)\r\n    local newTable = {}\r\n    for k, v in pairs(oldTable) do\r\n        newTable[k] = v\r\n    end\r\n    return newTable\r\nend\r\n\r\n--Moves scripted highlight from all objects\r\nfunction removeAllHighlights()\r\n    for _, obj in ipairs(getAllObjects()) do\r\n        obj.highlightOff()\r\n    end\r\nend\r\n\r\n--Round number (num) to the Nth decimal (dec)\r\nfunction round(num, dec)\r\n  local mult = 10^(dec or 0)\r\n  return math.floor(num * mult + 0.5) / mult\r\nend",
+  "LuaScriptState": "{\"ml\":{\"1b9ecd\":{\"lock\":false,\"pos\":{\"x\":13.0095,\"y\":1.4951,\"z\":70.986},\"rot\":{\"x\":0,\"y\":269.9999,\"z\":0}},\"3de6ba\":{\"lock\":false,\"pos\":{\"x\":6.4095,\"y\":1.4951,\"z\":63.336},\"rot\":{\"x\":0,\"y\":269.9997,\"z\":0}},\"4c8f98\":{\"lock\":false,\"pos\":{\"x\":3.1095,\"y\":1.4951,\"z\":70.986},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"66e945\":{\"lock\":false,\"pos\":{\"x\":3.7052,\"y\":1.4951,\"z\":65.3742},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"c292bb\":{\"lock\":false,\"pos\":{\"x\":6.4133,\"y\":1.5121,\"z\":55.6814},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"c306ec\":{\"lock\":false,\"pos\":{\"x\":6.4125,\"y\":1.5121,\"z\":65.8648},\"rot\":{\"x\":0,\"y\":270.0002,\"z\":0}},\"e00001\":{\"lock\":false,\"pos\":{\"x\":9.7095,\"y\":1.4951,\"z\":70.986},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"e00003\":{\"lock\":false,\"pos\":{\"x\":6.4095,\"y\":1.4951,\"z\":70.986},\"rot\":{\"x\":0,\"y\":269.9998,\"z\":0}},\"e00007\":{\"lock\":false,\"pos\":{\"x\":9.7095,\"y\":1.4951,\"z\":55.686},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"e00009\":{\"lock\":false,\"pos\":{\"x\":3.1095,\"y\":1.4951,\"z\":55.686},\"rot\":{\"x\":0,\"y\":269.9998,\"z\":0}},\"e0000b\":{\"lock\":false,\"pos\":{\"x\":6.3994,\"y\":1.4951,\"z\":58.1936},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"e0000c\":{\"lock\":false,\"pos\":{\"x\":13.0095,\"y\":1.4951,\"z\":55.686},\"rot\":{\"x\":0,\"y\":269.9999,\"z\":0}},\"e0000e\":{\"lock\":false,\"pos\":{\"x\":9.7095,\"y\":1.4951,\"z\":63.336},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"e0000f\":{\"lock\":false,\"pos\":{\"x\":3.1095,\"y\":1.4951,\"z\":63.336},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"e00014\":{\"lock\":false,\"pos\":{\"x\":3.6998,\"y\":1.4951,\"z\":66.6755},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"e00016\":{\"lock\":false,\"pos\":{\"x\":13.0095,\"y\":1.4951,\"z\":63.336},\"rot\":{\"x\":0,\"y\":269.9997,\"z\":0}},\"e00019\":{\"lock\":false,\"pos\":{\"x\":9.7095,\"y\":1.4951,\"z\":78.636},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"e0001a\":{\"lock\":false,\"pos\":{\"x\":3.1095,\"y\":1.4951,\"z\":78.6362},\"rot\":{\"x\":0,\"y\":269.9921,\"z\":0}},\"e0001b\":{\"lock\":false,\"pos\":{\"x\":6.4854,\"y\":1.4951,\"z\":78.6467},\"rot\":{\"x\":0,\"y\":269.9999,\"z\":0}},\"e0001d\":{\"lock\":false,\"pos\":{\"x\":13.0095,\"y\":1.4951,\"z\":78.636},\"rot\":{\"x\":0,\"y\":269.9778,\"z\":0}},\"e0001f\":{\"lock\":false,\"pos\":{\"x\":9.7095,\"y\":1.4951,\"z\":86.286},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"e00020\":{\"lock\":false,\"pos\":{\"x\":3.1095,\"y\":1.4951,\"z\":86.286},\"rot\":{\"x\":0,\"y\":269.9792,\"z\":0}},\"e00021\":{\"lock\":false,\"pos\":{\"x\":6.4095,\"y\":1.4951,\"z\":86.286},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"e00023\":{\"lock\":false,\"pos\":{\"x\":13.0095,\"y\":1.4951,\"z\":86.286},\"rot\":{\"x\":0,\"y\":269.9987,\"z\":0}}}}",
+  "XmlUI": "",
+  "ContainedObjects": [
+    {
+      "GUID": "e00023",
+      "Name": "Card",
+      "Transform": {
+        "posX": 13.0095,
+        "posY": 1.49510384,
+        "posZ": 86.286,
+        "rotX": -1.42871412E-08,
+        "rotY": 269.9987,
+        "rotZ": 1.50564048E-07,
+        "scaleX": 0.6,
+        "scaleY": 1.0,
+        "scaleZ": 0.6
+      },
+      "Nickname": "Teruzuki",
+      "Description": "",
+      "GMNotes": "{\"id\":\"2eb0d1f2-306d-4450-9ec2-78a666151661-m\",\"type\":\"Minicard\",\"TtsZoopGuid\":\"d1384ae3-5f10-46fe-8b02-f8040613d086\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Minicard",
+        "ScenarioCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 102400,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "1024": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/qtsrs6jteuj3owz7o5wtk/Teruzuki-mini-marker-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=3d0xodofpvni6dsizg80unjk0&raw=1&cachebust=1732664931977",
+          "BackURL": "https://www.dropbox.com/scl/fi/hk67hyo0bc3ogv7sohg1r/Teruzuki-mini-marker-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=l6yksv6xiulw5th5mz7rsep9j&raw=1&cachebust=1732664933374",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "e0001f",
+      "Name": "Card",
+      "Transform": {
+        "posX": 9.7095,
+        "posY": 1.49510384,
+        "posZ": 86.286,
+        "rotX": -1.95484E-08,
+        "rotY": 270.0,
+        "rotZ": -7.14853741E-08,
+        "scaleX": 0.783099234,
+        "scaleY": 1.0,
+        "scaleZ": 0.783099234
+      },
+      "Nickname": "Teruzuki",
+      "Description": "Akizuki Class Destroyer",
+      "GMNotes": "{\"id\":\"2eb0d1f2-306d-4450-9ec2-78a666151661\",\"type\":\"Investigator\",\"class\":\"Guardian\",\"traits\":\"Shipgirl. Destroyer. Veteran.\",\"agilityIcons\":3,\"combatIcons\":4,\"intellectIcons\":3,\"willpowerIcons\":2,\"extraToken\":\"Reaction\",\"TtsZoopGuid\":\"2eb0d1f2-306d-4450-9ec2-78a666151661\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Investigator",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 102100,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "1021": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/4sjyvofbw0j0vle5ov6jl/Teruzuki-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=pc4jtmy9vhf2yvts3r4padam3&raw=1&cachebust=1732663290483",
+          "BackURL": "https://www.dropbox.com/scl/fi/3lu5no2mprdfssw3vkikx/Teruzuki-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=jnrmvpexdijcrfz8or5sw01wl&raw=1&cachebust=1732663292254",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "e00021",
+      "Name": "Card",
+      "Transform": {
+        "posX": 6.4095,
+        "posY": 1.49510384,
+        "posZ": 86.286,
+        "rotX": -4.883074E-10,
+        "rotY": 270.000061,
+        "rotZ": 7.74948461E-08,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Searchlight",
+      "Description": "",
+      "GMNotes": "{\"id\":\"d9f82673-37d9-4f90-a523-9af0baecb072\",\"type\":\"Event\",\"class\":\"Neutral\",\"traits\":\"Tactic.\",\"cost\":3,\"combatIcons\":1,\"willpowerIcons\":1,\"wildIcons\":1,\"TtsZoopGuid\":\"d9f82673-37d9-4f90-a523-9af0baecb072\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 102300,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "1023": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/jye744chdqo1qwh9xfb1i/Searchlight-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=9c9gsoacrl87j6jih6ksyrmo3&raw=1&cachebust=1732664930702",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "e00020",
+      "Name": "Card",
+      "Transform": {
+        "posX": 3.1095,
+        "posY": 1.495104,
+        "posZ": 86.286,
+        "rotX": -7.44585051E-08,
+        "rotY": 269.9792,
+        "rotZ": 4.17963037E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Rationing",
+      "Description": "",
+      "GMNotes": "{\"id\":\"724c722a-7554-445a-ab71-f9fd0b9860a1\",\"type\":\"Treachery\",\"traits\":\"Hardship.\",\"weakness\":true,\"TtsZoopGuid\":\"724c722a-7554-445a-ab71-f9fd0b9860a1\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 102200,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "1022": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/v7btpbw2ayksk3193iiuh/Rationing-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=1f6jg7xvv4fi5aclz2i6piw8a&raw=1&cachebust=1732664929140",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "e0001d",
+      "Name": "Card",
+      "Transform": {
+        "posX": 13.0095,
+        "posY": 1.49510384,
+        "posZ": 78.636,
+        "rotX": -3.059082E-07,
+        "rotY": 269.9778,
+        "rotZ": 1.1416202E-07,
+        "scaleX": 0.6,
+        "scaleY": 1.0,
+        "scaleZ": 0.6
+      },
+      "Nickname": "Suzuya",
+      "Description": "",
+      "GMNotes": "{\"id\":\"ce452c62-edac-4cc7-9293-6e900a73cfac-m\",\"type\":\"Minicard\",\"TtsZoopGuid\":\"5c7523b7-69dc-45e5-bdd5-0f6e68d5007d\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Minicard",
+        "ScenarioCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 102000,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "1020": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/drz3hvonxsfziw3i1s9c9/Suzuya-mini-marker-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=vzyce9gl9woc7slj15gky0fvn&raw=1&cachebust=1732664926019",
+          "BackURL": "https://www.dropbox.com/scl/fi/dmvp1a1r97fw2zkcqp7vd/Suzuya-mini-marker-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=ct0p2bvoj86f1220y79wxmaxs&raw=1&cachebust=1732664927459",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "e00019",
+      "Name": "Card",
+      "Transform": {
+        "posX": 9.7095,
+        "posY": 1.49510384,
+        "posZ": 78.636,
+        "rotX": -1.95484E-08,
+        "rotY": 270.0,
+        "rotZ": -7.14853741E-08,
+        "scaleX": 0.783099234,
+        "scaleY": 1.0,
+        "scaleZ": 0.783099234
+      },
+      "Nickname": "Suzuya",
+      "Description": "Mogami class aviation cruiser",
+      "GMNotes": "{\"id\":\"ce452c62-edac-4cc7-9293-6e900a73cfac\",\"type\":\"Investigator\",\"class\":\"Seeker\",\"traits\":\"Shipgirl. Aviation cruiser. Veteran.\",\"agilityIcons\":3,\"combatIcons\":1,\"intellectIcons\":5,\"willpowerIcons\":3,\"extraToken\":\"Reaction\",\"TtsZoopGuid\":\"ce452c62-edac-4cc7-9293-6e900a73cfac\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Investigator",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 271400,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "2714": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/hgaqcx2ovm66bfluw7nsn/Suzuya-investigator-card-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=wtywabp36vkwx3curazmhj0es&raw=1&cachebust=1732663286364",
+          "BackURL": "https://www.dropbox.com/scl/fi/s9e7rznr2qw075671a6b6/Suzuya-investigator-card-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=d4lusmfxderixnwdlviu2rj2g&raw=1&cachebust=1732663288322",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "e0001b",
+      "Name": "Card",
+      "Transform": {
+        "posX": 6.4854,
+        "posY": 1.49510384,
+        "posZ": 78.6467,
+        "rotX": -3.18064437E-08,
+        "rotY": 269.999939,
+        "rotZ": -1.24317552E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Kyoufuu Kai",
+      "Description": "Seaplane Fighter",
+      "GMNotes": "{\"id\":\"ce9a6978-afc2-4fd9-b93d-87f4822fe20a\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Ally. Vehicle.\",\"cost\":4,\"agilityIcons\":1,\"combatIcons\":1,\"intellectIcons\":1,\"wildIcons\":1,\"uses\":[{\"count\":4,\"token\":\"resource\",\"type\":\"Secret\"}],\"TtsZoopGuid\":\"ce9a6978-afc2-4fd9-b93d-87f4822fe20a\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 271200,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "2712": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/yo9xf6gcd7qvz43y2liqd/Kyoufuu-Kai-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=5avawrimxrx9vrf7u7bbac4ss&raw=1&cachebust=1732664924593",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "e0001a",
+      "Name": "Card",
+      "Transform": {
+        "posX": 3.1095,
+        "posY": 1.49510384,
+        "posZ": 78.6362,
+        "rotX": 1.58194581E-07,
+        "rotY": 269.9921,
+        "rotZ": -5.32227E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Abyssal Recon Flying Boat",
+      "Description": "",
+      "GMNotes": "{\"id\":\"91ea40c0-6760-494d-adb0-53838469f23e\",\"type\":\"Treachery\",\"traits\":\"Abyssal. Vehicle. Monster.\",\"weakness\":true,\"TtsZoopGuid\":\"91ea40c0-6760-494d-adb0-53838469f23e\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 101800,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "1018": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/78xqvjtyyuwetod7z3u02/Abyssal-Recon-Flying-Boat-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=zxeb83xuaryv6ldtx4lge738p&raw=1&cachebust=1732664923034",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "1b9ecd",
+      "Name": "Card",
+      "Transform": {
+        "posX": 13.0095,
+        "posY": 1.49510384,
+        "posZ": 70.986,
+        "rotX": 2.78857E-07,
+        "rotY": 269.999939,
+        "rotZ": -1.32638874E-07,
+        "scaleX": 0.6,
+        "scaleY": 1.0,
+        "scaleZ": 0.6
+      },
+      "Nickname": "I-26",
+      "Description": "",
+      "GMNotes": "{\"id\":\"2b802247-c1ba-4b36-8f9f-72fb21210d0b-m\",\"type\":\"Minicard\",\"TtsZoopGuid\":\"005f6d49-046b-412e-8ab0-903f942194c2\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Minicard",
+        "ScenarioCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 271500,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "2715": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/dc7kgzfu2aq3dwf48mblx/I-26-mini-marker-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=j6dtyzylstg4t0e1kyx0zllrx&raw=1&cachebust=1732664898387",
+          "BackURL": "https://www.dropbox.com/scl/fi/uwq3wg3gdllsva4d1ivkx/I-26-mini-marker-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=486a8pdkhfcet5rnkt4coo2sa&raw=1&cachebust=1732664899620",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "e00001",
+      "Name": "Card",
+      "Transform": {
+        "posX": 9.7095,
+        "posY": 1.49510384,
+        "posZ": 70.986,
+        "rotX": -1.95484E-08,
+        "rotY": 270.0,
+        "rotZ": -7.14853741E-08,
+        "scaleX": 0.783099234,
+        "scaleY": 1.0,
+        "scaleZ": 0.783099234
+      },
+      "Nickname": "I-26",
+      "Description": "Junsen Type B Submarine",
+      "GMNotes": "{\"id\":\"2b802247-c1ba-4b36-8f9f-72fb21210d0b\",\"type\":\"Investigator\",\"class\":\"Rogue\",\"traits\":\" Shipgirl. Submarine. Veteran.\",\"agilityIcons\":4,\"combatIcons\":1,\"intellectIcons\":4,\"willpowerIcons\":2,\"extraToken\":\"FreeTrigger\",\"TtsZoopGuid\":\"2b802247-c1ba-4b36-8f9f-72fb21210d0b\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Investigator",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 273000,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "2730": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/e24rzcd68rb7g7o3u5bm5/I-26-investigator-card-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=m36gnmrg3hs241e0onihj159o&raw=1&cachebust=1732676472883",
+          "BackURL": "https://www.dropbox.com/scl/fi/madd1ibdah6pvr2zoi4eu/I-26-investigator-card-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=spc3xm9i81drooosoix7uaavr&raw=1&cachebust=1732676474524",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "e00003",
+      "Name": "Card",
+      "Transform": {
+        "posX": 6.4095,
+        "posY": 1.49510384,
+        "posZ": 70.986,
+        "rotX": -5.80963633E-09,
+        "rotY": 269.999817,
+        "rotZ": -3.82573E-08,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Submarine Radar & Passive Radiolocator",
+      "Description": "Improved late-model verison",
+      "GMNotes": "{\"id\":\"383769cc-ddf2-4ff8-b5f2-aed136f4ad2f\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Item. Tool. Innate.\",\"cost\":4,\"agilityIcons\":1,\"intellectIcons\":2,\"TtsZoopGuid\":\"383769cc-ddf2-4ff8-b5f2-aed136f4ad2f\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 100200,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "1002": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/33fba7410g5iczrj0gvxy/Submarine-Radar-Passive-Radiolocator-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=gqn0oh2lsi6jf6ocvyiu2xhes&raw=1&cachebust=1732664896834",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "4c8f98",
+      "Name": "Card",
+      "Transform": {
+        "posX": 3.1095,
+        "posY": 1.49510384,
+        "posZ": 70.986,
+        "rotX": -6.959444E-08,
+        "rotY": 270.000061,
+        "rotZ": -5.239582E-10,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Destroyer I-Class Elite",
+      "Description": "",
+      "GMNotes": "{\"id\":\"48f5a3ce-5c20-400c-b491-914dd418fa65\",\"type\":\"Enemy\",\"traits\":\"Abyssal. Destroyer. Monster.\",\"weakness\":true,\"TtsZoopGuid\":\"48f5a3ce-5c20-400c-b491-914dd418fa65\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 271600,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "2716": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/991wi7xwr4fe36vn4adh0/Destroyer-I-Class-Elite-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=lnjl3ig65acdthwndaaqkhdj7&raw=1&cachebust=1732664895047",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "e00016",
+      "Name": "Card",
+      "Transform": {
+        "posX": 13.0095,
+        "posY": 1.49510384,
+        "posZ": 63.336,
+        "rotX": -1.78540049E-07,
+        "rotY": 269.9997,
+        "rotZ": -4.357489E-08,
+        "scaleX": 0.6,
+        "scaleY": 1.0,
+        "scaleZ": 0.6
+      },
+      "Nickname": "Shoukaku",
+      "Description": "",
+      "GMNotes": "{\"id\":\"ed6ab90d-2658-43c2-b636-fbe1d4ec1a24-m\",\"type\":\"Minicard\",\"TtsZoopGuid\":\"cf33c7bf-d323-4585-909a-fa16d39b3d32\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Minicard",
+        "ScenarioCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 101600,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "1016": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/dznmf5vg9l83mq716fzud/Shoukaku-mini-investigator-marker-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=48okl7ecjx8sj6vptbfii00dl&raw=1&cachebust=1732664917825",
+          "BackURL": "https://www.dropbox.com/scl/fi/2cetdgjfa1r5lmlwueldc/Shoukaku-mini-investigator-marker-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=z2ij3w4ik1oy9fcyra45msiio&raw=1&cachebust=1732664921297",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "e0000e",
+      "Name": "Card",
+      "Transform": {
+        "posX": 9.7095,
+        "posY": 1.49510384,
+        "posZ": 63.336,
+        "rotX": 3.16156381E-08,
+        "rotY": 270.000061,
+        "rotZ": -4.924684E-08,
+        "scaleX": 0.783099234,
+        "scaleY": 1.0,
+        "scaleZ": 0.783099234
+      },
+      "Nickname": "Shoukaku",
+      "Description": "Shoukaku Class Aircraft Carrier",
+      "GMNotes": "{\"id\":\"ed6ab90d-2658-43c2-b636-fbe1d4ec1a24\",\"type\":\"Investigator\",\"class\":\"Mystic\",\"traits\":\"Shipgirl. Aircraft Carrier. Veteran.\",\"agilityIcons\":3,\"combatIcons\":2,\"intellectIcons\":2,\"willpowerIcons\":5,\"TtsZoopGuid\":\"ed6ab90d-2658-43c2-b636-fbe1d4ec1a24\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Investigator",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 272700,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "2727": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/sbeqe80gf4fff5fzb1qhd/Shoukaku-investigator-card-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=ljuzj05d4pbhk0diqjwc6ub4x&raw=1&cachebust=1732663282405",
+          "BackURL": "https://www.dropbox.com/scl/fi/lc8ycuqbfwhqluqhtdq0q/Shoukaku-investigator-card-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=wcugrf9bpcax5paxdimj4893q&raw=1&cachebust=1732663284083",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "c306ec",
+      "Name": "Deck",
+      "Transform": {
+        "posX": 6.4125,
+        "posY": 1.51205766,
+        "posZ": 65.8648,
+        "rotX": -4.11919636E-08,
+        "rotY": 270.0002,
+        "rotZ": -9.15669247E-08,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "",
+      "Description": "",
+      "GMNotes": "",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": false,
+      "SidewaysCard": false,
+      "DeckIDs": [
+        101400,
+        273700
+      ],
+      "CustomDeck": {
+        "1014": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/so1tq65fsbow2yuzmnz5r/Shoukaku-Air-Wing-1-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=sbxohbr48cpwrdcoib2cohgjk&raw=1&cachebust=1732940611412",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        },
+        "2737": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/qela9dpr8xygx52mv0btz/Shoukaku-Air-Wing-2-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=pkqv03hfnv5708yb8qf3qmrqw&raw=1&cachebust=1732940613336",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": "",
+      "ContainedObjects": [
+        {
+          "GUID": "019190",
+          "Name": "Card",
+          "Transform": {
+            "posX": 6.923507,
+            "posY": 1.57205856,
+            "posZ": 65.44524,
+            "rotX": -0.00112755818,
+            "rotY": 270.000153,
+            "rotZ": 0.0708309561,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": " Shoukaku Air Wing",
+          "Description": "Type 97 Torpedo Bomber",
+          "GMNotes": "{\"id\":\"722c16c6-bed3-4a4c-8a51-37db5f961190\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Ally. Vehicle.\",\"cost\":3,\"uses\":[{\"count\":3,\"token\":\"resource\",\"type\":\"Fuel\"}],\"TtsZoopGuid\":\"722c16c6-bed3-4a4c-8a51-37db5f961190\"}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "Asset",
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 101400,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "1014": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/so1tq65fsbow2yuzmnz5r/Shoukaku-Air-Wing-1-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=sbxohbr48cpwrdcoib2cohgjk&raw=1&cachebust=1732940611412",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "e00015",
+          "Name": "Card",
+          "Transform": {
+            "posX": 6.64578247,
+            "posY": 1.58035386,
+            "posZ": 65.56253,
+            "rotX": 0.0003031721,
+            "rotY": 270.000061,
+            "rotZ": -0.000383531966,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Shoukaku Air Wing",
+          "Description": "Shiden Kai 2",
+          "GMNotes": "{\"id\":\"7f6bdf11-e81f-4d83-a39e-0972d7b67715\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Ally. Vehicle.\",\"cost\":3,\"uses\":[{\"count\":3,\"token\":\"resource\",\"type\":\"Fuel\"}],\"TtsZoopGuid\":\"7f6bdf11-e81f-4d83-a39e-0972d7b67715\"}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "Asset",
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 273700,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "2737": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/qela9dpr8xygx52mv0btz/Shoukaku-Air-Wing-2-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=pkqv03hfnv5708yb8qf3qmrqw&raw=1&cachebust=1732940613336",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        }
+      ]
+    },
+    {
+      "GUID": "3de6ba",
+      "Name": "Card",
+      "Transform": {
+        "posX": 6.4095,
+        "posY": 1.49510384,
+        "posZ": 63.336,
+        "rotX": -6.514943E-08,
+        "rotY": 269.9997,
+        "rotZ": 1.59137585E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Skilled Pilots",
+      "Description": "",
+      "GMNotes": "{\"id\":\"fdc4cbfc-4790-4fd5-92b5-c04084b831d5\",\"type\":\"Skill\",\"class\":\"Neutral\",\"traits\":\"Ally. Veteran.\",\"willpowerIcons\":1,\"TtsZoopGuid\":\"fdc4cbfc-4790-4fd5-92b5-c04084b831d5\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 272100,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "2721": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/ry72zz8u54j0n3sdsru0n/Skilled-Pilots-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=upvrwu2ntg2s49npo7zmy518p&raw=1&cachebust=1732074581282",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "e00014",
+      "Name": "Card",
+      "Transform": {
+        "posX": 3.6998,
+        "posY": 1.49510384,
+        "posZ": 66.6755,
+        "rotX": -7.575503E-09,
+        "rotY": 270.000061,
+        "rotZ": 1.99284131E-07,
+        "scaleX": 0.6,
+        "scaleY": 1.0,
+        "scaleZ": 0.6
+      },
+      "Nickname": "",
+      "Description": "",
+      "GMNotes": "{\"type\":\"Minicard\",\"TtsZoopGuid\":\"bf75eb0f-3428-489b-85db-1c4b1f294987\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Minicard",
+        "ScenarioCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 271800,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "2718": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/3ut9uz7zj2ha2c6cvzq54/Shoukaku-Air-Wing-1-mini-marker-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=4co6ttm52x42ljvd7ggdz1knv&raw=1&cachebust=1731899817351",
+          "BackURL": "https://www.dropbox.com/scl/fi/uynu69brqamj8cl4trq9i/Shoukaku-Air-Wing-1-mini-marker-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=8e3mvsvks88vxi70vdgv8e84v&raw=1&cachebust=1731899820553",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "66e945",
+      "Name": "Card",
+      "Transform": {
+        "posX": 3.7052,
+        "posY": 1.49510384,
+        "posZ": 65.3742,
+        "rotX": 5.53384645E-08,
+        "rotY": 270.000061,
+        "rotZ": -1.68177408E-07,
+        "scaleX": 0.6,
+        "scaleY": 1.0,
+        "scaleZ": 0.6
+      },
+      "Nickname": "",
+      "Description": "",
+      "GMNotes": "{\"type\":\"Minicard\",\"TtsZoopGuid\":\"0380e8a4-f448-4703-98ab-cac9eb3c93bd\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Minicard",
+        "ScenarioCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 101500,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "1015": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/ypo2l3mj3ienm3h9qtms4/Shoukaku-Air-Wing-2-mini-marker-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=a7k6t6qy9ff85tj5uro46s0lg&raw=1&cachebust=1731899823732",
+          "BackURL": "https://www.dropbox.com/scl/fi/l9mhsghklbv5csjz1tv4l/Shoukaku-Air-Wing-2-mini-marker-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=nlmjfgy9lo69q8e4j0ewa7o73&raw=1&cachebust=1731899827475",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "e0000f",
+      "Name": "Card",
+      "Transform": {
+        "posX": 3.1095,
+        "posY": 1.49510384,
+        "posZ": 63.336,
+        "rotX": -1.08056739E-07,
+        "rotY": 270.000061,
+        "rotZ": 7.64366845E-08,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Hard Landing",
+      "Description": "",
+      "GMNotes": "{\"id\":\"ed8645b1-989f-4e30-a0ed-ab6b3c7568fa\",\"type\":\"Treachery\",\"traits\":\"Blunder.\",\"weakness\":true,\"TtsZoopGuid\":\"ed8645b1-989f-4e30-a0ed-ab6b3c7568fa\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 271900,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "2719": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/gi8rw0pupm1dpbsv644rb/Hard-landing-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=jdhud0gzth6s5ms88k6ndif06&raw=1&cachebust=1732664911194",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "e0000c",
+      "Name": "Card",
+      "Transform": {
+        "posX": 13.0095,
+        "posY": 1.49510384,
+        "posZ": 55.686,
+        "rotX": 5.78615165E-08,
+        "rotY": 269.999939,
+        "rotZ": -2.30674289E-07,
+        "scaleX": 0.6,
+        "scaleY": 1.0,
+        "scaleZ": 0.6
+      },
+      "Nickname": "Nagato",
+      "Description": "",
+      "GMNotes": "{\"id\":\"5f2e6105-6500-43f0-8f56-6322802d9408-m\",\"type\":\"Minicard\",\"TtsZoopGuid\":\"357b9b58-3061-4295-9086-2813c645a330\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Minicard",
+        "ScenarioCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 100800,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "1008": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/fstt2uy3v2fp0rr1dbcqb/Nagato-mini-marker-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=rub5h2jtms4gkr3kall03w1as&raw=1&cachebust=1732664908027",
+          "BackURL": "https://www.dropbox.com/scl/fi/80gbg98mu69aftjxemfse/Nagato-mini-marker-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=671lhmotqe5y2bj76s2lcz9x6&raw=1&cachebust=1732664909328",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "e00007",
+      "Name": "Card",
+      "Transform": {
+        "posX": 9.7095,
+        "posY": 1.49510384,
+        "posZ": 55.686,
+        "rotX": -1.95484E-08,
+        "rotY": 270.0,
+        "rotZ": -7.14853741E-08,
+        "scaleX": 0.783099234,
+        "scaleY": 1.0,
+        "scaleZ": 0.783099234
+      },
+      "Nickname": "Nagato",
+      "Description": "Nagato Class Battleship",
+      "GMNotes": "{\"id\":\"5f2e6105-6500-43f0-8f56-6322802d9408\",\"type\":\"Investigator\",\"class\":\"Survivor\",\"traits\":\"Shipgirl. Battleship. Veteran.\",\"agilityIcons\":1,\"combatIcons\":5,\"intellectIcons\":2,\"willpowerIcons\":4,\"TtsZoopGuid\":\"5f2e6105-6500-43f0-8f56-6322802d9408\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Investigator",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 272800,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "2728": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/gdgq71sii96vx69mtf5uy/Nagato-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=ut38v6edfb3hfrseddxp4y9rv&raw=1&cachebust=1732667223774",
+          "BackURL": "https://www.dropbox.com/scl/fi/s7wawhbnb35uwm9ttij1v/Nagato-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=soaqq1uqq0c601cg2vhobrwl7&raw=1&cachebust=1732667225176",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "e0000b",
+      "Name": "Card",
+      "Transform": {
+        "posX": 6.3994,
+        "posY": 1.49510384,
+        "posZ": 58.1936,
+        "rotX": 4.27087556E-08,
+        "rotY": 270.000061,
+        "rotZ": -2.81835977E-08,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Mutsu",
+      "Description": "Nagato Class Battleship",
+      "GMNotes": "{\"id\":\"ac53d9c0-2c18-488a-82aa-8feacbe01bea\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Shipgirl. Battleship. Veteran. Ally\",\"TtsZoopGuid\":\"ac53d9c0-2c18-488a-82aa-8feacbe01bea\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 273300,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "2733": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/41kmtsicori3xqij3378d/Mutsu-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=15ugw5cypmth8oqbhru94nb4h&raw=1&cachebust=1732940607693",
+          "BackURL": "https://www.dropbox.com/scl/fi/m4r0a5uawir788a3iqgfj/Mutsu-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=xyma23rpruvw7n03pb4z4fara&raw=1&cachebust=1732940609607",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "c292bb",
+      "Name": "Deck",
+      "Transform": {
+        "posX": 6.4133,
+        "posY": 1.51205766,
+        "posZ": 55.6814,
+        "rotX": -4.65232581E-08,
+        "rotY": 270.000061,
+        "rotZ": -2.05152816E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "",
+      "Description": "",
+      "GMNotes": "",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": false,
+      "SidewaysCard": false,
+      "DeckIDs": [
+        100500,
+        100500
+      ],
+      "CustomDeck": {
+        "1005": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/olbb665qddqd3e11u5oz3/41cm-Twin-Gun-Mount-Kai-2-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=yyasm16753e1rrj14xidnzq0k&raw=1&cachebust=1732667226905",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": "",
+      "ContainedObjects": [
+        {
+          "GUID": "e00008",
+          "Name": "Card",
+          "Transform": {
+            "posX": 41.27446,
+            "posY": 1.49510026,
+            "posZ": 51.6035576,
+            "rotX": 4.03259619E-05,
+            "rotY": 270.0,
+            "rotZ": -0.000243129,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "41cm Twin Gun Mount Kai 2",
+          "Description": "Modernised Battleship Main Gun",
+          "GMNotes": "{\"id\":\"cb5e6239-1215-4892-a581-9ed28ac164ed\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Item. Weapon. Firearm.\",\"cost\":3,\"combatIcons\":2,\"wildIcons\":1,\"uses\":[{\"count\":3,\"token\":\"resource\",\"type\":\"Ammo\"}],\"TtsZoopGuid\":\"cb5e6239-1215-4892-a581-9ed28ac164ed\"}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "Asset",
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 100500,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "1005": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/olbb665qddqd3e11u5oz3/41cm-Twin-Gun-Mount-Kai-2-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=yyasm16753e1rrj14xidnzq0k&raw=1&cachebust=1732667226905",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "1e32d2",
+          "Name": "Card",
+          "Transform": {
+            "posX": 41.27446,
+            "posY": 1.53887022,
+            "posZ": 51.6035576,
+            "rotX": -9.425299E-05,
+            "rotY": 270.0,
+            "rotZ": -0.00209708675,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "41cm Twin Gun Mount Kai 2",
+          "Description": "Modernised Battleship Main Gun",
+          "GMNotes": "{\"id\":\"cb5e6239-1215-4892-a581-9ed28ac164ed\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Item. Weapon. Firearm.\",\"cost\":3,\"combatIcons\":2,\"wildIcons\":1,\"uses\":[{\"count\":3,\"token\":\"resource\",\"type\":\"Ammo\"}],\"TtsZoopGuid\":\"cb5e6239-1215-4892-a581-9ed28ac164ed\"}",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "Tags": [
+            "Asset",
+            "PlayerCard"
+          ],
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 100500,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "1005": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/olbb665qddqd3e11u5oz3/41cm-Twin-Gun-Mount-Kai-2-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=yyasm16753e1rrj14xidnzq0k&raw=1&cachebust=1732667226905",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        }
+      ]
+    },
+    {
+      "GUID": "e00009",
+      "Name": "Card",
+      "Transform": {
+        "posX": 3.10949969,
+        "posY": 1.49510384,
+        "posZ": 55.686,
+        "rotX": -6.06849848E-11,
+        "rotY": 269.9998,
+        "rotZ": -2.370559E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Battleship Princess",
+      "Description": "",
+      "GMNotes": "{\"id\":\"75e388a1-4a1c-4fdd-9032-449f9b8ccde4\",\"type\":\"Enemy\",\"traits\":\"Abyssal. Battleship. Humanoid.\",\"weakness\":true,\"TtsZoopGuid\":\"75e388a1-4a1c-4fdd-9032-449f9b8ccde4\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 100600,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "1006": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/96695jo9j4drs9z9hk86c/Battleship-Princess-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=pdjp4ltbpf1u9yroa1e70r8m2&raw=1&cachebust=1732667229447",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    }
+  ]
+}
