@@ -271,29 +271,28 @@ function placeLocations(region)
   end
 
   local numPlayers = COUNTER.getVar("val")
-  local deck = mythosAreaApi.getEncounterDeck()
 
   if lastRegion == TIMELESS_REALM then
-    placeEnemy("The Crawling Mist", deck, RFG.position, Vector({ 0, 1, 0 }))
+    placeEnemyFromEncounterDeck("The Crawling Mist", RFG.position, Vector({ 0, 1, 0 }))
   end
 
   if region == ORIAB then
-    placeEnemy("Nightriders", deck, nameMap["Mt. Ngranek"].position, RIGHT)
+    placeEnemyFromEncounterDeck("Nightriders", nameMap["Mt. Ngranek"].position, RIGHT)
     if numPlayers >= 3 then
-      placeEnemy("Nightriders", deck, nameMap["Nameless Ruins"].position, LEFT)
+      placeEnemyFromEncounterDeck("Nightriders", nameMap["Nameless Ruins"].position, LEFT)
     end
     broadcastToAll("Place each investigator at Baharna. Add swarm cards to enemies.")
   elseif region == MNAR then
-    placeEnemy("Beings of Ib", chest, nameMap["Ruins of Ib"].position, RIGHT)
+    placeEnemyFromContainer("Beings of Ib", chest, nameMap["Ruins of Ib"].position, RIGHT)
     broadcastToAll("Place each investigator at Kadatheron. Add swarm cards to enemies.")
   elseif region == FORBIDDEN_LANDS then
-    placeEnemy("Stalking Manticore", chest, nameMap["Forbidden Lands"].position, RIGHT)
-    placeEnemy("Horde of Night", chest, nameMap["Zulan-Thek"].position, RIGHT)
+    placeEnemyFromContainer("Stalking Manticore", chest, nameMap["Forbidden Lands"].position, RIGHT)
+    placeEnemyFromContainer("Horde of Night", chest, nameMap["Zulan-Thek"].position, RIGHT)
     broadcastToAll("Place each investigator at Ilek-Vad. Add swarm cards to enemies.")
   elseif region == TIMELESS_REALM then
-    placeEnemy("Priest of a Thousand Masks", deck, nameMap["Hazuth-Kleg"].position, LEFT)
+    placeEnemyFromEncounterDeck("Priest of a Thousand Masks", nameMap["Hazuth-Kleg"].position, LEFT)
     if numPlayers >= 3 then
-      placeEnemy("Priest of a Thousand Masks", deck, nameMap["Celephaïs"].position, LEFT)
+      placeEnemyFromEncounterDeck("Priest of a Thousand Masks", nameMap["Celephaïs"].position, LEFT)
     end
     broadcastToAll("Place each investigator at Celephaïs.")
   end
@@ -301,14 +300,41 @@ function placeLocations(region)
   lastRegion = region
 end
 
-function placeEnemy(name, container, position, side)
+function placeEnemyFromEncounterDeck(name, position, side)
+  local encounterDeckObjects = mythosAreaApi.getEncounterDeckObjects()
+
+  if encounterDeckObjects.topCard and encounterDeckObjects.topCard.getName() == name then
+    encounterDeckObjects.topCard.setPosition(Vector(position) + side)
+    encounterDeckObjects.topCard.setRotation({ 0, 270, 0 })
+    mythosAreaApi.flipTopCard()
+    return
+  end
+
+  if encounterDeckObjects.draw then
+    for i, card in ipairs(encounterDeckObjects.draw.getObjects()) do
+      if card.name == name then
+        encounterDeckObjects.draw.takeObject({
+          index    = card.index,
+          position = Vector(position) + side,
+          rotation = { 0, 270, 0 },
+          smooth   = false
+        })
+        return
+      end
+    end
+  end
+
+  broadcastToAll("Couldn't find " .. name, "Orange")
+end
+
+function placeEnemyFromContainer(name, container, position, side)
   for i, card in ipairs(container.getObjects()) do
     if card.name == name then
       container.takeObject({
-        index = card.index,
+        index    = card.index,
         position = Vector(position) + side,
         rotation = { 0, 270, 0 },
-        smooth = false
+        smooth   = false
       })
       return
     end
