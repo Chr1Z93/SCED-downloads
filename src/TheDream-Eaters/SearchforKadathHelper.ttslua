@@ -159,26 +159,39 @@ function setup(region, color)
       rotation = SET_ASIDE.rotation
     })
   end
+
   Wait.time(function() mythosAreaApi.reshuffleEncounterDeck() end, 0.1)
   Wait.time(function() cleanZone() end, 1)
   Wait.time(function() placeLocations(region) end, 2)
-  Wait.time(function() mythosAreaApi.getEncounterDeck().shuffle() end, 0.1)
+  Wait.time(function() shuffleDeck() end, 2)
+end
+
+function shuffleDeck()
+  local encounterDeckObjects = mythosAreaApi.getEncounterDeckObjects()
+
+  if encounterDeckObjects.draw and encounterDeckObjects.topCard then
+    encounterDeckObjects.draw.putObject(encounterDeckObjects.topCard)
+    encounterDeckObjects.draw.shuffle()
+    mythosAreaApi.flipTopCardFromDeck(1)
+  elseif encounterDeckObjects.draw then
+    encounterDeckObjects.draw.shuffle()
+  end
 end
 
 function cleanZone()
   -- clean the encounter deck
   if not ACT1_ADVANCED then
-    local deck = mythosAreaApi.getEncounterDeck()
-    local cardsToRemove = {}
+    local encounterDeckObjects = mythosAreaApi.getEncounterDeckObjects()
 
-    for i, card in ipairs(deck.getObjects()) do
+    local cardsToRemove = {}
+    for i, card in ipairs(encounterDeckObjects.draw.getObjects()) do
       if rfgMap[card.name] then
         table.insert(cardsToRemove, card.index)
       end
     end
 
     for i = #cardsToRemove, 1, -1 do
-      deck.takeObject({
+      encounterDeckObjects.draw.takeObject({
         position = RFG.position,
         rotation = RFG.rotation,
         smooth = false,
@@ -306,7 +319,7 @@ function placeEnemyFromEncounterDeck(name, position, side)
   if encounterDeckObjects.topCard and encounterDeckObjects.topCard.getName() == name then
     encounterDeckObjects.topCard.setPosition(Vector(position) + side)
     encounterDeckObjects.topCard.setRotation({ 0, 270, 0 })
-    mythosAreaApi.flipTopCard()
+    mythosAreaApi.flipTopCardFromDeck()
     return
   end
 
