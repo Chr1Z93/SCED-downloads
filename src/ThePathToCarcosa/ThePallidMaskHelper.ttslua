@@ -1,0 +1,86 @@
+local deckLib                  = require("util/DeckLib")
+local tokenManagerApi          = require("tokens/TokenManagerApi")
+
+
+catacombsDeckGUID = "628da0"
+tombAndPassageGUID = "99e693"
+setAsideBoxGUID = "7a167a"
+
+
+function onLoad()
+  self.createButton({
+    label = "Awoke inside the catacombs",
+    click_function = "awoke",
+    function_owner = self,
+    position = { 0, 0.1, -0.5 },
+    height = 150,
+    width = 1500,
+    scale = { x = 2, y = 2, z = 2 },
+    font_color = { r = 0, g = 0, b = 0 },
+    color = { r = 1, g = 1, b = 1 }
+  })
+
+  self.createButton({
+    label = "Entered catacombs on your own",
+    click_function = "entered",
+    function_owner = self,
+    position = { 0, 0.1, 0.5 },
+    height = 150,
+    width = 1500,
+    scale = { x = 2, y = 2, z = 2 },
+    font_color = { r = 0, g = 0, b = 0 },
+    color = { r = 1, g = 1, b = 1 }
+  })
+end
+
+function awoke()
+  setup(true)
+end
+
+function entered()
+  setup(false)
+end
+
+function setup(awoke)
+  local catacombsDeck = getObjectFromGUID(catacombsDeckGUID)
+  local deckSize = catacombsDeck.getQuantity()
+  if awoke then
+    catacombsDeck.shuffle()
+    if deckSize == 16 then
+      local setAsideBox = getObjectFromGUID(setAsideBoxGUID)
+      local cutDecks = catacombsDeck.cut(4)
+      setAsideBox.putObject(cutDecks[2])
+      catacombsDeck = cutDecks[1]
+    end
+  end
+  
+  -- if not shuffling, top card is always The Gate to Hell
+  local startingLocation = catacombsDeck.takeObject({
+    position = { -30.24, 1.53, 15.30 },
+    smooth = false
+  })
+  tokenManagerApi.spawnTokenGroup(startingLocation, "resource", 1)
+  
+  if not awoke then
+    catacombsDeck.shuffle()
+    local deckSize = catacombsDeck.getQuantity()
+    if deckSize == 15 then
+      local setAsideBox = getObjectFromGUID(setAsideBoxGUID)
+      local cutDecks = catacombsDeck.cut(4)
+      setAsideBox.putObject(cutDecks[1])
+      catacombsDeck = cutDecks[2]
+    end
+  end
+
+  local deckSize = catacombsDeck.getQuantity()
+
+  local newDecks = catacombsDeck.cut(deckSize - 3)
+  newDecks[2].setPosition({ -17.18, 1.58, 7.52 })
+  newDecks[2].setRotation({ 0, 270, 0 })
+
+  local tombAndPassage = getObjectFromGUID(tombAndPassageGUID)
+  deckLib.placeOrMergeIntoDeck(tombAndPassage, { -17.12, 1.56, 11.46 }, {0, 270, 0}, false, true) -- bottom 5 cards are shuffled together
+  Wait.time(function() deckLib.placeOrMergeIntoDeck(newDecks[2], { -17.12, 1.56, 11.46 }) end, 1)
+  Wait.time(function() startingLocation.flip() end, 1) --keeps resource token on top
+  self.destruct()
+end
