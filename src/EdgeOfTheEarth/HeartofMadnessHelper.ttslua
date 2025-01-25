@@ -1,21 +1,18 @@
-TOP_LOCATION = Vector({ -13.5, 1.62, -0.03 })
-ROTATION = { 0, 270, 0 }
-V_OFFSET = Vector({ 0, 1, 0 })
-CIRCLE_STEPS = 60
+local guidReferenceApi = require("core/GUIDReferenceApi")
+
+TOP_LOCATION = Vector(-14.65, 1.55, 0)
 
 function onLoad()
   self.createButton({
-    label = "Set Up",
+    label          = "Set Up",
     click_function = "setup",
     function_owner = self,
-    position = { 0, 0.1, 0 },
-    height = 120,
-    width = 400,
-    scale = { x = 1.75, y = 1.75, z = 1.75 },
-    font_size = 80
+    position       = { 0, 0.11, 0 },
+    height         = 120,
+    width          = 400,
+    scale          = { x = 1.75, y = 1, z = 1.75 },
+    font_size      = 80
   })
-
-  playarea = getObjectFromGUID("721ba2")
 end
 
 function getLocationDeck()
@@ -25,14 +22,14 @@ function getLocationDeck()
     if name == "Ancient Facilities" or name == "Locations" then
       deck = obj
     elseif name == "The Gate of Y'quaa" then
-      gate = obj.getPosition()
+      gatePos = obj.getPosition()
     end
   end
 end
 
-function setup(_obj, playerColor, _alt_click)
+function setup(_, playerColor, _)
   getLocationDeck()
-  if gate == nil or deck == nil then
+  if gatePos == nil or deck == nil then
     broadcastToColor("Either The Gate of Y'quaa or the location deck were not found", playerColor)
     return
   end
@@ -47,69 +44,68 @@ function setup(_obj, playerColor, _alt_click)
     broadcastToColor("Couldn't find token spawn tracker to reset spawned status for locations", playerColor)
   end
 
-  local offset = Vector.between(gate, TOP_LOCATION):scale(1 / 3)
+  Wait.frames(function() placeLocations() end, 5)
+  Wait.frames(function() drawLines() end, 10)
+end
 
-  -- place locations
-  locations = {}
+function placeLocations()
+  local offset = Vector.between(gatePos, TOP_LOCATION):scale(1 / 3)
+  locationPositions = {}
   for i = 1, 5 do
     for j = 1, 3 do
-      local pos = gate + offset * j + V_OFFSET
+      local pos = gatePos + offset * j + Vector(0, 1, 0)
+      locationPositions[i .. "-" .. j] = pos
       if i == 5 and j == 3 then
-        locations["5-3"] = deck.remainder.getGUID()
         deck.remainder.setPosition(pos)
+        deck.remainder.use_snap_points = false
       else
-        deck.takeObject({
-          position = pos,
-          rotation = ROTATION,
-          smooth = false,
-          callback_function = function(obj) locations[i .. "-" .. j] = obj.getGUID() end
-        })
+        local card = deck.takeObject({ position = pos, smooth = false })
+        card.use_snap_points = false
       end
     end
     offset:rotateOver('y', 72)
   end
-
-  Wait.time(drawLines, 1)
 end
 
 function drawLines()
-  local center = playarea.positionToLocal(gate)
-  local params = {}
+  local playarea = guidReferenceApi.getObjectByOwnerAndType("Mythos", "PlayArea")
+  local center = playarea.positionToLocal(gatePos)
+  local vectorLines = {}
 
   -- draw spokes
   for i = 1, 5 do
-    local edge = getObjectFromGUID(locations[i .. "-3"]).getPosition()
-    table.insert(params, {
+    local edge = locationPositions[i .. "-3"]
+    table.insert(vectorLines, {
       color = { 0.6, 0.6, 0.6 },
       thickness = 0.01,
-      points = { center, playarea.positionToLocal(edge) }
+      points = { center, playarea.positionToLocal(edge):setAt("y", center.y) }
     })
   end
 
   local offset = Vector.between(
-    playarea.positionToLocal(gate),
+    playarea.positionToLocal(gatePos),
     playarea.positionToLocal(TOP_LOCATION)
   ):scale(1 / 3)
 
   -- draw rings
   for j = 1, 3 do
-    drawCircle(center, j * offset:magnitude(), params)
+    drawCircle(center, j * offset:magnitude(), vectorLines)
   end
 
-  playarea.setVectorLines(params)
+  playarea.setVectorLines(vectorLines)
 end
 
-function drawCircle(center, radius, params)
-  local d, s, c, r = 360 / CIRCLE_STEPS, math.sin, math.cos, math.rad
+function drawCircle(center, radius, vectorLines)
   local points = {}
-  for i = 0, CIRCLE_STEPS do
+  for i = 0, 60 do
+    local angle = math.rad(360 / 60 * i)
     table.insert(points, {
-      center.x + c(r(d * i)) * radius,
-      0.07,
-      center.z + s(r(d * i)) * radius
+      center.x + math.cos(angle) * radius,
+      0.06,
+      center.z + math.sin(angle) * radius
     })
   end
-  table.insert(params, {
+  table.insert(vectorLines, {
     color = { 0.6, 0.6, 0.6 },
     thickness = 0.01,
     points = points
