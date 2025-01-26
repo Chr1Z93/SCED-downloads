@@ -1,6 +1,8 @@
 local deckLib           = require("util/DeckLib")
+local guidReferenceApi  = require("core/GUIDReferenceApi")
 local mythosAreaApi     = require("mythos/MythosAreaApi")
 local playAreaApi       = require("playarea/PlayAreaApi")
+local searchLib         = require("util/SearchLib")
 local victoryDisplayApi = require("mythos/VictoryDisplayApi")
 
 PLAYAREA                = {
@@ -20,15 +22,10 @@ RFG                     = {
 }
 
 ROTATION                = { 0, 270, 180 }
-RIGHT                   = Vector({ 0, 0, -2.5 })
-LEFT                    = Vector({ 0, 0, 2.5 })
+RIGHT                   = Vector( 0, 0, -2.5 )
+LEFT                    = Vector( 0, 0, 2.5 )
 
 CRAWLING_MIST           = "aa76f7"
-
-TOKEN_IMAGES            = {
-  doom = "https://i.imgur.com/EoL7yaZ.png",
-  clue = "https://steamusercontent-a.akamaihd.net/ugc/1758068501357164917/1D06F1DC4D6888B6F57124BD2AFE20D0B0DA15A8/"
-}
 
 SKAI                    = 1
 ORIAB                   = 2
@@ -46,23 +43,29 @@ LOCATIONS               = {
   { name = "Mt. Ngranek",                    region = ORIAB,           vp = 1,                             position = { -43.37, 1.6, 0 } },
   { name = "Nameless Ruins",                 region = ORIAB,           vp = 1,                             position = { -43.37, 1.6, 7.57 } },
   -- Mnar
-  { name = "Kadatheron",                     region = MNAR,            position = { -30.22, 1.6, 7.57 } },
+  { name = "Kadatheron",                     region = MNAR,                                                position = { -30.22, 1.6, 7.57 } },
   { name = "Ruins of Ib",                    region = MNAR,            vp = 1,                             position = { -36.77, 1.6, 15.19 } },
   { name = "Sarnath",                        region = MNAR,            vp = 1,                             position = { -30.22, 1.6, 15.19 } },
   -- Forbidden Lands
   { name = "Ilek-Vad",                       region = FORBIDDEN_LANDS, vp = 1,                             position = { -17.12, 1.6, 0 } },
-  { name = "Zulan-Thek",                     region = FORBIDDEN_LANDS, position = { -17.12, 1.6, 15.19 } },
-  { name = "Forbidden Lands",                region = FORBIDDEN_LANDS, position = { -17.12, 1.6, 7.57 } },
+  { name = "Zulan-Thek",                     region = FORBIDDEN_LANDS,                                     position = { -17.12, 1.6, 15.19 } },
+  { name = "Forbidden Lands",                region = FORBIDDEN_LANDS,                                     position = { -17.12, 1.6, 7.57 } },
   -- Timeless Realm
   { name = "Serannian",                      region = TIMELESS_REALM,  vp = 1,                             position = { -23.68, 1.6, -15.28 } },
   { name = "Celephaïs",                      region = TIMELESS_REALM,  vp = 1,                             position = { -30.22, 1.6, -15.28 } },
-  { name = "Hazuth-Kleg",                    region = TIMELESS_REALM,  position = { -36.77, 1.64, -15.28 } },
+  { name = "Hazuth-Kleg",                    region = TIMELESS_REALM,                                      position = { -36.77, 1.64, -15.28 } },
   { name = "City-Which-Appears-On-No-Map",   region = TIMELESS_REALM,  vp = 2 },
   { name = "Temple of Unattainable Desires", region = TIMELESS_REALM,  vp = 1 }
 }
 
-RFG_CARDS               = { "Pack of Vooniths", "Cats of Ulthar", "Zoog Burrow", "Stealthy Zoog", "Furtive Zoog",
-  "Inconspicuous Zoog" }
+RFG_CARDS               = {
+  "Pack of Vooniths",
+  "Cats of Ulthar",
+  "Zoog Burrow",
+  "Stealthy Zoog",
+  "Furtive Zoog",
+  "Inconspicuous Zoog"
+}
 
 function onLoad()
   self.createButton({
@@ -111,7 +114,6 @@ function onLoad()
   ENCOUNTER_DECK_SPAWN_POS = Vector(ENCOUNTER_DECK_POS) + Vector(0, 2.5, 0)
   ENCOUNTER_DECK_DISCARD_POSITION = Global.getTable("ENCOUNTER_DECK_DISCARD_POSITION")
   ACT1_ADVANCED = false
-  COUNTER = getObjectFromGUID('f182ee')
   makeIndexes()
 end
 
@@ -145,7 +147,7 @@ end
 
 function setup(region, color)
   -- remove clues from players
-  local masterClueCounter = getObjectFromGUID("4a3aa4")
+  local masterClueCounter = guidReferenceApi.getObjectByOwnerAndType("Mythos", "MasterClueCounter")
   if masterClueCounter ~= nil then
     masterClueCounter.call("removeAllPlayerClues")
   end
@@ -153,8 +155,8 @@ function setup(region, color)
   -- spawn locationDeck if not yet done
   if locationDeck == nil then
     locationDeck = chest.takeObject({
-      guid = "c5ed15", -- locations
-      smooth = false,
+      guid     = "c5ed15", -- locations
+      smooth   = false,
       position = SET_ASIDE.position,
       rotation = SET_ASIDE.rotation
     })
@@ -185,6 +187,7 @@ function cleanZone()
     if encounterDeckObjects.draw and encounterDeckObjects.topCard then
       encounterDeckObjects.draw.putObject(encounterDeckObjects.topCard)
     end
+
     local cardsToRemove = {}
     for i, card in ipairs(encounterDeckObjects.draw.getObjects()) do
       if rfgMap[card.name] then
@@ -203,23 +206,24 @@ function cleanZone()
   end
 
   -- clean the play area
-  local zone = getObjectFromGUID("a2f932")
+  local zone = guidReferenceApi.getObjectByOwnerAndType("PlayArea", "PlayAreaZone")
   for i, obj in ipairs(zone.getObjects()) do
     local loc = nameMap[obj.getName()]
 
     -- remove certain cards from game
     if not ACT1_ADVANCED then
-      if obj.tag == "Card" and rfgMap[obj.getName()] then
+      if obj.type == "Card" and rfgMap[obj.getName()] then
         obj.setRotation(RFG.rotation)
         obj.setPosition(RFG.position)
         goto continue
-      elseif obj.tag == "Deck" then
+      elseif obj.type == "Deck" then
         local cardsToRemove = {}
         for _, card in ipairs(obj.getObjects()) do
           if rfgMap[card.name] then
             table.insert(cardsToRemove, card.index)
           end
         end
+
         for i = #cardsToRemove, 1, -1 do
           obj.takeObject({
             position = RFG.position,
@@ -233,12 +237,12 @@ function cleanZone()
     end
 
     -- move enemies and treacheries to the encounter deck
-    if obj.tag == "Card" and obj.hasTag("ScenarioCard") and not obj.hasTag("Location") then
+    if obj.type == "Card" and obj.hasTag("ScenarioCard") and not obj.hasTag("Location") then
       deckLib.placeOrMergeIntoDeck(obj, ENCOUNTER_DECK_POS, ROTATION)
     end
 
     -- move locations to victory display or set aside
-    if obj.tag == "Card" and loc ~= nil then
+    if obj.type == "Card" and loc ~= nil then
       if loc.vp ~= nil and not obj.is_face_down and not hasClues(obj) then
         playAreaApi.maybeUntrackLocation(obj)
         victoryDisplayApi.placeCard(obj)
@@ -248,13 +252,8 @@ function cleanZone()
     end
 
     -- delete clues and doom tokens
-    if obj.tag == "Tile" then
-      local props = obj.getCustomObject()
-      if (props.image == TOKEN_IMAGES.clue and props.image_bottom == TOKEN_IMAGES.doom) or
-          (props.image == TOKEN_IMAGES.doom and props.image_bottom == TOKEN_IMAGES.clue)
-      then
-        obj.destruct()
-      end
+    if obj.memo == "clueDoom" then
+      obj.destruct()
     end
 
     ::continue::
@@ -276,8 +275,8 @@ function placeLocations(region)
         if loc.name == card.name then
           locationDeck.takeObject({
             position = loc.position,
-            smooth = false,
-            index = card.index
+            smooth   = false,
+            index    = card.index
           })
           break
         end
@@ -285,7 +284,7 @@ function placeLocations(region)
     end
   end
 
-  local numPlayers = COUNTER.getVar("val")
+  local numPlayers = playAreaApi.getInvestigatorCount()
 
   if lastRegion == TIMELESS_REALM then
     placeEnemyFromEncounterDeck("The Crawling Mist", RFG.position, Vector({ 0, 1, 0 }))
@@ -358,25 +357,6 @@ function placeEnemyFromContainer(name, container, position, side)
 end
 
 function hasClues(card)
-  local objs = Physics.cast({
-    origin = card.getPosition(),
-    direction = { 0, 1, 0 },
-    type = 2,
-    size = { 4, 5, 4 },
-    max_distance = 0
-  })
-  local cluesFound = false
-  for i, v in ipairs(objs) do
-    local obj = v.hit_object
-    if obj.tag == "Tile" then
-      local props = obj.getCustomObject()
-      if (props.image == TOKEN_IMAGES.clue and props.image_bottom == TOKEN_IMAGES.doom)
-          or (props.image == TOKEN_IMAGES.doom and props.image_bottom == TOKEN_IMAGES.clue)
-      then
-        cluesFound = true
-        break
-      end
-    end
-  end
-  return cluesFound
+  local searchResult = searchLib.onObject(card, "isClue")
+  return #searchResult > 0
 end

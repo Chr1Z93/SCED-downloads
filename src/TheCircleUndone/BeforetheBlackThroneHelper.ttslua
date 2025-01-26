@@ -1,3 +1,4 @@
+local searchLib = require("util/SearchLib")
 CHEST_GUID = "7a167a"
 
 COSMIC_INGRESS_GUID = "910e54"
@@ -66,22 +67,13 @@ end
 
 function resetSpawnStatus()
   local tokenSpawnTracker = getObjectFromGUID("e3ffc9")
-  if tokenSpawnTracker then
-    tokenSpawnTracker.call("resetAllLocations")
-  end
+  tokenSpawnTracker.call("resetAllLocations")
 end
 
 function getDeck(pos)
-  local objs = Physics.cast({
-    origin = pos,
-    direction = { x = 0, y = 1, z = 0 },
-    type = 3
-  })
-  for _, v in ipairs(objs) do
-    local obj = v.hit_object
-    if obj.type == "Deck" then
-      return obj
-    end
+  local result = searchLib.atPosition(pos, "isDeck")
+  if #result > 0 then
+    return result[1]
   end
   return nil
 end
@@ -117,15 +109,9 @@ end
 
 function checkEmptySpace(color)
   for coord, pos in pairs(COSMOS) do
-    local objs = Physics.cast({
-      origin = pos,
-      direction = { x = 0, y = 1, z = 0 },
-      type = 3,
-      size = { 2, 2, 2 }
-    })
+    local objs = searchLib.atPosition(pos)
     local skipCleanUp = false
-    for _, v in ipairs(objs) do
-      local obj = v.hit_object
+    for _, obj in ipairs(objs) do
       local exclude = obj.getGUID() == HIDEOUS_PALACE_GUID or obj.getGUID() == COURT_OF_THE_GOO_GUID
       if exclude then skipCleanUp = true end
       if obj.type == "Card" and obj.is_face_down and not exclude then
@@ -133,10 +119,10 @@ function checkEmptySpace(color)
         return false
       end
     end
+
     if not skipCleanUp then
-      for _, v in ipairs(objs) do
-        local obj = v.hit_object
-        if isClueDoom(obj) then obj.destruct() end
+      for _, obj in ipairs(objs) do
+        if obj.memo == "clueDoom" then obj.destruct() end
       end
     end
   end
@@ -152,16 +138,8 @@ function markEmptySpace(spaces)
 end
 
 function moveLocationTo(loc, coord)
-  local objs = Physics.cast({
-    origin = loc.getPosition(),
-    direction = { 0, 1, 0 },
-    type = 2,
-    size = { 8, 8, 8 },
-    max_distance = 0
-  })
-  for i, v in ipairs(objs) do
-    local obj = v.hit_object
-    if obj ~= loc and obj.type == "Card" or isClueDoom(obj) then
+  for i, obj in ipairs(searchLib.inArea(loc.getPosition(), nil, { 8, 8, 8 })) do
+    if obj ~= loc and obj.type == "Card" or obj.memo == "clueDoom" then
       loc.addAttachment(obj)
     end
   end
@@ -180,15 +158,7 @@ function drawX(pos)
   })
 end
 
-function isClueDoom(obj)
-  if obj.type ~= "Tile" then return false end
-  local props = obj.getCustomObject()
-  return (props.image == TOKEN_IMAGES.clue and props.image_bottom == TOKEN_IMAGES.doom)
-      or (props.image == TOKEN_IMAGES.doom and props.image_bottom == TOKEN_IMAGES.clue)
-end
-
-function setup_1(obj, color, alt_click)
-  local startloc = getObjectFromGUID(COSMIC_INGRESS_GUID)
+function setup_1()
   local nextLoc = getObjectFromGUID(HIDEOUS_PALACE_GUID)
   local cosmos = getObjectFromGUID(COSMOS_DECK_GUID)
   cosmos.shuffle()
@@ -198,7 +168,7 @@ function setup_1(obj, color, alt_click)
   cosmos.takeObject({
     position = deckPos + OFFSET,
     rotation = ROTATION,
-    smooth = false
+    smooth   = false
   })
   cosmos.setPosition(COSMOS_DECK_POSITION)
 
@@ -242,7 +212,7 @@ function place_locations_2()
   local props = {
     position = COSMOS["C1"] + OFFSET,
     rotation = ROTATION,
-    smooth = false
+    smooth   = false
   }
   cosmos.takeObject(props)
   cosmos.takeObject(props)
@@ -255,12 +225,12 @@ function place_locations_2()
     deck.takeObject({
       position = COSMOS["D3"] + OFFSET,
       rotation = ROTATION,
-      smooth = false
+      smooth   = false
     })
     deck.takeObject({
       position = COSMOS["C5"] + OFFSET,
       rotation = ROTATION,
-      smooth = false
+      smooth   = false
     })
   end, 1)
 
@@ -289,7 +259,7 @@ function place_locations_3()
   local props = {
     position = COSMOS["C1"] + OFFSET,
     rotation = ROTATION,
-    smooth = false
+    smooth   = false
   }
   cosmos.takeObject(props)
   cosmos.takeObject(props)
@@ -303,17 +273,17 @@ function place_locations_3()
     deck.takeObject({
       position = COSMOS["E2"] + OFFSET,
       rotation = ROTATION,
-      smooth = false
+      smooth   = false
     })
     deck.takeObject({
       position = COSMOS["E4"] + OFFSET,
       rotation = ROTATION,
-      smooth = false
+      smooth   = false
     })
     deck.takeObject({
       position = COSMOS["C5"] + OFFSET,
       rotation = ROTATION,
-      smooth = false
+      smooth   = false
     })
   end, 1)
   DISABLED = true

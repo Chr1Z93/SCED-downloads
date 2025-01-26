@@ -1,3 +1,6 @@
+local guidReferenceApi = require("core/GUIDReferenceApi")
+local searchLib        = require("util/SearchLib")
+
 START       = { x = -30.24, y = 1.55, z = 0 }
 SET_ASIDE   = { x = -12.5, y = 1.8, z = 6.75 }
 EXPLORATION = { x = -11.5, y = 1.8, z = 11 }
@@ -45,30 +48,25 @@ function getExploreDeckPosition()
 end
 
 function setup(_, _color)
-  local zone = getObjectFromGUID("a2f932")
+  local zone = guidReferenceApi.getObjectByOwnerAndType("Mythos", "PlayAreaZone")
 
   -- make index of all cards in play area and remove all clues and doom
   local allCards = {}
   for _, obj in ipairs(zone.getObjects()) do
-    if obj.tag == "Card" then
+    if obj.type == "Card" then
       local notes = JSON.decode(obj.getGMNotes()) or nil
       local name = obj.getName()
       if ((notes ~= nil and notes.type == "Location") or name == "Perils of Yoth") and name ~= nil then
         allCards[name] = { card = obj, guid = obj.getGUID() }
       end
-    elseif obj.tag == "Deck" then
+    elseif obj.type == "Deck" then
       for _, card in ipairs(obj.getObjects()) do
         if card.name ~= nil then
           allCards[card.name] = { deck = obj, guid = card.guid }
         end
       end
-    elseif obj.tag == "Tile" then
-      local props = obj.getCustomObject()
-      if (props.image == TOKEN_IMAGES.clue and props.image_bottom == TOKEN_IMAGES.doom)
-          or (props.image == TOKEN_IMAGES.doom and props.image_bottom == TOKEN_IMAGES.clue)
-      then
-        obj.destruct()
-      end
+    elseif obj.memo == "clueDoom" then
+      obj.destruct()
     end
   end
 
@@ -111,28 +109,21 @@ function setup(_, _color)
     end
   end
 
-  resetSpawnStatus()
+  local tokenSpawntracker = guidReferenceApi.getObjectByOwnerAndType("Mythos", "TokenSpawnTracker")
+  tokenSpawntracker.call("resetAllLocations")
+
   Wait.time(setup_2, 0.5)
 end
 
 function setup_2()
-  local objs = Physics.cast({
-    origin = SET_ASIDE,
-    direction = { x = 0, y = 1, z = 0 },
-    type = 3,
-    size = { x = 1, y = 1, z = 1 },
-    orientation = { 0, 270, 0 }
-  })
-
   local deck = nil
-  for i, v in ipairs(objs) do
-    if v.hit_object.tag == "Deck" then
-      deck = v.hit_object
-      deck.setName("Set Aside Locations")
-      break
-    end
+  local result = searchLib.inArea(SET_ASIDE, { 0, 270, 0 }, { x = 1, y = 1, z = 1 }, "isDeck")
+  if #result > 0 then
+    deck = result[1]
+    deck.setName("Set Aside Locations")
+  else
+    return
   end
-  if deck == nil then return end
 
   local locMap = {}
   for _, card in ipairs(deck.getObjects()) do
@@ -153,20 +144,10 @@ function setup_2()
 end
 
 function nameExplorationDeck()
-  local objs = Physics.cast({
-    origin = getExploreDeckPosition(),
-    direction = { x = 0, y = 1, z = 0 },
-    type = 3,
-    size = { x = 1, y = 1, z = 1 },
-    orientation = { 0, 270, 0 }
-  })
-
-  for _, v in ipairs(objs) do
-    if v.hit_object.tag == "Deck" then
-      v.hit_object.shuffle()
-      v.hit_object.setName("Exploration Deck")
-      return
-    end
+  local result = searchLib.inArea(getExploreDeckPosition(), { 0, 270, 0 }, { x = 1, y = 1, z = 1 }, "isDeck")
+  if #result > 0 then
+    result[1].shuffle()
+    result[1].setName("Exploration Deck")
   end
 end
 
@@ -189,12 +170,5 @@ function placeCard(deck, card, position, faceup)
       card.setRotation({ 0, 270, 180 })
       card.setPosition(position)
     end
-  end
-end
-
-function resetSpawnStatus()
-  local tokenSpawntracker = getObjectFromGUID("e3ffc9")
-  if tokenSpawntracker then
-    tokenSpawntracker.call("resetAllLocations")
   end
 end

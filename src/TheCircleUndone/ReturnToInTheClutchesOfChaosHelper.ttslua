@@ -1,3 +1,5 @@
+local playAreaApi     = require("playarea/PlayAreaApi")
+local searchLib       = require("util/SearchLib")
 local tokenManagerApi = require("tokens/TokenManagerApi")
 
 ALL_LOCATIONS = {
@@ -65,29 +67,17 @@ function onLoad()
     font_size = 75
   })
 
-  PLAYER_COUNTER = getObjectFromGUID('f182ee')
-  TOKEN_PLAYER_ONE = Global.getTable('tokenplayerone')
   math.randomseed(os.time())
 end
 
 function setup(_obj, _color, alt_click)
   locationData = {}
   -- find Hangman's Hill and Silver Twilight Lodge
-  local objs = Physics.cast({
-    origin = PLAYAREA.position,
-    direction = { x = 0, y = 1, z = 0 },
-    type = 3,
-    size = PLAYAREA.scale,
-    orientation = PLAYAREA.rotation
-  })
-  for i, v in ipairs(objs) do
-    local obj = v.hit_object
-    if obj.tag == "Card" then
-      if obj.getName() == "Hangman's Hill" then
-        locationData["Hangman's Hill"] = { guid = obj.getGUID(), breach = 0, clue = 0 }
-      elseif obj.getName() == "Silver Twilight Lodge" then
-        locationData["Silver Twilight Lodge"] = { guid = obj.getGUID(), breach = 0, clue = 0 }
-      end
+  for i, obj in ipairs(searchLib.inArea(PLAYAREA.position, PLAYAREA.rotation, PLAYAREA.scale, "isCard")) do
+    if obj.getName() == "Hangman's Hill" then
+      locationData["Hangman's Hill"] = { guid = obj.getGUID(), breach = 0, clue = 0 }
+    elseif obj.getName() == "Silver Twilight Lodge" then
+      locationData["Silver Twilight Lodge"] = { guid = obj.getGUID(), breach = 0, clue = 0 }
     end
   end
 
@@ -108,13 +98,10 @@ function setup(_obj, _color, alt_click)
     locationData[loc.name] = { guid = deck.remainder.guid, breach = 0, clue = 0 }
   end
 
-  local numPlayers = PLAYER_COUNTER.getVar("val")
-  local numLocations = 2
-  local numDraws = numPlayers
-  if numPlayers == 4 then
-    numDraws = 3
-    numLocations = 3
-  end
+  local numPlayers   = playAreaApi.getInvestigatorCount()
+  local numLocations = (numPlayers == 4) and 3 or 2
+  local numDraws     = (numPlayers == 4) and 3 or numPlayers
+
   for i = 1, numDraws do
     placeBreaches(numLocations)
   end
@@ -150,7 +137,7 @@ function placeClue()
 end
 
 function addBreaches()
-  placeBreaches(PLAYER_COUNTER.getVar("val") + 1)
+  placeBreaches(playAreaApi.getInvestigatorCount() + 1)
 end
 
 function placeBreaches(numBreaches)

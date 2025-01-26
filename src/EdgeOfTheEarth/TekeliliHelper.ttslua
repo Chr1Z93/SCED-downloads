@@ -1,10 +1,11 @@
-local deckLib = require("util/DeckLib")
-local playermatApi = require("playermat/PlayermatApi")
+local deckLib          = require("util/DeckLib")
+local guidReferenceApi = require("core/GUIDReferenceApi")
+local playermatApi     = require("playermat/PlayermatApi")
+local searchLib        = require("util/SearchLib")
 require("playercards/PlayerCardSpawner")
 
-local ALL_CARDS_GUID       = "15bb07"
 local CAST_POS             = {
-  DRAW = { x = 1.05, y = 0.05, z = 0.16 },
+  DRAW    = { x = 1.05, y = 0.05, z = 0.16 },
   DISCARD = { x = -1.05, y = 0.05, z = 0.16 }
 }
 local colliding            = false
@@ -199,7 +200,7 @@ end
 
 -- respawns the stored Tekeli-li cards
 function spawnStoredTekelili(matColor)
-  local allCardsBag = getObjectFromGUID(ALL_CARDS_GUID)
+  local allCardsBag = guidReferenceApi.getObjectByOwnerAndType("Mythos", "AllCardsBag")
   local cardsToSpawn = {}
   for cardId, cardCount in pairs(playerTekelili[matColor]) do
     local card = allCardsBag.call("getCardById", { id = cardId })
@@ -270,7 +271,7 @@ end
 
 -- spawns a tekeli-li deck with the provided cards
 function spawnTekeliliDeck(deckData)
-  local allCardsBag = getObjectFromGUID(ALL_CARDS_GUID)
+  local allCardsBag = guidReferenceApi.getObjectByOwnerAndType("Mythos", "AllCardsBag")
   local cardsToSpawn = {}
   for cardId, cardCount in pairs(deckData) do
     local card = allCardsBag.call("getCardById", { id = cardId })
@@ -306,20 +307,10 @@ end
 
 -- returns the first object found, type can be "deck" or "discard"
 function checkSnapPoint(type)
-  local result = Physics.cast({
-    direction    = { 0, 1, 0 },
-    max_distance = 0.1,
-    type         = 3,
-    size         = { 0.1, 0.1, 0.1 },
-    origin       = self.positionToWorld(CAST_POS[type])
-  })
-
-  for _, hit in ipairs(result) do
-    if hit.hit_object ~= self then
-      return hit.hit_object
-    end
+  local result = searchLib.atPosition(self.positionToWorld(CAST_POS[type]), "isCardOrDeck")
+  if #result > 0 then
+    return result[1]
   end
-
   return nil
 end
 

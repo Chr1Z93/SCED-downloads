@@ -1,11 +1,14 @@
+local playAreaApi = require("playarea/PlayAreaApi")
+local searchLib   = require("util/SearchLib")
+
 ROAD_DECK_GUID = "de80aa"
 FPA_GUID = "b4e0a1"
 NO_VP_GUIDS = { "bebfba", "48b819", "6bb83e", "fe2e46", "dd62cc", "f35c3d" }
 
 LOCATION_POSITIONS = {
-  Vector({ -30.22, 1.6, 15.19 }),
-  Vector({ -30.22, 1.6, 7.57 }),
-  Vector({ -30.22, 1.6, -0.03 })
+  Vector( -30.22, 1.6, 15.19 ),
+  Vector( -30.22, 1.6, 7.57 ),
+  Vector( -30.22, 1.6, 0 )
 }
 VEHICLES = { "Hit Van", "Hybrid Assassin", "Pursuing Motorcar" }
 VEHICLE_OFFSET = Vector(3.25, 0, 0)
@@ -32,6 +35,7 @@ function makeIndexes()
   for i, guid in ipairs(NO_VP_GUIDS) do
     noVPs[guid] = true
   end
+
   vMap = {}
   for i, name in ipairs(VEHICLES) do
     vMap[name] = true
@@ -39,20 +43,10 @@ function makeIndexes()
 end
 
 function getDeck(position)
-  local objs = Physics.cast({
-    origin = position,
-    direction = { x = 0, y = -1, z = 0 },
-    type = 3,
-    size = { x = 1, y = 1, z = 1 },
-    orientation = { x = 0, y = 270, z = 180 }
-  })
-
-  for i, v in ipairs(objs) do
-    if v.hit_object.tag == "Deck" then
-      return v.hit_object
-    end
+  local result = searchLib.inArea(position, { x = 0, y = 270, z = 180 }, { x = 1, y = 1, z = 1 }, "isDeck")
+  if #result > 0 then
+    return result[1]
   end
-
   return nil
 end
 
@@ -74,16 +68,16 @@ function setup(obj, color, alt_click)
     if taken < 2 then
       -- shuffle with Falcon Point Approach
       roadDeck.takeObject({
-        guid = card.guid,
+        guid     = card.guid,
         position = fpaPosition + Vector(0, 1, 0),
-        smooth = false
+        smooth   = false
       })
     else
       -- starting locations
       roadDeck.takeObject({
-        guid = card.guid,
+        guid     = card.guid,
         position = LOCATION_POSITIONS[taken - 1],
-        smooth = false
+        smooth   = false
       })
     end
     taken = taken + 1
@@ -94,7 +88,7 @@ function setup(obj, color, alt_click)
 
   roadDeck.takeObject({ position = LOCATION_POSITIONS[3], smooth = false })
 
-  local numPlayers = getObjectFromGUID('f182ee').getVar("val")
+  local numPlayers = playAreaApi.getInvestigatorCount()
   if numPlayers > 1 then
     local deck = getDeck(ENCOUNTER_DECK_POSITION)
     deck.shuffle()
