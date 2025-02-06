@@ -2,6 +2,9 @@ local playAreaApi     = require("playarea/PlayAreaApi")
 local searchLib       = require("util/SearchLib")
 local tokenManagerApi = require("tokens/TokenManagerApi")
 
+local clickableResourceCounter = nil
+local foundTokens              = 0
+
 ALL_LOCATIONS = {
   "Southside",
   "Rivertown",
@@ -69,88 +72,125 @@ function onLoad(savedData)
     locationData     = loadedData.locationData
   end
 
-  buttonCreation()
+  self.createButton({
+    label = "Set Up",
+    click_function = "setup",
+    function_owner = self,
+    position = { 0, 0.1, -0.6 },
+    height = 120,
+    width = 525,
+    scale = { x = 1.75, y = 1.75, z = 1.75 },
+    font_size = 75
+  })
+
+  self.createButton({
+    label = "Place Clue",
+    click_function = "placeClue",
+    function_owner = self,
+    position = { 0, 0.1, 0 },
+    height = 120,
+    width = 525,
+    scale = { x = 1.75, y = 1.75, z = 1.75 },
+    font_size = 75
+  })
+
+  self.createButton({
+    label = "Add Breaches",
+    click_function = "addBreaches",
+    function_owner = self,
+    position = { 0, 0.1, 0.6 },
+    height = 120,
+    width = 525,
+    scale = { x = 1.75, y = 1.75, z = 1.75 },
+    font_size = 75
+  })
+
   math.randomseed(os.time())
 end
 
-function buttonCreation()
-  self.clearButtons()
-
-  local bParams = {}
-  bParams.function_owner = self
-  bParams.position = Vector(0, 0.1, -0.6)
-  bParams.height = 420
-  bParams.width = 1800
-  bParams.scale = Vector(0.5, 0.5, 0.5)
-
-  -- first button (Setup / Random Location)
-  if beforeSetup then
-    bParams.label = "Set Up"
-    bParams.click_function = "setup"
-    bParams.font_size = 260
-  else
-    bParams.label = "Random Location"
-    bParams.click_function = "broadCastRandomLocation"
-    bParams.font_size = 210
+function findBagLocations()
+  -- find Hangman's Hill and Silver Twilight Lodge
+  for i, obj in ipairs(searchLib.inArea(PLAYAREA.position, PLAYAREA.rotation, PLAYAREA.scale, "isCard")) do
+    if obj.getName() == "Hangman's Hill" then
+      locationData["Hangman's Hill"] = { guid = obj.getGUID(), breach = 0 }
+    elseif obj.getName() == "Silver Twilight Lodge" then
+      locationData["Silver Twilight Lodge"] = { guid = obj.getGUID(), breach = 0 }
+    end
   end
-  self.createButton(bParams)
-
-  -- second button (Place Clue)
-  bParams.label = "Place Clue"
-  bParams.click_function = "placeClue"
-  bParams.position.z = 0
-  bParams.font_size = 260
-  self.createButton(bParams)
-
-  -- third button (Add Breaches)
-  bParams.label = "Add Breaches"
-  bParams.click_function = "addBreaches"
-  bParams.position.z = 0.6
-  bParams.font_size = 260
-  self.createButton(bParams)
 end
 
 function setup(_, playerColor, _)
   locationData = {}
-  -- find Hangman's Hill and Silver Twilight Lodge
-  for i, obj in ipairs(searchLib.inArea(PLAYAREA.position, PLAYAREA.rotation, PLAYAREA.scale, "isCard")) do
-    if obj.getName() == "Hangman's Hill" then
-      locationData["Hangman's Hill"] = { guid = obj.getGUID(), breach = 0, clue = 0 }
-    elseif obj.getName() == "Silver Twilight Lodge" then
-      locationData["Silver Twilight Lodge"] = { guid = obj.getGUID(), breach = 0, clue = 0 }
-    end
-  end
+  findBagLocations()
 
   if locationData["Hangman's Hill"] == nil or locationData["Silver Twilight Lodge"] == nil then
-    printToColor("Place Hangman's Hill and Silver Twilight Lodge first", playerColor)
-    return
+    Player[playerColor].showOptionsDialog("Choose setup", {"Carl Sanford posesses the secrets of the universe", "Annette Mason is posessed by evil"},
+    function(_, index, playerColor)
+      if index == 1 then
+        bag = getObjectFromGUID("92c6fc")
+      else
+        bag = getObjectFromGUID("d14543")
+      end
+      bag.call("buttonClick_place")
+      findBagLocations()
+      setup2(playerColor)
+    end
+    )
+  else
+    setup2(playerColor)
   end
+end
 
-  beforeSetup = false
-  buttonCreation()
+function setup2(playerColor)
+  Player[playerColor].showOptionsDialog("Use clickable counters for breaches?", {"Yes", "No"}, "No",
+    function(text) useClickable = text
 
-  for k, loc in pairs(RANDOMIZED_LOCATIONS) do
-    local chosen = math.random(2)
+    for k, loc in pairs(RANDOMIZED_LOCATIONS) do
+      local chosen = math.random(2)
 
-    local guid1 = loc.guids[3 - chosen]
-    local card1 = getObjectFromGUID(guid1)
-    card1.setPosition(SET_ASIDE.position)
-    card1.setRotation(SET_ASIDE.rotation)
+      local guid1 = loc.guids[3 - chosen]
+      local card1 = getObjectFromGUID(guid1)
+      card1.setPosition(SET_ASIDE.position)
+      card1.setRotation(SET_ASIDE.rotation)
 
-    local guid2 = loc.guids[chosen]
-    local card2 = getObjectFromGUID(guid2)
-    card2.setPosition(loc.position)
-    card2.setRotation(SET_ASIDE.rotation)
-    locationData[loc.name] = { guid = guid2, breach = 0, clue = 0 }
-  end
+      local guid2 = loc.guids[chosen]
+      local card2 = getObjectFromGUID(guid2)
+      card2.setPosition(loc.position)
+      card2.setRotation(SET_ASIDE.rotation)
+      locationData[loc.name] = { guid = guid2, breach = 0 }
+      
+    end
+    
+    if useClickable == "Yes" then
+      for i, v in ipairs(ALL_LOCATIONS) do
+        local location = locationData[v]
+        local locationCard = getObjectFromGUID(location.guid)
+        tokenManagerApi.spawnTokenGroup(locationCard, "resourceCounter", 1)
+      end
+    end
+    
+    local numPlayers   = playAreaApi.getInvestigatorCount()
+    local numLocations = (numPlayers == 4) and 3 or 2
+    local numDraws     = (numPlayers == 4) and 3 or numPlayers
 
-  local numPlayers   = playAreaApi.getInvestigatorCount()
-  local numLocations = (numPlayers == 4) and 3 or 2
-  local numDraws     = (numPlayers == 4) and 3 or numPlayers
+    Wait.frames(function() 
+      for i = 1, numDraws do
+        placeBreaches(numLocations)
+      end
+    end, 3)
 
-  for i = 1, numDraws do
-    placeBreaches(numLocations)
-  end
+    self.editButton({
+      label = "Random Location",
+      click_function = "broadCastRandomLocation",
+      function_owner = self,
+      position = { 0, 0.1, -0.6 },
+      height = 120,
+      width = 525,
+      scale = { x = 1.75, y = 1.75, z = 1.75 },
+      font_size = 60
+    })
+    
+  end)
 end
 
 function getRandomLocation()
@@ -164,14 +204,9 @@ end
 function placeClue()
   local name = getRandomLocation()
   local location = locationData[name]
-  local clue = location.clue
-  local pos = getObjectFromGUID(location.guid).getPosition()
-  local cluePos = { x = pos.x + 0.85, y = pos.y + 1, z = pos.z - 0.8 + (0.55 * clue) }
-  clue = clue + 1
-  if clue > 3 then clue = 0 end
-  location.clue = clue
-  printToAll("Clue placed at: " .. name)
-  tokenManagerApi.spawnToken(cluePos, "clue")
+  local locationCard = getObjectFromGUID(location.guid)
+  broadcastToAll("Clue placed at: " .. name, "White")
+  tokenManagerApi.addUseToCard(locationCard, "clue")
 end
 
 function addBreaches()
@@ -185,17 +220,44 @@ function placeBreaches(numBreaches)
     table.insert(shuffled, pos, v)
   end
 
-  printToAll("Breaches added to:")
+  broadcastToAll("Breaches added to:", "White")
   for j = 1, numBreaches do
-    printToAll("- " .. shuffled[j])
+    broadcastToAll("- " .. shuffled[j], "White")
     local location = locationData[shuffled[j]]
-    local pos = getObjectFromGUID(location.guid).getPosition()
     local breach = location.breach
-    local z = breach < 3 and (pos.z - 0.7 + (0.7 * breach)) or (pos.z - 0.35 + (0.7 * (breach - 3)))
-    local breachPos = { x = pos.x + 0.3, y = pos.y + 1, z = z }
     breach = breach + 1
+    
+    local locationCard = getObjectFromGUID(location.guid)
+    searchLocation(locationCard)
+
+    if breach == 4 then
+      locationCard.highlightOn("Red", 3)
+    else
+      locationCard.highlightOn("Yellow", 3)
+    end
+    if clickableResourceCounter then
+      clickableResourceCounter.call("updateVal", breach)
+    else
+      locationCard.resting = true
+      tokenManagerApi.spawnTokenGroup(locationCard, "resource", breach)
+    end
     if breach > 4 then breach = 0 end
     location.breach = breach
-    tokenManagerApi.spawnToken(breachPos, "resource")
+  end
+end
+
+function searchLocation(locationCard)
+  clickableResourceCounter = nil
+  foundTokens = 0
+  for _, obj in ipairs(searchLib.onObject(locationCard, "isTileOrToken")) do
+    local image = obj.getCustomObject().image
+    if image == "https://steamusercontent-a.akamaihd.net/ugc/1758068501357192910/11DDDC7EF621320962FDCF3AE3211D5EDC3D1573/" then
+      foundTokens = foundTokens + math.abs(obj.getQuantity())
+      obj.destruct()
+    elseif obj.getMemo() == "resourceCounter" then
+      foundTokens = obj.getVar("val")
+      clickableResourceCounter = obj
+      return
+    end
   end
 end
