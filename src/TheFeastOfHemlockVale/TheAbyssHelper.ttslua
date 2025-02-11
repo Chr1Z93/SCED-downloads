@@ -1,13 +1,7 @@
-local deckLib          = require("util/DeckLib")
-local guidReferenceApi = require("core/GUIDReferenceApi")
-local playermatApi     = require("playermat/PlayermatApi")
-local searchLib        = require("util/SearchLib")
-require("playercards/PlayerCardSpawner")
-
-local CAST_POS             = {
-  DRAW    = { x = 1.05, y = 0.05, z = 0.16 },
-  DISCARD = { x = -1.05, y = 0.05, z = 0.16 }
-}
+local deckLib              = require("util/DeckLib")
+local guidReferenceApi     = require("core/GUIDReferenceApi")
+local playermatApi         = require("playermat/PlayermatApi")
+local searchLib            = require("util/SearchLib")
 
 local colliding            = false
 local helpVisibleToPlayers = {}
@@ -18,7 +12,7 @@ local helpVisibleToPlayers = {}
 
 -- adding context menu entries
 function onLoad()
-
+  self.max_typed_number = 99
 end
 
 -- TTS Event to trigger object movement
@@ -28,27 +22,37 @@ function onCollisionEnter(collisionInfo)
   colliding = true
   Wait.time(function() colliding = false end, 0.1)
 
-  -- check if colliding obj is above
-  local pos = collisionInfo.collision_object.getPosition()
-  local selfPos = self.getPosition()
-  if pos.y < selfPos.y then return end
-
-  returnObject()
-end
-
--- moves an object to the bottom of the Abyss Deck if it is a card
-function returnObject(obj)
-  -- use provided object or get object from snap point
-  local discard = obj or checkSnapPoint("DISCARD", "Card", "Deck")
+  local obj = collisionInfo.collision_object
 
   -- exit early if nothing found or not a card/deck
-  if discard == nil or (discard.type ~= "Card" and discard.type ~= "Deck") then return end
+  if obj.type ~= "Card" and obj.type ~= "Deck" then return end
+
+  -- check if colliding obj is above
+  if obj.getPosition().y < self.getPosition().y then return end
 
   -- make sure cards are face-up
-  discard.setRotation(self.getRotation():setAt("z", 0))
+  obj.setRotation(self.getRotation():setAt("z", 0))
 
   -- place objects into deck
-  discard.setPosition(self.positionToWorld(CAST_POS.DRAW))
+  local bag = getAbyssBag()
+  if not bag then return end
+
+  -- make sure they get added to the top
+  obj.setPosition(bag.getPosition() + Vector(0, 1, 0))
+  if obj.type == "Card" then
+    bag.putObject(obj)
+  else
+    obj.shuffle()
+    for i = 1, #obj.getObjects() do
+      bag.putObject(obj.takeObject())
+    end
+  end
+end
+
+function onNumberTyped(playerColor, number)
+  if number > 0 then
+    drawFromAbyss(Player[playerColor], number)
+  end
 end
 
 ---------------------------------------------------------
@@ -56,24 +60,29 @@ end
 ---------------------------------------------------------
 
 -- draws a card to the playmat of the requesting player
-function drawFromAbyss(player)
+function drawFromAbyss(player, number)
   local bag = getAbyssBag()
-  if not bag or #bag.getObjects() == 0 then return end
+  if not bag then return end
+
+  local bagCount = #bag.getObjects()
+  if bagCount == 0 then
+    printToColor("The Abyss deck is empty!", player.color)
+    return
+  end
 
   local matColor = playermatApi.getMatColor(player.color)
   local pos = playermatApi.getEncounterCardDrawPosition(matColor, false)
   local rot = playermatApi.returnRotation(matColor)
 
-  deckLib.placeOrMergeIntoDeck(bag.takeObject(), Vector(pos), rot)
+  for i = 1, math.min(number, bagCount) do
+    deckLib.placeOrMergeIntoDeck(bag.takeObject({ index = 0 }), Vector(pos), rot)
+  end
 end
 
 -- adds a tag to all cards of each player
 function tagPlayerCards()
-  log("Tagging player cards")
-  for matColor, mat in pairs(guidReferenceApi.getObjectsByType("PlayerMat")) do
-    log("Tagging player cards for " .. matColor)
+  for matColor, _ in pairs(guidReferenceApi.getObjectsByType("Playermat")) do
     for _, obj in ipairs(playermatApi.searchAroundPlayermat(matColor, "isCardOrDeck")) do
-      log("Tagging object " .. obj.getGUID())
       if obj.type == "Card" then
         obj.addTag("Mat" .. matColor)
       else
@@ -100,24 +109,21 @@ end
 -- helper functions
 ---------------------------------------------------------
 
--- returns a reference to the tekeli-li deck
+-- returns a reference to the abyss deck
 function getAbyssBag()
-  local bag = checkSnapPoint("DRAW", "Bag")
-  if not bag then
-    printToAll("Couldn't find Abyss deck!", "Orange")
-  else
-    return bag
-  end
-end
-
--- returns the first object found, type can be "deck" or "discard"
-function checkSnapPoint(type, objType1, objType2)
-  for _, obj in ipairs(searchLib.atPosition(self.positionToWorld(CAST_POS[type]))) do
-    if obj.type == objType1 or obj.type == objType2 then
-      return obj
+  local bag
+  for _, obj in ipairs(searchLib.atPosition(self.positionToWorld({ x = 1.05, y = 0.05, z = 0.16 }))) do
+    if obj.type == "Bag" then
+      bag = obj
+      break
     end
   end
-  return nil
+
+  if not bag then
+    printToAll("Couldn't find Abyss deck!", "Orange")
+    return
+  end
+  return bag
 end
 
 -- updates the visibility of the help text
