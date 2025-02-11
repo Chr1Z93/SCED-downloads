@@ -8,9 +8,9 @@ local CAST_POS             = {
   DRAW    = { x = 1.05, y = 0.05, z = 0.16 },
   DISCARD = { x = -1.05, y = 0.05, z = 0.16 }
 }
+
 local colliding            = false
 local helpVisibleToPlayers = {}
-local playerTekelili       = {}
 
 ---------------------------------------------------------
 -- main functionality
@@ -39,68 +39,51 @@ end
 -- moves an object to the bottom of the Abyss Deck if it is a card
 function returnObject(obj)
   -- use provided object or get object from snap point
-  local discard
-  if obj then
-    discard = obj
-  else
-    discard = checkSnapPoint("DISCARD")
-  end
+  local discard = obj or checkSnapPoint("DISCARD", "Card", "Deck")
 
   -- exit early if nothing found or not a card/deck
   if discard == nil or (discard.type ~= "Card" and discard.type ~= "Deck") then return end
 
+  -- make sure cards are face-up
+  discard.setRotation(self.getRotation():setAt("z", 0))
+
   -- place objects into deck
-  local rot = self.getRotation()
-  discard.setRotation({ rot.x, rot.y, 180 })
   discard.setPosition(self.positionToWorld(CAST_POS.DRAW))
 end
-
----------------------------------------------------------
--- context menu functions
----------------------------------------------------------
-
 
 ---------------------------------------------------------
 -- XML click functions
 ---------------------------------------------------------
 
--- draws a tekeli-li card to the playmat of the requesting player
-function drawTekelili(player)
-  local deck = getTekeliliDeck()
-  if not deck then return end
+-- draws a card to the playmat of the requesting player
+function drawFromAbyss(player)
+  local bag = getAbyssBag()
+  if not bag or #bag.getObjects() == 0 then return end
 
   local matColor = playermatApi.getMatColor(player.color)
   local pos = playermatApi.getEncounterCardDrawPosition(matColor, false)
   local rot = playermatApi.returnRotation(matColor)
-  if deck.type == "Card" then
-    deckLib.placeOrMergeIntoDeck(deck, Vector(pos), rot)
-  else
-    deckLib.placeOrMergeIntoDeck(deck.takeObject(), Vector(pos), rot)
-  end
+
+  deckLib.placeOrMergeIntoDeck(bag.takeObject(), Vector(pos), rot)
 end
 
--- shuffles a tekeli-li card into the deck of the requesting player
-function shuffleTekelili(player)
-  local deck = getTekeliliDeck()
-  if not deck then return end
-
-  local matColor = playermatApi.getMatColor(player.color)
-  local pos = playermatApi.getDrawPosition(matColor)
-  local rot = playermatApi.returnRotation(matColor)
-  rot = rot:setAt("z", 180)
-  if deck.type == "Card" then
-    deckLib.placeOrMergeIntoDeck(deck, Vector(pos), rot)
-  else
-    deckLib.placeOrMergeIntoDeck(deck.takeObject(), Vector(pos), rot)
-  end
-
-  -- shuffle deck (after a short delay to make sure the card is in it)
-  Wait.time(function()
-    local drawDeck = playermatApi.getDeckAreaObjects(matColor).draw
-    if drawDeck then
-      drawDeck.shuffle()
+-- adds a tag to all cards of each player
+function tagPlayerCards()
+  log("Tagging player cards")
+  for matColor, mat in pairs(guidReferenceApi.getObjectsByType("PlayerMat")) do
+    log("Tagging player cards for " .. matColor)
+    for _, obj in ipairs(playermatApi.searchAroundPlayermat(matColor, "isCardOrDeck")) do
+      log("Tagging object " .. obj.getGUID())
+      if obj.type == "Card" then
+        obj.addTag("Mat" .. matColor)
+      else
+        for _, cardData in ipairs(obj.getData().ContainedObjects) do
+          cardData.Tags = cardData.Tags or {}
+          table.insert(cardData.Tags, "Mat" .. matColor)
+        end
+      end
     end
-  end, 1)
+  end
 end
 
 -- toggles the help text for the player that clicks it
@@ -117,47 +100,22 @@ end
 -- helper functions
 ---------------------------------------------------------
 
--- spawns a tekeli-li deck with the provided cards
-function spawnTekeliliDeck(deckData)
-  local allCardsBag = guidReferenceApi.getObjectByOwnerAndType("Mythos", "AllCardsBag")
-  local cardsToSpawn = {}
-  for cardId, cardCount in pairs(deckData) do
-    local card = allCardsBag.call("getCardById", { id = cardId })
-    if card ~= nil then
-      for i = 1, cardCount do
-        table.insert(cardsToSpawn, { data = card.data, metadata = card.metadata })
-      end
-    end
-  end
-
-  local pos = self.positionToWorld(CAST_POS.DRAW)
-  local rot = self.getRotation()
-  rot.z = 180
-  local callback = function(deck)
-    deck.setName("Tekeli-li Deck")
-    deck.shuffle()
-  end
-
-  ---@diagnostic disable-next-line: undefined-global
-  Spawner.spawnCards(cardsToSpawn, pos, rot, _, callback)
-end
-
 -- returns a reference to the tekeli-li deck
-function getTekeliliDeck()
-  local deck = checkSnapPoint("DRAW")
-
-  if not deck then
-    printToAll("Couldn't find Tekeli-li deck! Spawn a new one from the context menu.", "Orange")
+function getAbyssBag()
+  local bag = checkSnapPoint("DRAW", "Bag")
+  if not bag then
+    printToAll("Couldn't find Abyss deck!", "Orange")
   else
-    return deck
+    return bag
   end
 end
 
 -- returns the first object found, type can be "deck" or "discard"
-function checkSnapPoint(type)
-  local result = searchLib.atPosition(self.positionToWorld(CAST_POS[type]), "isCardOrDeck")
-  if #result > 0 then
-    return result[1]
+function checkSnapPoint(type, objType1, objType2)
+  for _, obj in ipairs(searchLib.atPosition(self.positionToWorld(CAST_POS[type]))) do
+    if obj.type == objType1 or obj.type == objType2 then
+      return obj
+    end
   end
   return nil
 end
