@@ -1,0 +1,178 @@
+local deckLib          = require("util/DeckLib")
+local guidReferenceApi = require("core/GUIDReferenceApi")
+local playermatApi     = require("playermat/PlayermatApi")
+local searchLib        = require("util/SearchLib")
+require("playercards/PlayerCardSpawner")
+
+local CAST_POS             = {
+  DRAW    = { x = 1.05, y = 0.05, z = 0.16 },
+  DISCARD = { x = -1.05, y = 0.05, z = 0.16 }
+}
+local colliding            = false
+local helpVisibleToPlayers = {}
+local playerTekelili       = {}
+
+---------------------------------------------------------
+-- main functionality
+---------------------------------------------------------
+
+-- adding context menu entries
+function onLoad()
+
+end
+
+-- TTS Event to trigger object movement
+function onCollisionEnter(collisionInfo)
+  -- flag to catch multiple calls
+  if colliding then return end
+  colliding = true
+  Wait.time(function() colliding = false end, 0.1)
+
+  -- check if colliding obj is above
+  local pos = collisionInfo.collision_object.getPosition()
+  local selfPos = self.getPosition()
+  if pos.y < selfPos.y then return end
+
+  returnObject()
+end
+
+-- moves an object to the bottom of the Abyss Deck if it is a card
+function returnObject(obj)
+  -- use provided object or get object from snap point
+  local discard
+  if obj then
+    discard = obj
+  else
+    discard = checkSnapPoint("DISCARD")
+  end
+
+  -- exit early if nothing found or not a card/deck
+  if discard == nil or (discard.type ~= "Card" and discard.type ~= "Deck") then return end
+
+  -- place objects into deck
+  local rot = self.getRotation()
+  discard.setRotation({ rot.x, rot.y, 180 })
+  discard.setPosition(self.positionToWorld(CAST_POS.DRAW))
+end
+
+---------------------------------------------------------
+-- context menu functions
+---------------------------------------------------------
+
+
+---------------------------------------------------------
+-- XML click functions
+---------------------------------------------------------
+
+-- draws a tekeli-li card to the playmat of the requesting player
+function drawTekelili(player)
+  local deck = getTekeliliDeck()
+  if not deck then return end
+
+  local matColor = playermatApi.getMatColor(player.color)
+  local pos = playermatApi.getEncounterCardDrawPosition(matColor, false)
+  local rot = playermatApi.returnRotation(matColor)
+  if deck.type == "Card" then
+    deckLib.placeOrMergeIntoDeck(deck, Vector(pos), rot)
+  else
+    deckLib.placeOrMergeIntoDeck(deck.takeObject(), Vector(pos), rot)
+  end
+end
+
+-- shuffles a tekeli-li card into the deck of the requesting player
+function shuffleTekelili(player)
+  local deck = getTekeliliDeck()
+  if not deck then return end
+
+  local matColor = playermatApi.getMatColor(player.color)
+  local pos = playermatApi.getDrawPosition(matColor)
+  local rot = playermatApi.returnRotation(matColor)
+  rot = rot:setAt("z", 180)
+  if deck.type == "Card" then
+    deckLib.placeOrMergeIntoDeck(deck, Vector(pos), rot)
+  else
+    deckLib.placeOrMergeIntoDeck(deck.takeObject(), Vector(pos), rot)
+  end
+
+  -- shuffle deck (after a short delay to make sure the card is in it)
+  Wait.time(function()
+    local drawDeck = playermatApi.getDeckAreaObjects(matColor).draw
+    if drawDeck then
+      drawDeck.shuffle()
+    end
+  end, 1)
+end
+
+-- toggles the help text for the player that clicks it
+function toggleHelp(player)
+  if helpVisibleToPlayers[player.color] then
+    helpVisibleToPlayers[player.color] = nil
+  else
+    helpVisibleToPlayers[player.color] = true
+  end
+  updateHelpVisibility()
+end
+
+---------------------------------------------------------
+-- helper functions
+---------------------------------------------------------
+
+-- spawns a tekeli-li deck with the provided cards
+function spawnTekeliliDeck(deckData)
+  local allCardsBag = guidReferenceApi.getObjectByOwnerAndType("Mythos", "AllCardsBag")
+  local cardsToSpawn = {}
+  for cardId, cardCount in pairs(deckData) do
+    local card = allCardsBag.call("getCardById", { id = cardId })
+    if card ~= nil then
+      for i = 1, cardCount do
+        table.insert(cardsToSpawn, { data = card.data, metadata = card.metadata })
+      end
+    end
+  end
+
+  local pos = self.positionToWorld(CAST_POS.DRAW)
+  local rot = self.getRotation()
+  rot.z = 180
+  local callback = function(deck)
+    deck.setName("Tekeli-li Deck")
+    deck.shuffle()
+  end
+
+  ---@diagnostic disable-next-line: undefined-global
+  Spawner.spawnCards(cardsToSpawn, pos, rot, _, callback)
+end
+
+-- returns a reference to the tekeli-li deck
+function getTekeliliDeck()
+  local deck = checkSnapPoint("DRAW")
+
+  if not deck then
+    printToAll("Couldn't find Tekeli-li deck! Spawn a new one from the context menu.", "Orange")
+  else
+    return deck
+  end
+end
+
+-- returns the first object found, type can be "deck" or "discard"
+function checkSnapPoint(type)
+  local result = searchLib.atPosition(self.positionToWorld(CAST_POS[type]), "isCardOrDeck")
+  if #result > 0 then
+    return result[1]
+  end
+  return nil
+end
+
+-- updates the visibility of the help text
+function updateHelpVisibility()
+  local visibility = ""
+  for playerColor, _ in pairs(helpVisibleToPlayers) do
+    if string.len(visibility) > 0 then
+      visibility = visibility .. "|" .. playerColor
+    else
+      visibility = playerColor
+    end
+  end
+  self.UI.setAttribute("helpText", "visibility", visibility)
+  self.UI.setAttribute("helpPanel", "visibility", visibility)
+  self.UI.setAttribute("helpPanel", "active", string.len(visibility) > 0)
+end

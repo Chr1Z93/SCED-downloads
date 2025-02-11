@@ -1,0 +1,74 @@
+local shuffleFirst = true
+
+function onLoad(saveData)
+  if saveData and saveData ~= "" then
+    local loadedData = JSON.decode(saveData) or {}
+    shuffleFirst = loadedData.shuffleFirst
+  end
+  updateShuffling()
+end
+
+function updateShuffling()
+  self.clearContextMenu()
+  if shuffleFirst then
+    shuffleFirst = false
+    self.addContextMenuItem("Shuffle Cards First", updateShuffling)
+    self.setDescription("Drop deck or single card on this to discard to top of Abyss.\n\nCards will NOT be shuffled first.")
+  else
+    shuffleFirst = true
+    self.addContextMenuItem("Don't Shuffle First", updateShuffling)
+    self.setDescription("Drop deck or single card on this to discard to top of Abyss.\n\nCards will be shuffled first.")
+  end
+  self.script_state = JSON.encode({ shuffleFirst = shuffleFirst })
+end
+
+function tryObjectEnter(theCard)
+  local abyssDeck = getObjectsWithTag("AbyssDeck")[1]
+  local abyssCard = getObjectsWithTag("AbyssCard")[1]
+
+  local abyssDeckPos = abyssDeck.getPosition()
+  local abyssOnTable = abyssCard ~= nil   -- weird bugs if related to card flipping:
+  -- if card starts on table,
+  -- we need to use the deck's put away to make sure it's flipped properly.
+  -- but, if we put away when it wasn't on the table,
+  -- there is a brief dialog about custom cards.
+  -- also, if we try to manually flip, all sorts of craziness happens
+  -- ie, the abyss card ends up on the bottom of the deck.
+
+  -- flip the card if needed
+  if not theCard.is_face_down then
+    theCard.flip()
+  end
+
+  -- move the abyss reference card to the side (if it exists)
+  local topCard = abyssDeck.takeObject({ position = abyssDeckPos + Vector(0, 1, 0) })
+
+  if topCard.hasTag("AbyssCard") then
+    -- top card is abyss card, set to side
+    abyssCard = topCard     -- so we can reference it later
+    abyssCard.setPosition(abyssDeckPos - Vector(0, 0, 3))
+  else
+    -- we don't want to pick up the top card unless it's the abyss card
+    -- we're already positioned above the deck, so we can just put it back
+    abyssDeck.putObject(topCard)     -- put it back
+  end
+
+  -- shuffle the cards to be put in the abyss
+  if shuffleFirst then
+    theCard.shuffle()
+  end
+
+  -- put the card on the deck
+  theCard.setPosition(abyssDeckPos + Vector(0, 1, 0))
+  abyssDeck.putObject(theCard)
+
+  -- put the abyss reference card back on top (if it exists)
+  if abyssCard ~= nil then   -- we'd have it reference by now if it existed
+    abyssCard.setPosition(abyssDeckPos + Vector(0, 1, 0))
+    if abyssOnTable then                   -- no need to put if was already on deck
+      abyssDeck.putObject(abyssCard)       -- putting it will flip if necessary
+    end
+  end
+
+  return false
+end
