@@ -5,6 +5,7 @@ local searchLib            = require("util/SearchLib")
 
 local colliding            = false
 local helpVisibleToPlayers = {}
+local setupVisible         = true
 
 ---------------------------------------------------------
 -- main functionality
@@ -12,6 +13,7 @@ local helpVisibleToPlayers = {}
 
 -- adding context menu entries
 function onLoad()
+  updateExplanation() -- setup help instructions
   self.max_typed_number = 99
 end
 
@@ -96,6 +98,11 @@ function tagPlayerCards()
       end
     end
   end
+
+  -- update setup section
+  self.UI.setAttribute("tagRow", "active", false)
+  self.UI.setAttribute("splitRow", "active", true)
+  enableNavigation()
 end
 
 -- toggles the help text for the player that clicks it
@@ -107,6 +114,66 @@ function toggleHelp(player)
   end
   updateHelpVisibility()
 end
+
+function splitAbyss(player, number)
+  local bag = getAbyssBag()
+  local bottomBag = getSetupBag("bottom")
+  local topBag = getSetupBag("top")
+  
+  local bagCount = #bag.getObjects()
+  local half = math.floor(bagCount / 2)
+  
+  bag.shuffle()
+  
+  bottomBag.call("setReadOnly", false)
+  for i = 1, bagCount do
+    local card = bag.takeObject({
+      smooth = false,
+      callback_function = function(obj)
+          if i <= half then
+            bottomBag.putObject(obj)
+          else
+            topBag.putObject(obj)
+          end
+        end
+    })
+  end
+  bottomBag.call("setReadOnly", true)
+
+  self.UI.setAttribute("splitRow", "active", false)
+  self.UI.setAttribute("finalizeRow", "active", true)
+  enableNavigation()
+end
+
+function finalizeAbyss(player, number)
+  local bag = getAbyssBag()
+  local bottomBag = getSetupBag("bottom")
+  local topBag = getSetupBag("top")
+  
+  bottomBag.shuffle()
+  topBag.shuffle()
+  
+  local bagCount = #bottomBag.getObjects()
+  for i = 1, bagCount do
+    local card = bottomBag.takeObject({
+      smooth = false,
+      callback_function = function(obj)
+          bag.putObject(obj)
+        end
+    })
+  end
+  
+  bagCount = #topBag.getObjects()
+  for i = 1, bagCount do
+    local card = topBag.takeObject({
+      smooth = false,
+      callback_function = function(obj)
+          bag.putObject(obj)
+        end
+    })
+  end
+end
+
 
 ---------------------------------------------------------
 -- helper functions
@@ -142,4 +209,102 @@ function updateHelpVisibility()
   self.UI.setAttribute("helpText", "visibility", visibility)
   self.UI.setAttribute("helpPanel", "visibility", visibility)
   self.UI.setAttribute("helpPanel", "active", string.len(visibility) > 0)
+end
+
+-- returns a reference to the abyss deck
+---@param topOrBottom string return top|bottom bag
+function getSetupBag(topOrBottom)
+  local offset = { x = -1, y = 0, z = 3 } --top
+  if topOrBottom == "bottom" then offset.z = 4.12 end
+
+  local bag
+  for _, obj in ipairs(searchLib.atPosition(self.positionToWorld(offset))) do
+    if obj.type == "Bag" then
+      bag = obj
+      break
+    end
+  end
+
+  if not bag then
+    printToAll("Couldn't find " .. topOrBottom .. " setup deck!", "Orange")
+    return
+  end
+
+  return bag
+end
+
+---------------------------------------------------------
+-- setup ui functions
+---------------------------------------------------------
+
+-- toggles the setup section
+function toggleSetup()
+  local bottomBag = getSetupBag("bottom")
+  local topBag = getSetupBag("top")
+  
+  setupVisible = not setupVisible
+  self.UI.setAttribute("setupPanel", "active", setupVisible)
+
+  if setupVisible then
+    self.UI.setAttribute("showAbyssSetupButton", "text", "Hide Abyss Setup")
+    bottomBag.setInvisibleTo({})
+    topBag.setInvisibleTo({})
+  else
+    self.UI.setAttribute("showAbyssSetupButton", "text", "Show Abyss Setup")
+    bottomBag.setInvisibleTo({"Green", "White", "Orange", "Red"})
+    topBag.setInvisibleTo({"Green", "White", "Orange", "Red"})
+  end
+
+end
+
+function previousStep(player, value, id)
+  if self.UI.getAttribute("splitRow", "active") == "True" then
+    self.UI.setAttribute("splitRow", "active", false)
+    self.UI.setAttribute("tagRow", "active", true)
+  elseif self.UI.getAttribute("finalizeRow", "active") == "True" then
+    self.UI.setAttribute("finalizeRow", "active", false)
+    self.UI.setAttribute("splitRow", "active", true)
+  end
+
+  enableNavigation()
+end
+
+function nextStep(player, value, id)
+  if self.UI.getAttribute("tagRow", "active") == "True" then
+    self.UI.setAttribute("tagRow", "active", false)
+    self.UI.setAttribute("splitRow", "active", true)
+  elseif self.UI.getAttribute("splitRow", "active") == "True" then
+    self.UI.setAttribute("splitRow", "active", false)
+    self.UI.setAttribute("finalizeRow", "active", true)
+  end
+
+  enableNavigation()
+end
+
+-- enable previous and next setup buttons
+function enableNavigation()
+  Wait.frames(function()
+    local back = true
+    if self.UI.getAttribute("tagRow", "active") == "True" then back = false end
+    self.UI.setAttribute("backButton", "active", back)
+    
+    local forward = true
+    if self.UI.getAttribute("finalizeRow", "active") == "True" then forward = false end
+    self.UI.setAttribute("forwardButton", "active", forward)
+
+    updateExplanation()
+  end, 1)
+end
+
+function updateExplanation()
+  local explanationText
+  if self.UI.getAttribute("tagRow", "active") == "True" then
+    explanationText = "Make sure all player decks are loaded, then click to tag all player cards with \n< AbyssMat<i>Color</i> >."
+  elseif self.UI.getAttribute("splitRow", "active") == "True" then
+    explanationText = "Click to shuffle Abyss & split into two halves."
+  elseif self.UI.getAttribute("finalizeRow", "active") == "True" then
+    explanationText = "Place player/Investigator cards in top bag.\n\nClick to shuffle top & place both halves back in Abyss."
+  end
+ 
+  self.UI.setValue("explanation", explanationText)
 end
