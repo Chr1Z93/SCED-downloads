@@ -81,15 +81,27 @@ def decompose_saved_object(input_file):
         return
 
     # Construct the saved object path
-    saved_object = os.path.join(
-        os.environ["USERPROFILE"],
-        "Documents",
-        "My Games",
-        "Tabletop Simulator",
-        "Saves",
-        "Saved Objects",
-        f"{nickname}.json",
-    )
+    if sys.platform == "linux" or sys.platform == "linux2": # linux
+        pass
+    elif sys.platform == "darwin": # macOS
+        saved_object = os.path.join(
+            os.path.expanduser("~"),
+            "Library",
+            "Tabletop Simulator",
+            "Saves",
+            "Saved Objects",
+            f"{nickname}.json",
+        )
+    else: # windows
+        saved_object = os.path.join(
+            os.environ["USERPROFILE"],
+            "Documents",
+            "My Games",
+            "Tabletop Simulator",
+            "Saves",
+            "Saved Objects",
+            f"{nickname}.json",
+        )
 
     # Validate and prepare the saved object JSON
     prepared_saved_object = validate_and_prepare_json(saved_object)
@@ -101,18 +113,33 @@ def decompose_saved_object(input_file):
     output_path = os.path.dirname(input_file)
 
     # Run the go command
-    cmd = [
-        "go",
-        "run",
-        "main.go",
-        "--moddir=C:\\git\\SCED",
-        f"--objin={prepared_saved_object}",
-        f"--objout={output_path}\\",
-        "--reverse",
-    ]
+    if sys.platform == "darwin": # macOS
+        cmd = [
+            "TTSModManager", # compiled ModManager
+            "-moddir",
+            os.path.expanduser("~") + "/Documents/GitHub/SCED",
+            "-objin",
+            f"{prepared_saved_object}",
+            "-objout",
+            f"{output_path}",
+            "-reverse",
+        ]
+    else: # windows
+        cmd = [
+            "go",
+            "run",
+            "main.go",
+            "--moddir=C:\\git\\SCED",
+            f"--objin={prepared_saved_object}",
+            f"--objout={output_path}\\",
+            "--reverse",
+        ]
 
     # Execute from the correct directory
-    subprocess.run(cmd, cwd="C:\\git\\TTSModManager")
+    if sys.platform == "darwin": # macOS
+        subprocess.run(cmd)
+    else: # windows
+        subprocess.run(cmd, cwd="C:\\git\\TTSModManager")
 
     # Clean up temporary file if created
     if prepared_saved_object != saved_object:
