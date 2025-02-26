@@ -81,27 +81,24 @@ def decompose_saved_object(input_file):
         return
 
     # Construct the saved object path
-    if sys.platform == "linux" or sys.platform == "linux2": # linux
-        pass
-    elif sys.platform == "darwin": # macOS
+    if sys.platform == "darwin": # macOS
         saved_object = os.path.join(
             os.path.expanduser("~"),
             "Library",
-            "Tabletop Simulator",
-            "Saves",
-            "Saved Objects",
-            f"{nickname}.json",
         )
     else: # windows
         saved_object = os.path.join(
             os.environ["USERPROFILE"],
             "Documents",
             "My Games",
-            "Tabletop Simulator",
-            "Saves",
-            "Saved Objects",
-            f"{nickname}.json",
         )
+    saved_object = os.path.join(
+        f"{saved_object}",
+        "Tabletop Simulator",
+        "Saves",
+        "Saved Objects",
+        f"{nickname}.json",
+    )
 
     # Validate and prepare the saved object JSON
     prepared_saved_object = validate_and_prepare_json(saved_object)
@@ -114,10 +111,13 @@ def decompose_saved_object(input_file):
 
     # Run the go command
     if sys.platform == "darwin": # macOS
+        moddir_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "SCED")
         cmd = [
-            "TTSModManager", # compiled ModManager
+            "go",
+            "run",
+            "main.go",
             "-moddir",
-            os.path.expanduser("~") + "/Documents/GitHub/SCED",
+            f"{moddir_path}",
             "-objin",
             f"{prepared_saved_object}",
             "-objout",
@@ -137,7 +137,8 @@ def decompose_saved_object(input_file):
 
     # Execute from the correct directory
     if sys.platform == "darwin": # macOS
-        subprocess.run(cmd)
+        modManager_path = os.path.join(os.path.dirname(moddir_path), "TTSModManager")
+        subprocess.run(cmd, cwd=f"{modManager_path}")
     else: # windows
         subprocess.run(cmd, cwd="C:\\git\\TTSModManager")
 
