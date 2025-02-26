@@ -21,35 +21,38 @@ def build_saved_object(input_file):
         print("Error: Could not read Nickname from file", file=sys.stderr)
         return
 
-  # Construct output path
+    # Construct output path
     if sys.platform == "darwin": # macOS
         output_file = os.path.join(
             os.path.expanduser("~"),
             "Library",
-            "Tabletop Simulator",
-            "Saves",
-            "Saved Objects",
-            f"{nickname}.json",
         )
     else: # windows
         output_file = os.path.join(
             os.environ["USERPROFILE"],
             "Documents",
             "My Games",
-            "Tabletop Simulator",
-            "Saves",
-            "Saved Objects",
-            f"{nickname}.json",
         )
-  
+    output_file = os.path.join(
+        f"{output_file}",
+        "Tabletop Simulator",
+        "Saves",
+        "Saved Objects",
+        f"{nickname}.json",
+    )
+
     # Run the go command
     if sys.platform == "darwin": # macOS
+        bonusdir_path = os.path.dirname(os.path.dirname(__file__))
+        moddir_path = os.path.join(os.path.dirname(bonusdir_path), "SCED")
         cmd = [
-            "TTSModManager", # compiled ModManager
+            "go",
+            "run",
+            "main.go",
             "-moddir",
-            os.path.expanduser("~") + "/Documents/GitHub/SCED",
+            f"{moddir_path}",
             "-bonusdir",
-            os.path.expanduser("~") + "/Documents/GitHub/SCED-downloads",
+            f"{bonusdir_path}",
             "-objin",
             f"{input_file}",
             "-objout",
@@ -67,10 +70,11 @@ def build_saved_object(input_file):
             f"--objout={output_file}",
             "--savedobj",
         ]
-
+    
     # Execute from the correct directory
     if sys.platform == "darwin": # macOS
-        subprocess.run(cmd)
+        modManager_path = os.path.join(os.path.dirname(bonusdir_path), "TTSModManager")
+        subprocess.run(cmd, cwd=f"{modManager_path}")
     else: # windows
         subprocess.run(cmd, cwd="C:\\git\\TTSModManager")
 
