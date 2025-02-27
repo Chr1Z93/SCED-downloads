@@ -22,10 +22,19 @@ def build_saved_object(input_file):
         return
 
     # Construct output path
+    if sys.platform == "darwin": # macOS
+        output_file = os.path.join(
+            os.path.expanduser("~"),
+            "Library",
+        )
+    else: # windows
+        output_file = os.path.join(
+            os.environ["USERPROFILE"],
+            "Documents",
+            "My Games",
+        )
     output_file = os.path.join(
-        os.environ["USERPROFILE"],
-        "Documents",
-        "My Games",
+        f"{output_file}",
         "Tabletop Simulator",
         "Saves",
         "Saved Objects",
@@ -33,19 +42,41 @@ def build_saved_object(input_file):
     )
 
     # Run the go command
-    cmd = [
-        "go",
-        "run",
-        "main.go",
-        "--moddir=C:\\git\\SCED",
-        "--bonusdir=C:\\git\\SCED-downloads",
-        f"--objin={input_file}",
-        f"--objout={output_file}",
-        "--savedobj",
-    ]
-
+    if sys.platform == "darwin": # macOS
+        bonusdir_path = os.path.dirname(os.path.dirname(__file__))
+        moddir_path = os.path.join(os.path.dirname(bonusdir_path), "SCED")
+        cmd = [
+            "go",
+            "run",
+            "main.go",
+            "-moddir",
+            f"{moddir_path}",
+            "-bonusdir",
+            f"{bonusdir_path}",
+            "-objin",
+            f"{input_file}",
+            "-objout",
+            f"{output_file}",
+            "-savedobj",
+        ]
+    else: # windows
+        cmd = [
+            "go",
+            "run",
+            "main.go",
+            "--moddir=C:\\git\\SCED",
+            "--bonusdir=C:\\git\\SCED-downloads",
+            f"--objin={input_file}",
+            f"--objout={output_file}",
+            "--savedobj",
+        ]
+    
     # Execute from the correct directory
-    subprocess.run(cmd, cwd="C:\\git\\TTSModManager")
+    if sys.platform == "darwin": # macOS
+        modManager_path = os.path.join(os.path.dirname(bonusdir_path), "TTSModManager")
+        subprocess.run(cmd, cwd=f"{modManager_path}")
+    else: # windows
+        subprocess.run(cmd, cwd="C:\\git\\TTSModManager")
 
 
 if __name__ == "__main__":
