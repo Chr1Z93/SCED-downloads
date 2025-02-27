@@ -10,7 +10,6 @@ local helpVisibleToPlayers = {}
 -- main functionality
 ---------------------------------------------------------
 
--- adding context menu entries
 function onLoad()
   self.max_typed_number = 99
 end
@@ -81,20 +80,30 @@ end
 
 -- adds a tag to all cards of each player
 function tagPlayerCards()
+  local count = 0
   for matColor, _ in pairs(guidReferenceApi.getObjectsByType("Playermat")) do
     for _, obj in ipairs(playermatApi.searchAroundPlayermat(matColor)) do
+      local tagString = "_" .. matColor
       if obj.type == "Card" then
-        obj.addTag("Mat" .. matColor)
+        obj.addTag(tagString)
+        count = count + 1
       elseif obj.type == "Deck" or obj.type == "Bag" then
         local data = obj.getData()
         for _, cardData in ipairs(data.ContainedObjects or {}) do
           cardData.Tags = cardData.Tags or {}
-          table.insert(cardData.Tags, "Mat" .. matColor)
+          table.insert(cardData.Tags, tagString)
+          count = count + 1
         end
         obj.destruct()
         spawnObjectData({ data = data })
       end
     end
+  end
+
+  if count > 0 then
+    printToAll("Tagged " .. count .. " cards with playermat color!", "Green")
+  else
+    printToAll("No cards found to tag!", "Orange")
   end
 end
 
@@ -114,19 +123,14 @@ end
 
 -- returns a reference to the abyss deck
 function getAbyssBag()
-  local bag
   for _, obj in ipairs(searchLib.atPosition(self.positionToWorld({ x = 1.05, y = 0.05, z = 0.16 }))) do
     if obj.type == "Bag" then
-      bag = obj
-      break
+      return obj
     end
   end
 
-  if not bag then
-    printToAll("Couldn't find Abyss deck!", "Orange")
-    return
-  end
-  return bag
+  printToAll("Couldn't find Abyss deck!", "Orange")
+  return nil
 end
 
 -- updates the visibility of the help text
@@ -142,4 +146,9 @@ function updateHelpVisibility()
   self.UI.setAttribute("helpText", "visibility", visibility)
   self.UI.setAttribute("helpPanel", "visibility", visibility)
   self.UI.setAttribute("helpPanel", "active", string.len(visibility) > 0)
+end
+
+-- called from the onNumberTyped of the Abyss Bag
+function drawFromAbyssWrapper(params)
+  drawFromAbyss(Player[params.playerColor], params.number)
 end
