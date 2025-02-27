@@ -21,58 +21,31 @@ def build_saved_object(input_file):
         print("Error: Could not read Nickname from file", file=sys.stderr)
         return
 
-  # Construct output path
-    if sys.platform == "darwin": # macOS
-        output_file = os.path.join(
-            os.path.expanduser("~"),
-            "Library",
-            "Tabletop Simulator",
-            "Saves",
-            "Saved Objects",
-            f"{nickname}.json",
-        )
-    else: # windows
-        output_file = os.path.join(
-            os.environ["USERPROFILE"],
-            "Documents",
-            "My Games",
-            "Tabletop Simulator",
-            "Saves",
-            "Saved Objects",
-            f"{nickname}.json",
-        )
-  
+    # Construct output path
+    output_file = os.path.join(
+        os.environ["USERPROFILE"],
+        "Documents",
+        "My Games",
+        "Tabletop Simulator",
+        "Saves",
+        "Saved Objects",
+        f"{nickname}.json",
+    )
+
     # Run the go command
-    if sys.platform == "darwin": # macOS
-        cmd = [
-            "TTSModManager", # compiled ModManager
-            "-moddir",
-            os.path.expanduser("~") + "/Documents/GitHub/SCED",
-            "-bonusdir",
-            os.path.expanduser("~") + "/Documents/GitHub/SCED-downloads",
-            "-objin",
-            f"{input_file}",
-            "-objout",
-            f"{output_file}",
-            "-savedobj",
-        ]
-    else: # windows
-        cmd = [
-            "go",
-            "run",
-            "main.go",
-            "--moddir=C:\\git\\SCED",
-            "--bonusdir=C:\\git\\SCED-downloads",
-            f"--objin={input_file}",
-            f"--objout={output_file}",
-            "--savedobj",
-        ]
+    cmd = [
+        "go",
+        "run",
+        "main.go",
+        "--moddir=C:\\git\\SCED",
+        "--bonusdir=C:\\git\\SCED-downloads",
+        f"--objin={input_file}",
+        f"--objout={output_file}",
+        "--savedobj",
+    ]
 
     # Execute from the correct directory
-    if sys.platform == "darwin": # macOS
-        subprocess.run(cmd)
-    else: # windows
-        subprocess.run(cmd, cwd="C:\\git\\TTSModManager")
+    subprocess.run(cmd, cwd="C:\\git\\TTSModManager")
 
 
 if __name__ == "__main__":
