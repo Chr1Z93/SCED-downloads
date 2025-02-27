@@ -1,0 +1,62 @@
+local searchLib = require("util/SearchLib")
+
+function onLoad()
+  self.max_typed_number = 99
+end
+
+-- only allow cards to enter, split decks and reject other objects
+function tryObjectEnter(object)
+  if object.getName() == lastRejectedName then return end
+
+  if object.type == "Deck" then
+    object.shuffle()
+    local pos = self.getPosition()
+    for i = 1, #object.getObjects() do
+      local card = object.takeObject({ position = pos + Vector(0, 0.1 * i, 0), smooth = false })
+      self.putObject(card)
+    end
+    return false
+  elseif object.type ~= "Card" then
+    lastRejectedName = object.getName()
+    Wait.time(function() lastRejectedName = nil end, 1)
+    return false
+  end
+
+  return true
+end
+
+function onObjectEnterContainer(container, object)
+  if container == self then resize() end
+end
+
+function onObjectLeaveContainer(container, object)
+  if container == self then resize() end
+end
+
+function resize()
+  local count = #self.getObjects()
+  if count == 0 then count = 1 end
+  self.setScale(self.getScale():setAt("y", 0.01 * count))
+end
+
+function onNumberTyped(playerColor, number)
+  if number > 0 then
+    local helper = getAbyssHelper()
+    if helper then
+      helper.call("drawFromAbyssWrapper", { playerColor = playerColor, number = number })
+    end
+  end
+  return true
+end
+
+-- returns a reference to the abyss helper
+function getAbyssHelper()
+  for _, obj in ipairs(searchLib.belowPosition(self.getPosition())) do
+    if obj.getName() == "The Abyss Helper" then
+      return obj
+    end
+  end
+
+  printToAll("Couldn't find Abyss helper!", "Orange")
+  return nil
+end

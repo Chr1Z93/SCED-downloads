@@ -1,0 +1,154 @@
+local deckLib              = require("util/DeckLib")
+local guidReferenceApi     = require("core/GUIDReferenceApi")
+local playermatApi         = require("playermat/PlayermatApi")
+local searchLib            = require("util/SearchLib")
+
+local colliding            = false
+local helpVisibleToPlayers = {}
+
+---------------------------------------------------------
+-- main functionality
+---------------------------------------------------------
+
+function onLoad()
+  self.max_typed_number = 99
+end
+
+-- TTS Event to trigger object movement
+function onCollisionEnter(collisionInfo)
+  -- flag to catch multiple calls
+  if colliding then return end
+  colliding = true
+  Wait.time(function() colliding = false end, 0.1)
+
+  local obj = collisionInfo.collision_object
+
+  -- exit early if nothing found or not a card/deck
+  if obj.type ~= "Card" and obj.type ~= "Deck" then return end
+
+  -- check if colliding obj is above
+  if obj.getPosition().y < self.getPosition().y then return end
+
+  -- make sure cards are face-up
+  obj.setRotation(self.getRotation():setAt("z", 0))
+
+  -- place objects into deck
+  local bag = getAbyssBag()
+  if not bag then return end
+
+  -- make sure they get added to the top
+  obj.setPosition(bag.getPosition() + Vector(0, 1, 0))
+  if obj.type == "Card" then
+    bag.putObject(obj)
+  else
+    obj.shuffle()
+    for i = 1, #obj.getObjects() do
+      bag.putObject(obj.takeObject())
+    end
+  end
+end
+
+function onNumberTyped(playerColor, number)
+  if number > 0 then
+    drawFromAbyss(Player[playerColor], number)
+  end
+end
+
+---------------------------------------------------------
+-- XML click functions
+---------------------------------------------------------
+
+-- draws a card to the playmat of the requesting player
+function drawFromAbyss(player, number)
+  local bag = getAbyssBag()
+  if not bag then return end
+
+  local bagCount = #bag.getObjects()
+  if bagCount == 0 then
+    printToColor("The Abyss deck is empty!", player.color)
+    return
+  end
+
+  local matColor = playermatApi.getMatColor(player.color)
+  local pos = playermatApi.getEncounterCardDrawPosition(matColor, false)
+  local rot = playermatApi.returnRotation(matColor)
+
+  for i = 1, math.min(number, bagCount) do
+    deckLib.placeOrMergeIntoDeck(bag.takeObject({ index = 0 }), Vector(pos), rot)
+  end
+end
+
+-- adds a tag to all cards of each player
+function tagPlayerCards()
+  local count = 0
+  for matColor, _ in pairs(guidReferenceApi.getObjectsByType("Playermat")) do
+    for _, obj in ipairs(playermatApi.searchAroundPlayermat(matColor)) do
+      local tagString = "_" .. matColor
+      if obj.type == "Card" then
+        obj.addTag(tagString)
+        count = count + 1
+      elseif obj.type == "Deck" or obj.type == "Bag" then
+        local data = obj.getData()
+        for _, cardData in ipairs(data.ContainedObjects or {}) do
+          cardData.Tags = cardData.Tags or {}
+          table.insert(cardData.Tags, tagString)
+          count = count + 1
+        end
+        obj.destruct()
+        spawnObjectData({ data = data })
+      end
+    end
+  end
+
+  if count > 0 then
+    printToAll("Tagged " .. count .. " cards with playermat color!", "Green")
+  else
+    printToAll("No cards found to tag!", "Orange")
+  end
+end
+
+-- toggles the help text for the player that clicks it
+function toggleHelp(player)
+  if helpVisibleToPlayers[player.color] then
+    helpVisibleToPlayers[player.color] = nil
+  else
+    helpVisibleToPlayers[player.color] = true
+  end
+  updateHelpVisibility()
+end
+
+---------------------------------------------------------
+-- helper functions
+---------------------------------------------------------
+
+-- returns a reference to the abyss deck
+function getAbyssBag()
+  for _, obj in ipairs(searchLib.atPosition(self.positionToWorld({ x = 1.05, y = 0.05, z = 0.16 }))) do
+    if obj.type == "Bag" then
+      return obj
+    end
+  end
+
+  printToAll("Couldn't find Abyss deck!", "Orange")
+  return nil
+end
+
+-- updates the visibility of the help text
+function updateHelpVisibility()
+  local visibility = ""
+  for playerColor, _ in pairs(helpVisibleToPlayers) do
+    if string.len(visibility) > 0 then
+      visibility = visibility .. "|" .. playerColor
+    else
+      visibility = playerColor
+    end
+  end
+  self.UI.setAttribute("helpText", "visibility", visibility)
+  self.UI.setAttribute("helpPanel", "visibility", visibility)
+  self.UI.setAttribute("helpPanel", "active", string.len(visibility) > 0)
+end
+
+-- called from the onNumberTyped of the Abyss Bag
+function drawFromAbyssWrapper(params)
+  drawFromAbyss(Player[params.playerColor], params.number)
+end
