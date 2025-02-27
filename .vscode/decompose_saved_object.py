@@ -81,10 +81,19 @@ def decompose_saved_object(input_file):
         return
 
     # Construct the saved object path
+    if sys.platform == "darwin": # macOS
+        saved_object = os.path.join(
+            os.path.expanduser("~"),
+            "Library",
+        )
+    else: # windows
+        saved_object = os.path.join(
+            os.environ["USERPROFILE"],
+            "Documents",
+            "My Games",
+        )
     saved_object = os.path.join(
-        os.environ["USERPROFILE"],
-        "Documents",
-        "My Games",
+        f"{saved_object}",
         "Tabletop Simulator",
         "Saves",
         "Saved Objects",
@@ -101,18 +110,37 @@ def decompose_saved_object(input_file):
     output_path = os.path.dirname(input_file)
 
     # Run the go command
-    cmd = [
-        "go",
-        "run",
-        "main.go",
-        "--moddir=C:\\git\\SCED",
-        f"--objin={prepared_saved_object}",
-        f"--objout={output_path}\\",
-        "--reverse",
-    ]
+    if sys.platform == "darwin": # macOS
+        moddir_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "SCED")
+        cmd = [
+            "go",
+            "run",
+            "main.go",
+            "-moddir",
+            f"{moddir_path}",
+            "-objin",
+            f"{prepared_saved_object}",
+            "-objout",
+            f"{output_path}/",
+            "-reverse",
+        ]
+    else: # windows
+        cmd = [
+            "go",
+            "run",
+            "main.go",
+            "--moddir=C:\\git\\SCED",
+            f"--objin={prepared_saved_object}",
+            f"--objout={output_path}\\",
+            "--reverse",
+        ]
 
     # Execute from the correct directory
-    subprocess.run(cmd, cwd="C:\\git\\TTSModManager")
+    if sys.platform == "darwin": # macOS
+        modManager_path = os.path.join(os.path.dirname(moddir_path), "TTSModManager")
+        subprocess.run(cmd, cwd=f"{modManager_path}")
+    else: # windows
+        subprocess.run(cmd, cwd="C:\\git\\TTSModManager")
 
     # Clean up temporary file if created
     if prepared_saved_object != saved_object:
