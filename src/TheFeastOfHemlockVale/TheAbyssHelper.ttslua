@@ -126,27 +126,48 @@ end
 
 function splitAbyss()
   local bag = getAbyssBag()
+  local bottomBag = getSetupBag("bottom")
+  local topBag = getSetupBag("top")
 
-  -- count player cards in Abyss bag
+  -- check contents of Abyss bag
+  local investigatorIndexes = {} -- keep track of investigator cards to move to top bag
   local playerCardCount = 0
   for _,obj in pairs(bag.getObjects()) do
     if obj.tags ~= nil then
       for _,tag in pairs(obj.tags) do
-        if tag == "PlayerCard" then
-            playerCardCount = playerCardCount + 1
+        if tag == "Investigator" then
+          table.insert(investigatorIndexes, obj.index)
+        elseif tag == "PlayerCard" then
+          playerCardCount = playerCardCount + 1
         end
       end
     end
   end
+  
+  -- move any investigator cards to top bag
+  if #investigatorIndexes > 0 then
+    -- remove investigators from count of player cards
+    playerCardCount = playerCardCount - #investigatorIndexes
 
-  -- make sure there is 5 per player
-  if playerCardCount ~= (playAreaApi.getInvestigatorCount() * 5) then
-    broadcastToAll("Add 5 cards/player to The Abyss", "Yellow")
-    return
+    --pull from end to keep index order correct
+    table.sort(investigatorIndexes, function(a,b) return a > b end)
+    for _,idx in pairs(investigatorIndexes) do
+      topBag.putObject(bag.takeObject({index=idx}))
+    end
   end
 
-  local bottomBag = getSetupBag("bottom")
-  local topBag = getSetupBag("top")
+  -- make sure 5 cards/player
+  if playerCardCount ~= (playAreaApi.getInvestigatorCount() * 5) then
+    local msg = tostring(playerCardCount)
+    if playerCardCount == 1 then
+      msg = msg .. " card currently in bag."
+    else
+      msg = msg .. " cards currently in bag."
+    end
+
+    broadcastToAll("Add 5 cards/player to The Abyss before proceeding.\n" .. msg, "Yellow")
+    return
+  end
 
   local bagCount = #bag.getObjects()
   local half = math.floor(bagCount / 2)
