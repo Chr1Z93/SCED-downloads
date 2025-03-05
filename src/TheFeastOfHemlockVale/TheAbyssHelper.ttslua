@@ -1,5 +1,6 @@
 local deckLib              = require("util/DeckLib")
 local guidReferenceApi     = require("core/GUIDReferenceApi")
+local playAreaApi         = require("playarea/PlayAreaApi")
 local playermatApi         = require("playermat/PlayermatApi")
 local searchLib            = require("util/SearchLib")
 
@@ -83,7 +84,21 @@ end
 function tagPlayerCards()
   local count = 0
   for matColor, _ in pairs(guidReferenceApi.getObjectsByType("Playermat")) do
+    -- collection of objects to tag
+    local objsToTag = {}
+    
+    -- collect player hand
+    for _, obj in pairs(Player[matColor].getHandObjects()) do
+      table.insert(objsToTag, obj)
+    end
+    
+    -- collect player mat area
     for _, obj in ipairs(playermatApi.searchAroundPlayermat(matColor)) do
+      table.insert(objsToTag, obj)
+    end
+    
+    -- tag collected objects
+    for _, obj in pairs(objsToTag) do
       local tagString = "_" .. matColor
       if obj.type == "Card" then
         obj.addTag(tagString)
@@ -128,6 +143,46 @@ function splitAbyss()
   local bottomBag = getSetupBag("bottom")
   local topBag = getSetupBag("top")
 
+  -- check contents of Abyss bag
+  local investigatorIndexes = {} -- keep track of investigator cards to move to top bag
+  local playerCardCount = 0
+  for _,obj in pairs(bag.getObjects()) do
+    if obj.tags ~= nil then
+      for _,tag in pairs(obj.tags) do
+        if tag == "Investigator" then
+          table.insert(investigatorIndexes, obj.index)
+        elseif tag == "PlayerCard" then
+          playerCardCount = playerCardCount + 1
+        end
+      end
+    end
+  end
+  
+  -- move any investigator cards to top bag
+  if #investigatorIndexes > 0 then
+    -- remove investigators from count of player cards
+    playerCardCount = playerCardCount - #investigatorIndexes
+
+    --pull from end to keep index order correct
+    table.sort(investigatorIndexes, function(a,b) return a > b end)
+    for _,idx in pairs(investigatorIndexes) do
+      topBag.putObject(bag.takeObject({index=idx}))
+    end
+  end
+
+  -- make sure 5 cards/player
+  if playerCardCount ~= (playAreaApi.getInvestigatorCount() * 5) then
+    local msg = tostring(playerCardCount)
+    if playerCardCount == 1 then
+      msg = msg .. " card currently in bag."
+    else
+      msg = msg .. " cards currently in bag."
+    end
+
+    broadcastToAll("Add 5 cards/player to The Abyss before proceeding.\n" .. msg, "Yellow")
+    return
+  end
+
   local bagCount = #bag.getObjects()
   local half = math.floor(bagCount / 2)
 
@@ -149,6 +204,31 @@ function splitAbyss()
 end
 
 function finalizeAbyss()
+  -- check to make sure we have investigators
+  local topBag = getSetupBag("top")
+  local investigatorCount = 0
+  for _,obj in pairs(topBag.getObjects()) do
+    if obj.tags ~= nil then
+      for _,tag in pairs(obj.tags) do
+        if tag == "Investigator" then
+          investigatorCount = investigatorCount + 1
+        end
+      end
+    end
+  end
+  local missingCount = playAreaApi.getInvestigatorCount() - investigatorCount
+  if missingCount ~= 0 then
+    local msg = "Missing "
+    if missingCount == 1 then
+      msg = msg .. "1 Investigator."
+    else
+      msg = msg .. tostring(missingCount) .. " Investigators."
+    end
+    broadcastToAll("Add all Investigators to the Top setup bag before proceeding.\n" .. msg, "Yellow")
+
+    return
+  end
+
   local bag = getAbyssBag()
   if not bag then return end
 
@@ -158,7 +238,6 @@ function finalizeAbyss()
     bag.putObject(bottomBag.takeObject())
   end
 
-  local topBag = getSetupBag("top")
   topBag.shuffle()
   for i = 1, #topBag.getObjects() do
     bag.putObject(topBag.takeObject())
