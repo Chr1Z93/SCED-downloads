@@ -1,11 +1,8 @@
-local playAreaApi     = require("playarea/PlayAreaApi")
-local searchLib       = require("util/SearchLib")
-local tokenManagerApi = require("tokens/TokenManagerApi")
+local playAreaApi              = require("playarea/PlayAreaApi")
+local searchLib                = require("util/SearchLib")
+local tokenManagerApi          = require("tokens/TokenManagerApi")
 
-local clickableResourceCounter = nil
-local foundTokens              = 0
-
-ALL_LOCATIONS = {
+ALL_LOCATIONS                  = {
   "Southside",
   "Rivertown",
   "Merchant District",
@@ -16,7 +13,7 @@ ALL_LOCATIONS = {
   "Silver Twilight Lodge"
 }
 
-RANDOMIZED_LOCATIONS = {
+RANDOMIZED_LOCATIONS           = {
   {
     name = "Southside",
     guids = { "c898a0", "e7f5fa" },
@@ -49,17 +46,17 @@ RANDOMIZED_LOCATIONS = {
   },
 }
 
-SET_ASIDE = {
+SET_ASIDE                      = {
   position = { x = -2.52, y = 2, z = 14.87 },
   rotation = { x = 0, y = 270, z = 0 }
 }
 
-PLAYAREA = {
+PLAYAREA                       = {
   position = { -27.92, 4.04, -0.20 },
   rotation = { 0.00, 90, 0.00 },
   scale = { 37.63, 5.10, 37.19 }
 }
-local beforeSetup = true
+local beforeSetup              = true
 
 function onSave()
   return JSON.encode({ beforeSetup = beforeSetup, locationData = locationData })
@@ -124,17 +121,17 @@ function setup(_, playerColor, _)
   findBagLocations()
 
   if locationData["Hangman's Hill"] == nil or locationData["Silver Twilight Lodge"] == nil then
-    Player[playerColor].showOptionsDialog("Choose setup", {"Carl Sanford posesses the secrets of the universe", "Annette Mason is posessed by evil"},
-    function(_, index, playerColor)
-      if index == 1 then
-        bag = getObjectFromGUID("92c6fc")
-      else
-        bag = getObjectFromGUID("d14543")
+    Player[playerColor].showOptionsDialog("Choose setup", { "Carl Sanford posesses the secrets of the universe", "Annette Mason is posessed by evil" },
+      function(_, index)
+        if index == 1 then
+          bag = getObjectFromGUID("92c6fc")
+        else
+          bag = getObjectFromGUID("d14543")
+        end
+        bag.call("buttonClick_place")
+        findBagLocations()
+        setup2(playerColor)
       end
-      bag.call("buttonClick_place")
-      findBagLocations()
-      setup2(playerColor)
-    end
     )
   else
     setup2(playerColor)
@@ -142,55 +139,54 @@ function setup(_, playerColor, _)
 end
 
 function setup2(playerColor)
-  Player[playerColor].showOptionsDialog("Use clickable counters for breaches?", {"Yes", "No"}, "No",
-    function(text) useClickable = text
+  Player[playerColor].showOptionsDialog("Use clickable counters for breaches?", { "Yes", "No" }, "No",
+    function(text)
+      useClickable = text
 
-    for k, loc in pairs(RANDOMIZED_LOCATIONS) do
-      local chosen = math.random(2)
+      for k, loc in pairs(RANDOMIZED_LOCATIONS) do
+        local chosen = math.random(2)
 
-      local guid1 = loc.guids[3 - chosen]
-      local card1 = getObjectFromGUID(guid1)
-      card1.setPosition(SET_ASIDE.position)
-      card1.setRotation(SET_ASIDE.rotation)
+        local guid1 = loc.guids[3 - chosen]
+        local card1 = getObjectFromGUID(guid1)
+        card1.setPosition(SET_ASIDE.position)
+        card1.setRotation(SET_ASIDE.rotation)
 
-      local guid2 = loc.guids[chosen]
-      local card2 = getObjectFromGUID(guid2)
-      card2.setPosition(loc.position)
-      card2.setRotation(SET_ASIDE.rotation)
-      locationData[loc.name] = { guid = guid2, breach = 0 }
-      
-    end
-    
-    if useClickable == "Yes" then
-      for i, v in ipairs(ALL_LOCATIONS) do
-        local location = locationData[v]
-        local locationCard = getObjectFromGUID(location.guid)
-        tokenManagerApi.spawnTokenGroup(locationCard, "resourceCounter", 1)
+        local guid2 = loc.guids[chosen]
+        local card2 = getObjectFromGUID(guid2)
+        card2.setPosition(loc.position)
+        card2.setRotation(SET_ASIDE.rotation)
+        locationData[loc.name] = { guid = guid2, breach = 0 }
       end
-    end
-    
-    local numPlayers   = playAreaApi.getInvestigatorCount()
-    local numLocations = (numPlayers == 4) and 3 or 2
-    local numDraws     = (numPlayers == 4) and 3 or numPlayers
 
-    Wait.frames(function() 
-      for i = 1, numDraws do
-        placeBreaches(numLocations)
+      if useClickable == "Yes" then
+        for i, v in ipairs(ALL_LOCATIONS) do
+          local location = locationData[v]
+          local locationCard = getObjectFromGUID(location.guid)
+          tokenManagerApi.spawnTokenGroup(locationCard, "resourceCounter", 1)
+        end
       end
-    end, 3)
 
-    self.editButton({
-      label = "Random Location",
-      click_function = "broadCastRandomLocation",
-      function_owner = self,
-      position = { 0, 0.1, -0.6 },
-      height = 120,
-      width = 525,
-      scale = { x = 1.75, y = 1.75, z = 1.75 },
-      font_size = 60
-    })
-    
-  end)
+      local numPlayers   = playAreaApi.getInvestigatorCount()
+      local numLocations = (numPlayers == 4) and 3 or 2
+      local numDraws     = (numPlayers == 4) and 3 or numPlayers
+
+      Wait.frames(function()
+        for i = 1, numDraws do
+          placeBreaches(numLocations)
+        end
+      end, 3)
+
+      self.editButton({
+        label = "Random Location",
+        click_function = "broadCastRandomLocation",
+        function_owner = self,
+        position = { 0, 0.1, -0.6 },
+        height = 120,
+        width = 525,
+        scale = { x = 1.75, y = 1.75, z = 1.75 },
+        font_size = 60
+      })
+    end)
 end
 
 function getRandomLocation()
@@ -224,31 +220,27 @@ function placeBreaches(numBreaches)
   for j = 1, numBreaches do
     broadcastToAll("- " .. shuffled[j], "White")
     local location = locationData[shuffled[j]]
-    local breach = location.breach
-    breach = breach + 1
-    
     local locationCard = getObjectFromGUID(location.guid)
-    searchLocation(locationCard)
+    local foundBreaches, clickableResourceCounter = searchLocation(locationCard)
+    foundBreaches = foundBreaches + 1
 
-    if breach == 4 then
+    if foundBreaches == 4 then
       locationCard.highlightOn("Red", 3)
     else
       locationCard.highlightOn("Yellow", 3)
     end
+
     if clickableResourceCounter then
-      clickableResourceCounter.call("updateVal", breach)
+      clickableResourceCounter.call("updateVal", foundBreaches)
     else
       locationCard.resting = true
-      tokenManagerApi.spawnTokenGroup(locationCard, "resource", breach)
+      tokenManagerApi.spawnTokenGroup(locationCard, "resource", foundBreaches)
     end
-    if breach > 4 then breach = 0 end
-    location.breach = breach
   end
 end
 
 function searchLocation(locationCard)
-  clickableResourceCounter = nil
-  foundTokens = 0
+  local foundTokens = 0
   for _, obj in ipairs(searchLib.onObject(locationCard, "isTileOrToken")) do
     local memo = obj.getMemo()
     if memo == "resource" then
@@ -256,8 +248,8 @@ function searchLocation(locationCard)
       obj.destruct()
     elseif memo == "resourceCounter" then
       foundTokens = obj.getVar("val")
-      clickableResourceCounter = obj
-      return
+      return foundTokens, obj
     end
   end
+  return foundTokens, nil
 end
