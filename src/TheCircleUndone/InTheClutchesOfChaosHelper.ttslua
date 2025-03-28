@@ -1,8 +1,9 @@
-local playAreaApi              = require("playarea/PlayAreaApi")
-local searchLib                = require("util/SearchLib")
-local tokenManagerApi          = require("tokens/TokenManagerApi")
+local playAreaApi          = require("playarea/PlayAreaApi")
+local searchLib            = require("util/SearchLib")
+local tokenManagerApi      = require("tokens/TokenManagerApi")
 
-ALL_LOCATIONS                  = {
+local beforeSetup          = true
+local ALL_LOCATIONS        = {
   "Southside",
   "Rivertown",
   "Merchant District",
@@ -13,50 +14,25 @@ ALL_LOCATIONS                  = {
   "Silver Twilight Lodge"
 }
 
-RANDOMIZED_LOCATIONS           = {
-  {
-    name = "Southside",
-    guids = { "c898a0", "e7f5fa" },
-    position = { -30.22, 1.64, -0.03 }
-  },
-  {
-    name = "Rivertown",
-    guids = { "db4b20", "92ee68" },
-    position = { -23.68, 1.65, -3.83 }
-  },
-  {
-    name = "Merchant District",
-    guids = { "bed0da", "b568b8" },
-    position = { -23.68, 1.63, 3.86 }
-  },
-  {
-    name = "French Hill",
-    guids = { "fc9d97", "6ed2ae" },
-    position = { -30.24, 1.63, -7.70 }
-  },
-  {
-    name = "South Church",
-    guids = { "3d2a8a", "1a0ad2" },
-    position = { -36.77, 1.65, -0.03 }
-  },
-  {
-    name = "Uptown",
-    guids = { "9484e9", "441006" },
-    position = { -30.22, 1.64, 7.57 }
-  },
+local RANDOMIZED_LOCATIONS = {
+  { name = "Southside",         deck = "4730c6" },
+  { name = "Rivertown",         deck = "3f6cb7" },
+  { name = "Merchant District", deck = "6ed4f6" },
+  { name = "French Hill",       deck = "8ff540" },
+  { name = "South Church",      deck = "e18226" },
+  { name = "Uptown",            deck = "08a5f6" }
 }
 
-SET_ASIDE                      = {
-  position = { x = -2.52, y = 2, z = 14.87 },
-  rotation = { x = 0, y = 270, z = 0 }
+local SET_ASIDE            = {
+  position = Vector(-2.52, 2, 14.87),
+  rotation = Vector(0, 270, 0)
 }
 
-PLAYAREA                       = {
-  position = { -27.92, 4.04, -0.20 },
-  rotation = { 0.00, 90, 0.00 },
+local PLAYAREA             = {
+  position = Vector(-27.92, 4.04, -0.20),
+  rotation = Vector(0, 90, 0),
   scale = { 37.63, 5.10, 37.19 }
 }
-local beforeSetup              = true
 
 function onSave()
   return JSON.encode({ beforeSetup = beforeSetup, locationData = locationData })
@@ -69,40 +45,34 @@ function onLoad(savedData)
     locationData     = loadedData.locationData
   end
 
-  self.createButton({
-    label = "Set Up",
-    click_function = "setup",
-    function_owner = self,
-    position = { 0, 0.1, -0.6 },
-    height = 120,
-    width = 525,
-    scale = { x = 1.75, y = 1.75, z = 1.75 },
-    font_size = 75
-  })
-
-  self.createButton({
-    label = "Place Clue",
-    click_function = "placeClue",
-    function_owner = self,
-    position = { 0, 0.1, 0 },
-    height = 120,
-    width = 525,
-    scale = { x = 1.75, y = 1.75, z = 1.75 },
-    font_size = 75
-  })
-
-  self.createButton({
-    label = "Add Breaches",
-    click_function = "addBreaches",
-    function_owner = self,
-    position = { 0, 0.1, 0.6 },
-    height = 120,
-    width = 525,
-    scale = { x = 1.75, y = 1.75, z = 1.75 },
-    font_size = 75
-  })
-
   math.randomseed(os.time())
+
+  -- shared button parameters
+  local bParams = {
+    function_owner = self,
+    height = 120,
+    width = 525,
+    scale = { x = 1.75, y = 1.75, z = 1.75 },
+    font_size = 75
+  }
+
+  -- setup button
+  bParams.label = "Set Up"
+  bParams.click_function = "setup"
+  bParams.position = { 0, 0.1, -0.6 }
+  self.createButton(bParams)
+
+  -- place clue button
+  bParams.label = "Place Clue"
+  bParams.click_function = "placeClue"
+  bParams.position = { 0, 0.1, 0 }
+  self.createButton(bParams)
+
+  -- add breaches button
+  bParams.label = "Add Breaches"
+  bParams.click_function = "addBreaches"
+  bParams.position = { 0, 0.1, 0.6 }
+  self.createButton(bParams)
 end
 
 function findBagLocations()
@@ -120,45 +90,45 @@ function setup(_, playerColor, _)
   locationData = {}
   findBagLocations()
 
-  if locationData["Hangman's Hill"] == nil or locationData["Silver Twilight Lodge"] == nil then
-    Player[playerColor].showOptionsDialog("Choose setup", { "Carl Sanford posesses the secrets of the universe", "Annette Mason is posessed by evil" },
-      function(_, index)
-        if index == 1 then
-          bag = getObjectFromGUID("92c6fc")
-        else
-          bag = getObjectFromGUID("d14543")
-        end
-        bag.call("buttonClick_place")
-        findBagLocations()
-        setup2(playerColor)
-      end
-    )
-  else
+  if locationData["Hangman's Hill"] or locationData["Silver Twilight Lodge"] then
     setup2(playerColor)
+    return
   end
+
+  Player[playerColor].showOptionsDialog("Choose setup", {
+      "Carl Sanford possesses the secrets of the universe",
+      "Annette Mason is possessed by evil"
+    },
+    function(_, index)
+      if index == 1 then
+        bag = getObjectFromGUID("92c6fc")
+      else
+        bag = getObjectFromGUID("d14543")
+      end
+      bag.call("buttonClick_place")
+      findBagLocations()
+      setup2(playerColor)
+    end
+  )
 end
 
 function setup2(playerColor)
-  Player[playerColor].showOptionsDialog("Use clickable counters for breaches?", { "Yes", "No" }, "No",
+  Player[playerColor].showOptionsDialog("Use clickable counters for breaches?", { "Yes", "No" }, "Yes",
     function(text)
-      useClickable = text
-
-      for k, loc in pairs(RANDOMIZED_LOCATIONS) do
-        local chosen = math.random(2)
-
-        local guid1 = loc.guids[3 - chosen]
-        local card1 = getObjectFromGUID(guid1)
-        card1.setPosition(SET_ASIDE.position)
-        card1.setRotation(SET_ASIDE.rotation)
-
-        local guid2 = loc.guids[chosen]
-        local card2 = getObjectFromGUID(guid2)
-        card2.setPosition(loc.position)
-        card2.setRotation(SET_ASIDE.rotation)
-        locationData[loc.name] = { guid = guid2, breach = 0 }
+      for i, loc in ipairs(RANDOMIZED_LOCATIONS) do
+        local deck = getObjectFromGUID(loc.deck)
+        deck.shuffle()
+        local cardsToTake = #deck.getObjects() - 1
+        for j = 1, cardsToTake do
+          deck.takeObject({
+            position = SET_ASIDE.position,
+            rotation = SET_ASIDE.rotation
+          })
+        end
+        locationData[loc.name] = { guid = deck.remainder.guid, breach = 0 }
       end
 
-      if useClickable == "Yes" then
+      if text == "Yes" then
         for i, v in ipairs(ALL_LOCATIONS) do
           local location = locationData[v]
           local locationCard = getObjectFromGUID(location.guid)
@@ -189,16 +159,20 @@ function setup2(playerColor)
     end)
 end
 
-function getRandomLocation()
+function getRandomLocationName()
   return ALL_LOCATIONS[math.random(1, #ALL_LOCATIONS)]
 end
 
 function broadCastRandomLocation()
-  broadcastToAll(getRandomLocation())
+  local name = getRandomLocationName()
+  local location = locationData[name]
+  local locationCard = getObjectFromGUID(location.guid)
+  locationCard.highlightOn("Green", 3)
+  broadcastToAll(name)
 end
 
 function placeClue()
-  local name = getRandomLocation()
+  local name = getRandomLocationName()
   local location = locationData[name]
   local locationCard = getObjectFromGUID(location.guid)
   broadcastToAll("Clue placed at: " .. name, "White")
@@ -216,7 +190,7 @@ function placeBreaches(numBreaches)
     table.insert(shuffled, pos, v)
   end
 
-  broadcastToAll("Breaches added to:", "White")
+  printToAll("Breaches added to:", "White")
   for j = 1, numBreaches do
     broadcastToAll("- " .. shuffled[j], "White")
     local location = locationData[shuffled[j]]
@@ -224,8 +198,9 @@ function placeBreaches(numBreaches)
     local foundBreaches, clickableResourceCounter = searchLocation(locationCard)
     foundBreaches = foundBreaches + 1
 
-    if foundBreaches == 4 then
+    if foundBreaches >= 4 then
       locationCard.highlightOn("Red", 3)
+      broadcastToAll("Resolve Incursion manually!", "Orange")
     else
       locationCard.highlightOn("Yellow", 3)
     end
