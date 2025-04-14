@@ -118,9 +118,7 @@ function finalizeAbyss()
 
   -- make sure there is one investigator / player
   if investigatorCardCount ~= playAreaApi.getInvestigatorCount() then
-    local msg = investigatorCardCount .. "/" ..
-        playAreaApi.getInvestigatorCount() .. " Investigators currently in bag."
-
+    local msg = investigatorCardCount .. "/" .. playAreaApi.getInvestigatorCount() .. " Investigators currently in bag."
     broadcastToAll("Add each player's Investigator card to Top Setup before proceeding.\n" .. msg, "Yellow")
     return
   end
@@ -157,10 +155,10 @@ function splitAbyss()
   -- check Abyss deck for player cards and investigators
   local investigatorIndexes = {} -- keep track of investigator cards to move
   local playerCardCount = 0
-  for _, obj in pairs(bag.getObjects()) do
-    if isInvestigator(obj) then
-      table.insert(investigatorIndexes, obj.index)
-    elseif isPlayerCard(obj) then
+  for _, objectData in pairs(bag.getObjects()) do
+    if isInvestigator(objectData) then
+      table.insert(investigatorIndexes, objectData.index)
+    elseif isPlayerCard(objectData) then
       playerCardCount = playerCardCount + 1
     end
   end
@@ -176,10 +174,10 @@ function splitAbyss()
 
   -- check top bag for player cards
   local playerCardIndexes = {} -- keep track of investigator cards to move
-  for _, obj in pairs(topBag.getObjects()) do
-    if not isInvestigator(obj) and isPlayerCard(obj) then
+  for _, objectData in pairs(topBag.getObjects()) do
+    if not isInvestigator(objectData) and isPlayerCard(objectData) then
       playerCardCount = playerCardCount + 1
-      table.insert(playerCardIndexes, obj.index)
+      table.insert(playerCardIndexes, objectData.index)
     end
   end
 
@@ -220,8 +218,8 @@ function splitAbyss()
   bottomBag.call("setReadOnly", true)
 
   -- update UI
-  abyssHelper().UI.setAttribute("splitRow", "active", false)
-  abyssHelper().UI.setAttribute("finalizeRow", "active", true)
+  self.UI.setAttribute("splitRow", "active", false)
+  self.UI.setAttribute("finalizeRow", "active", true)
   setupEnableNavigation()
 end
 
@@ -268,8 +266,8 @@ function tagPlayerCards()
   end
 
   -- update setup section
-  abyssHelper().UI.setAttribute("tagRow", "active", false)
-  abyssHelper().UI.setAttribute("splitRow", "active", true)
+  self.UI.setAttribute("tagRow", "active", false)
+  self.UI.setAttribute("splitRow", "active", true)
   setupEnableNavigation()
 end
 
@@ -286,13 +284,6 @@ end
 ---------------------------------------------------------
 -- MARK: helper functions
 ---------------------------------------------------------
-
--- make it easier to decouple code from the true AbyssHelper
--- (for later features)
-function abyssHelper()
-  return self -- real version
-  -- return getObjectFromGUID("abyss") -- testing version
-end
 
 -- aliases for vscode code completion
 ---@alias bagTypes
@@ -320,7 +311,7 @@ function getBag(bagType)
   if bagType == "abyss" then offset = { x = 1, y = 0, z = 0 } end
 
   local bag
-  for _, obj in ipairs(searchLib.atPosition(abyssHelper().positionToWorld(offset))) do
+  for _, obj in ipairs(searchLib.atPosition(self.positionToWorld(offset))) do
     if obj.type == "Bag" then
       return obj
     end
@@ -364,7 +355,6 @@ function getBagFromSetAside(bagType)
 end
 
 ---### get Set-aside chest (bag)
----@return object|nil # Set-aside bag
 function getSetAside()
   local mythosArea = guidReferenceApi.getObjectsByType("MythosArea").Mythos
   local objectsInMythosArea = searchLib.onObject(mythosArea, "isInteractable")
@@ -385,26 +375,22 @@ function getSetAside()
 end
 
 --- ### use tags to check if card is an Investigator
---- @param obj # Card still in bag _(not true tts__Object)_
-function isInvestigator(obj)
-  if obj.tags ~= nil then
-    for _, tag in pairs(obj.tags) do
+function isInvestigator(objectData)
+  if objectData.tags ~= nil then
+    for _, tag in pairs(objectData.tags) do
       if tag == "Investigator" then return true end
     end
   end
-
   return false
 end
 
 --- ### use tags to check if card is a Player Card
---- @param obj # Card still in bag _(not true tts__Object)_
-function isPlayerCard(obj)
-  if obj.tags ~= nil then
-    for _, tag in pairs(obj.tags) do
+function isPlayerCard(objectData)
+  if objectData.tags ~= nil then
+    for _, tag in pairs(objectData.tags) do
       if tag == "PlayerCard" then return true end
     end
   end
-
   return false
 end
 
@@ -418,9 +404,9 @@ function updateHelpVisibility()
       visibility = playerColor
     end
   end
-  abyssHelper().UI.setAttribute("helpText", "visibility", visibility)
-  abyssHelper().UI.setAttribute("helpPanel", "visibility", visibility)
-  abyssHelper().UI.setAttribute("helpPanel", "active", string.len(visibility) > 0)
+  self.UI.setAttribute("helpText", "visibility", visibility)
+  self.UI.setAttribute("helpPanel", "visibility", visibility)
+  self.UI.setAttribute("helpPanel", "active", string.len(visibility) > 0)
 end
 
 ---------------------------------------------------------
@@ -431,12 +417,12 @@ end
 function setupEnableNavigation()
   Wait.frames(function()
     local back = true
-    if abyssHelper().UI.getAttribute("tagRow", "active") == "True" then back = false end
-    abyssHelper().UI.setAttribute("backButton", "active", back)
+    if self.UI.getAttribute("tagRow", "active") == "True" then back = false end
+    self.UI.setAttribute("backButton", "active", back)
 
     local forward = true
-    if abyssHelper().UI.getAttribute("finalizeRow", "active") == "True" then forward = false end
-    abyssHelper().UI.setAttribute("forwardButton", "active", forward)
+    if self.UI.getAttribute("finalizeRow", "active") == "True" then forward = false end
+    self.UI.setAttribute("forwardButton", "active", forward)
 
     setupUpdateExplanation()
   end, 1)
@@ -444,12 +430,12 @@ end
 
 --- ### Setup UI: next step
 function setupNextStep()
-  if abyssHelper().UI.getAttribute("tagRow", "active") == "True" then
-    abyssHelper().UI.setAttribute("tagRow", "active", false)
-    abyssHelper().UI.setAttribute("splitRow", "active", true)
-  elseif abyssHelper().UI.getAttribute("splitRow", "active") == "True" then
-    abyssHelper().UI.setAttribute("splitRow", "active", false)
-    abyssHelper().UI.setAttribute("finalizeRow", "active", true)
+  if self.UI.getAttribute("tagRow", "active") == "True" then
+    self.UI.setAttribute("tagRow", "active", false)
+    self.UI.setAttribute("splitRow", "active", true)
+  elseif self.UI.getAttribute("splitRow", "active") == "True" then
+    self.UI.setAttribute("splitRow", "active", false)
+    self.UI.setAttribute("finalizeRow", "active", true)
   end
 
   setupEnableNavigation()
@@ -457,12 +443,12 @@ end
 
 --- ### Setup UI: previous step
 function setupPreviousStep()
-  if abyssHelper().UI.getAttribute("splitRow", "active") == "True" then
-    abyssHelper().UI.setAttribute("splitRow", "active", false)
-    abyssHelper().UI.setAttribute("tagRow", "active", true)
-  elseif abyssHelper().UI.getAttribute("finalizeRow", "active") == "True" then
-    abyssHelper().UI.setAttribute("finalizeRow", "active", false)
-    abyssHelper().UI.setAttribute("splitRow", "active", true)
+  if self.UI.getAttribute("splitRow", "active") == "True" then
+    self.UI.setAttribute("splitRow", "active", false)
+    self.UI.setAttribute("tagRow", "active", true)
+  elseif self.UI.getAttribute("finalizeRow", "active") == "True" then
+    self.UI.setAttribute("finalizeRow", "active", false)
+    self.UI.setAttribute("splitRow", "active", true)
   end
 
   setupEnableNavigation()
@@ -472,7 +458,7 @@ end
 function setupToggleSetup()
   -- toggle visibility of setup panel
   setupVisible = not setupVisible
-  abyssHelper().UI.setAttribute("setupPanel", "active", setupVisible)
+  self.UI.setAttribute("setupPanel", "active", setupVisible)
 
   -- get references to the setup bags
   -- if the bags are in the Set-aside chest,
@@ -482,9 +468,9 @@ function setupToggleSetup()
 
   -- update button text
   if setupVisible then
-    abyssHelper().UI.setAttribute("showAbyssSetupButton", "text", "Hide Abyss Setup")
+    self.UI.setAttribute("showAbyssSetupButton", "text", "Hide Abyss Setup")
   else
-    abyssHelper().UI.setAttribute("showAbyssSetupButton", "text", "Show Abyss Setup")
+    self.UI.setAttribute("showAbyssSetupButton", "text", "Show Abyss Setup")
     local setAside = getSetAside()
     setAside.putObject(topBag)
     setAside.putObject(bottomBag)
@@ -493,16 +479,15 @@ end
 
 --- ### Setup UI: update explanation text
 function setupUpdateExplanation()
-  local explanationText
-  if abyssHelper().UI.getAttribute("tagRow", "active") == "True" then
-    explanationText =
-    "Make sure all player decks are loaded, then click to tag all player cards with \n< AbyssMat<i>Color</i> >."
-  elseif abyssHelper().UI.getAttribute("splitRow", "active") == "True" then
+  local explanationText = ""
+
+  if self.UI.getAttribute("tagRow", "active") == "True" then
+    explanationText = "Make sure all player decks are loaded, then click to tag all player cards with \n< AbyssMat<i>Color</i> >."
+  elseif self.UI.getAttribute("splitRow", "active") == "True" then
     explanationText = "Click to shuffle Abyss & split into two halves."
-  elseif abyssHelper().UI.getAttribute("finalizeRow", "active") == "True" then
-    explanationText =
-    "Place player/Investigator cards in top bag.\n\nClick to shuffle top & place both halves back in Abyss."
+  elseif self.UI.getAttribute("finalizeRow", "active") == "True" then
+    explanationText = "Place player/Investigator cards in top bag.\n\nClick to shuffle top & place both halves back in Abyss."
   end
 
-  abyssHelper().UI.setValue("explanation", explanationText)
+  self.UI.setValue("explanation", explanationText)
 end
