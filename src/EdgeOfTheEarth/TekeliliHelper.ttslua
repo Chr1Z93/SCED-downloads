@@ -245,22 +245,58 @@ function shuffleTekelili(player)
   if not deck then return end
 
   local matColor = playermatApi.getMatColor(player.color)
-  local pos = playermatApi.getDrawPosition(matColor)
-  local rot = playermatApi.returnRotation(matColor)
-  rot = rot:setAt("z", 180)
-  if deck.type == "Card" then
-    deckLib.placeOrMergeIntoDeck(deck, Vector(pos), rot)
-  else
-    deckLib.placeOrMergeIntoDeck(deck.takeObject(), Vector(pos), rot)
+
+  -- get draw deck
+  local deckAreaObjects = playermatApi.getDeckAreaObjects(matColor)
+
+  -- check for Harbinger
+  local harbinger
+  if deckAreaObjects.topCard then
+    harbinger = isHarbinger(deckAreaObjects.topCard.getGMNotes())
+  elseif deckAreaObjects.draw and not deckAreaObjects.draw.is_face_down then
+    local cards = deckAreaObjects.draw.getObjects()
+    harbinger = isHarbinger(cards[#cards].gm_notes)
   end
-  
-  -- shuffle deck (after a short delay to make sure the card is in it)
-  Wait.time(function()
-    local drawDeck = playermatApi.getDeckAreaObjects(matColor).draw
-    if drawDeck then
-      drawDeck.shuffle()
+
+  if harbinger then
+    printToColor("Your deck can't be manipulated because of 'The Harbinger'.", player.color)
+    return
+  end
+
+  local tekeliliCard = (deck.type == "Card") and deck or deck.takeObject()
+
+  -- don't continue if deck is empty
+  if deckAreaObjects.draw == nil and deckAreaObjects.topCard == nil then
+    printToColor("Your deck is empty and a single card can't be shuffled in.", player.color)
+    return
+  end
+
+  -- top card handling
+  local topCardDetected = false
+  if deckAreaObjects.topCard then
+    topCardDetected = true
+    deckAreaObjects.topCard.setRotation(deckAreaObjects.topCard.getRotation():setAt("z", 180))
+    if deckAreaObjects.draw then
+      deckAreaObjects.draw.putObject(deckAreaObjects.topCard)
     end
-  end, 1)
+  end
+
+  local pos = playermatApi.getDrawPosition(matColor)
+  local rot = playermatApi.returnRotation(matColor):setAt("z", 180)
+
+  Wait.time(function()
+    deckLib.placeOrMergeIntoDeck(tekeliliCard, Vector(pos), rot, nil, true)
+    if topCardDetected then
+      Wait.time(function()
+        playermatApi.flipTopCardFromDeck(matColor)
+      end, 1.5)
+    end
+  end, topCardDetected and 1 or 0.01)
+end
+
+function isHarbinger(notes)
+  local md = JSON.decode(notes or "") or {}
+  return md.id == "08006"
 end
 
 -- toggles the help text for the player that clicks it
