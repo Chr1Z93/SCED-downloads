@@ -79,22 +79,20 @@ end
 
 -- spawns just the missing tekeli-li cards as a new deck
 function spawnMissing()
-  -- analyse cards and decks for currently existing tekeli-li cards
+  -- analyse cards and decks for currently existing Tekeli-li cards
   local foundCards = {}
   for _, obj in ipairs(getObjects()) do
-    if obj.type == "Card" and obj.getName() == "Tekeli-li" then
+    if obj.type == "Card" then
       local md = JSON.decode(obj.getGMNotes()) or {}
-      if md.weakness and md.id then
+      if md.id and NEW_DECK_DATA[md.id] then -- make sure it's a Tekeli-li
         foundCards[md.id] = (foundCards[md.id] or 0) + 1
       end
     elseif obj.type == "Deck" then
       local data = obj.getData()
       for _, cardData in ipairs(data.ContainedObjects) do
-        if cardData.Nickname == "Tekeli-li" then
-          local md = JSON.decode(cardData.GMNotes) or {}
-          if md.weakness and md.id then
-            foundCards[md.id] = (foundCards[md.id] or 0) + 1
-          end
+        local md = JSON.decode(cardData.GMNotes) or {}
+        if md.id and NEW_DECK_DATA[md.id] then -- make sure it's a Tekeli-li
+          foundCards[md.id] = (foundCards[md.id] or 0) + 1
         end
       end
     end
@@ -123,9 +121,9 @@ end
 function removeAll()
   local count = 0
   for _, obj in ipairs(getObjects()) do
-    if obj.type == "Card" and obj.getName() == "Tekeli-li" then
-      local notes = JSON.decode(obj.getGMNotes()) or {}
-      if notes.weakness then
+    if obj.type == "Card" then
+      local md = JSON.decode(obj.getGMNotes()) or {}
+      if md.id and NEW_DECK_DATA[md.id] then
         count = count + 1
         obj.destruct()
       end
@@ -137,14 +135,11 @@ function removeAll()
 
       for i, cardData in ipairs(data.ContainedObjects) do
         local keepCard = true
-
-        if cardData.Nickname == "Tekeli-li" then
-          local notes = JSON.decode(cardData.GMNotes) or {}
-          if notes.weakness then
-            count = count + 1
-            keepCard = false
-            manipulated = true
-          end
+        local md = JSON.decode(cardData.GMNotes) or {}
+        if md.id and NEW_DECK_DATA[md.id] then
+          count = count + 1
+          keepCard = false
+          manipulated = true
         end
 
         if keepCard then
@@ -174,26 +169,24 @@ end
 function storeTekelili(matColor)
   local searchResult = playermatApi.searchAroundPlayermat(matColor, "isCardOrDeck")
 
-  -- add found tekeli-li cards to table
+  -- add found Tekeli-li cards to table
   playerTekelili[matColor] = {}
 
   for _, obj in ipairs(searchResult) do
-    if obj.type == "Card" and obj.getName() == "Tekeli-li" then
+    if obj.type == "Card" then
       trackTekelili(matColor, obj.getGMNotes())
     elseif obj.type == "Deck" then
       for _, cardData in ipairs(obj.getData().ContainedObjects) do
-        if cardData.Nickname == "Tekeli-li" then
-          trackTekelili(matColor, cardData.GMNotes)
-        end
+        trackTekelili(matColor, cardData.GMNotes)
       end
     end
   end
 end
 
--- adds a tekelili card to the stored cards index
+-- adds a Tekeli-li card to the stored cards index
 function trackTekelili(matColor, notes)
   local md = JSON.decode(notes) or {}
-  if md.weakness and md.id then
+  if md.id and NEW_DECK_DATA[md.id] then
     playerTekelili[matColor][md.id] = (playerTekelili[matColor][md.id] or 0) + 1
   end
 end
