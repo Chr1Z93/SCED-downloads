@@ -1,10 +1,12 @@
 local deckLib         = require("util/DeckLib")
+local guidReferenceApi     = require("core/GUIDReferenceApi")
 
 local walkwaysDeckGUID = "612a6b"
 local remainingWalkwaysGUID = "3948c1"
 local obsidianFoundationsGUID = "91eb93"
 local westernWallGUID = "28aaa8"
 local floodTokenPoolGUID = "5c6098"
+local trash = guidReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
 
 local westernLocationPositions = {
   Vector(-23.64, 1.53, 0.00),
@@ -57,82 +59,77 @@ function onLoad()
 end
 
 function westernSetup()
-
   local bag = getObjectFromGUID("aff57b")
-  if #bag.getObjects() > 0 then
-    bag.call("buttonClick_place")
-  end
-  local walkwaysDeck = getObjectFromGUID(walkwaysDeckGUID)
-  walkwaysDeck.shuffle()
-  for i = 1,2 do
-    walkwaysDeck.takeObject({
-    position = { -4.63, 1.60, 14.87 } })
-  end
-
-  local remainingWalkwaysDeck = getObjectFromGUID(remainingWalkwaysGUID)
-  Wait.time(function() deckLib.placeOrMergeIntoDeck(remainingWalkwaysDeck, walkwaysDeck.getPosition(), walkwaysDeck.getRotation(), false, true) end, 1)
-  Wait.time(function() for i = 1,6 do
-      walkwaysDeck.takeObject({
-      position = westernLocationPositions[i] })
-    end
-  end, 2)
-
-  -- place final three locations
-  local obsidianFoundations = getObjectFromGUID(obsidianFoundationsGUID)
-  Wait.time(function() deckLib.placeOrMergeIntoDeck(obsidianFoundations, walkwaysDeck.getPosition(), walkwaysDeck.getRotation(), false, true) end, 2.5)
-  Wait.time(function() for i = 7, 9 do
-      walkwaysDeck.takeObject({
-      position = westernLocationPositions[i]})
-    end
-  end, 3)
-  local floodTokenPool = getObjectFromGUID(floodTokenPoolGUID)
-  -- place flood tokens
-  Wait.time(function() for i = 1, 9 do
-    floodTokenPool.takeObject({ position = westernLocationPositions[i] + Vector(2, 0, -1.5),
-    callback_function = function(spawnedObject) if i > 3 then spawnedObject.flip() end end })
-    end
-  end, 4)
-
-  self.destroy()
+  setup("west", bag, westernLocationPositions)
 end
 
 function easternSetup()
   local bag = getObjectFromGUID("7cd284")
+  setup("east", bag, easternLocationPositions)
+end
+
+function setup(direction, bag, locationPositions)
   if #bag.getObjects() > 0 then
     bag.call("buttonClick_place")
   end
+  function coinside()
+    -- remove two random locations
+    local walkwaysDeck = getObjectFromGUID(walkwaysDeckGUID)
+    walkwaysDeck.shuffle()
+    coWaitSeconds(0.5)
+    for i = 1,2 do
+      local card = walkwaysDeck.takeObject()
+      trash.putObject(card)
+    end
 
-  local walkwaysDeck = getObjectFromGUID(walkwaysDeckGUID)
-  walkwaysDeck.shuffle()
-  for i = 1,2 do
-    walkwaysDeck.takeObject({
-    position = { -4.63, 1.60, 14.87 } })
+    -- shuffle together cards
+    local remainingWalkwaysDeck = getObjectFromGUID(remainingWalkwaysGUID)
+    deckLib.placeOrMergeIntoDeck(remainingWalkwaysDeck, walkwaysDeck.getPosition(), walkwaysDeck.getRotation(), false, true)
+    coWaitSeconds(1)
+    for i = 1,6 do
+      walkwaysDeck.takeObject({
+      position = locationPositions[i] })
+    end
+
+    coWaitSeconds(1)
+    -- place final three locations
+    if direction == "west" then
+      finalLocation = getObjectFromGUID(obsidianFoundationsGUID)
+    else
+      finalLocation = getObjectFromGUID(westernWallGUID)
+    end
+    deckLib.placeOrMergeIntoDeck(finalLocation, walkwaysDeck.getPosition(), walkwaysDeck.getRotation(), false, true)
+    coWaitSeconds(1)
+    for i = 7, 9 do
+      walkwaysDeck.takeObject({
+      position = locationPositions[i]})
+    end
+    
+    local floodTokenPool = getObjectFromGUID(floodTokenPoolGUID)
+    -- place flood tokens
+    if direction == "west" then
+      for i = 1, 9 do
+        floodTokenPool.takeObject({ position = locationPositions[i] + Vector(2, 0, -1.5),
+        callback_function = function(spawnedObject) if i > 3 then spawnedObject.flip() end end })
+      end
+    else
+      for i = 1, 6 do
+        floodTokenPool.takeObject({ position = locationPositions[i] + Vector(2, 0, -1.5),
+        callback_function = function(spawnedObject) if i == 1 then spawnedObject.flip() end end })
+        end
+        floodTokenPool.takeObject({ position = Vector(-43.44, 1.53, 0.00) + Vector(2, 0, -1.5), callback_function = function(spawnedObject) spawnedObject.flip() end})
+    end
+    return 1
   end
 
-  local remainingWalkwaysDeck = getObjectFromGUID(remainingWalkwaysGUID)
-  Wait.time(function() deckLib.placeOrMergeIntoDeck(remainingWalkwaysDeck, walkwaysDeck.getPosition(), walkwaysDeck.getRotation(), false, true) end, 1)
-  Wait.time(function() for i = 1,6 do
-      walkwaysDeck.takeObject({
-      position = easternLocationPositions[i] })
-    end
-  end, 2)
-
-  -- place final three locations
-  local westernWall = getObjectFromGUID(westernWallGUID)
-  Wait.time(function() deckLib.placeOrMergeIntoDeck(westernWall, walkwaysDeck.getPosition(), walkwaysDeck.getRotation(), false, true) end, 2.5)
-  Wait.time(function() for i = 7, 9 do
-      walkwaysDeck.takeObject({
-      position = easternLocationPositions[i]})
-    end
-  end, 3)
-  local floodTokenPool = getObjectFromGUID(floodTokenPoolGUID)
-  -- place flood tokens
-  Wait.time(function() for i = 1, 6 do
-    floodTokenPool.takeObject({ position = easternLocationPositions[i] + Vector(2, 0, -1.5),
-    callback_function = function(spawnedObject) if i == 1 then spawnedObject.flip() end end })
-    end
-    floodTokenPool.takeObject({ position = Vector(-43.44, 1.53, 0.00) + Vector(2, 0, -1.5), callback_function = function(spawnedObject) spawnedObject.flip() end})
-  end, 4)
-
+  startLuaCoroutine(self, "coinside")
   self.destroy()
+end
+
+-- pauses the current coroutine for 'seconds' seconds
+function coWaitSeconds(seconds)
+  local startTime = os.clock()
+  while os.clock() - startTime < seconds do
+    coroutine.yield(0)
+  end
 end
