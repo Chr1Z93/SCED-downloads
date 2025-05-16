@@ -1,0 +1,135 @@
+local deckLib         = require("util/DeckLib")
+local guidReferenceApi     = require("core/GUIDReferenceApi")
+
+local walkwaysDeckGUID = "612a6b"
+local remainingWalkwaysGUID = "3948c1"
+local obsidianFoundationsGUID = "91eb93"
+local westernWallGUID = "28aaa8"
+local floodTokenPoolGUID = "5c6098"
+local trash = guidReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+
+local westernLocationPositions = {
+  Vector(-23.64, 1.53, 0.00),
+  Vector(-30.24, 1.53, 3.83),
+  Vector(-30.24, 1.53, -3.83),
+  Vector(-36.84, 1.53, 7.65),
+  Vector(-36.84, 1.53, 0.00),
+  Vector(-36.84, 1.53, -7.65),
+  Vector(-43.44, 1.53, 7.65),
+  Vector(-43.44, 1.53, 0.00),
+  Vector(-43.44, 1.53, -7.65)
+}
+
+local easternLocationPositions = {
+  Vector(-36.84, 1.53, 0.00),
+  Vector(-30.24, 1.58, 3.83),
+  Vector(-30.24, 1.58, -3.83),
+  Vector(-23.64, 1.53, 7.65),
+  Vector(-23.64, 1.53, 0.00),
+  Vector(-23.64, 1.53, -7.65),
+  Vector(-17.04, 1.53, 7.65),
+  Vector(-17.04, 1.53, 0.00),
+  Vector(-17.04, 1.53, -7.65)
+}
+
+function onLoad()
+  self.createButton({
+    label = "Western",
+    click_function = "westernSetup",
+    function_owner = self,
+    position = { 0, 0.1, -0.5 },
+    height = 150,
+    width = 460,
+    scale = { x = 2, y = 2, z = 2 },
+    font_color = { r = 0, g = 0, b = 0 },
+    color = { r = 1, g = 1, b = 1 }
+  })
+
+  self.createButton({
+    label = "Eastern",
+    click_function = "easternSetup",
+    function_owner = self,
+    position = { 0, 0.1, 0.5 },
+    height = 150,
+    width = 460,
+    scale = { x = 2, y = 2, z = 2 },
+    font_color = { r = 0, g = 0, b = 0 },
+    color = { r = 1, g = 1, b = 1 }
+  })
+end
+
+function westernSetup()
+  local bag = getObjectFromGUID("aff57b")
+  setup("west", bag, westernLocationPositions)
+end
+
+function easternSetup()
+  local bag = getObjectFromGUID("7cd284")
+  setup("east", bag, easternLocationPositions)
+end
+
+function setup(direction, bag, locationPositions)
+  if #bag.getObjects() > 0 then
+    bag.call("buttonClick_place")
+  end
+  function coinside()
+    -- remove two random locations
+    local walkwaysDeck = getObjectFromGUID(walkwaysDeckGUID)
+    walkwaysDeck.shuffle()
+    coWaitSeconds(0.5)
+    for i = 1,2 do
+      local card = walkwaysDeck.takeObject()
+      trash.putObject(card)
+    end
+
+    -- shuffle together cards
+    local remainingWalkwaysDeck = getObjectFromGUID(remainingWalkwaysGUID)
+    deckLib.placeOrMergeIntoDeck(remainingWalkwaysDeck, walkwaysDeck.getPosition(), walkwaysDeck.getRotation(), false, true)
+    coWaitSeconds(1)
+    for i = 1,6 do
+      walkwaysDeck.takeObject({
+      position = locationPositions[i] })
+    end
+
+    coWaitSeconds(1)
+    -- place final three locations
+    if direction == "west" then
+      finalLocation = getObjectFromGUID(obsidianFoundationsGUID)
+    else
+      finalLocation = getObjectFromGUID(westernWallGUID)
+    end
+    deckLib.placeOrMergeIntoDeck(finalLocation, walkwaysDeck.getPosition(), walkwaysDeck.getRotation(), false, true)
+    coWaitSeconds(1)
+    for i = 7, 9 do
+      walkwaysDeck.takeObject({
+      position = locationPositions[i]})
+    end
+    
+    local floodTokenPool = getObjectFromGUID(floodTokenPoolGUID)
+    -- place flood tokens
+    if direction == "west" then
+      for i = 1, 9 do
+        floodTokenPool.takeObject({ position = locationPositions[i] + Vector(2, 0, -1.5),
+        callback_function = function(spawnedObject) if i > 3 then spawnedObject.flip() end end })
+      end
+    else
+      for i = 1, 6 do
+        floodTokenPool.takeObject({ position = locationPositions[i] + Vector(2, 0, -1.5),
+        callback_function = function(spawnedObject) if i == 1 then spawnedObject.flip() end end })
+        end
+        floodTokenPool.takeObject({ position = Vector(-43.44, 1.53, 0.00) + Vector(2, 0, -1.5), callback_function = function(spawnedObject) spawnedObject.flip() end})
+    end
+    return 1
+  end
+
+  startLuaCoroutine(self, "coinside")
+  self.destroy()
+end
+
+-- pauses the current coroutine for 'seconds' seconds
+function coWaitSeconds(seconds)
+  local startTime = os.clock()
+  while os.clock() - startTime < seconds do
+    coroutine.yield(0)
+  end
+end
