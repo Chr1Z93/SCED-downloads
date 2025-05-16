@@ -1,0 +1,127 @@
+local deckLib              = require("util/DeckLib")
+local guidReferenceApi     = require("core/GUIDReferenceApi")
+local tokenManagerApi      = require("tokens/TokenManagerApi")
+
+local mechanismsGUID = "7eaf51"
+local chambersGUID = "b20ec7"
+local starSpawnGUID = "552c0f"
+local floodTokenPoolGUID = "5c6098"
+local trash = guidReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+local setAsideBoxGUID = "d4cafa"
+
+local grandVaultPositions = {
+  Vector(-23.64, 1.53, 7.65),
+  Vector(-23.64, 1.53, 0.00),
+  Vector(-23.64, 1.53, -7.65),
+  Vector(-30.24, 1.53, -7.65),
+  Vector(-36.84, 1.53, -7.65),
+  Vector(-36.84, 1.53, 0.00),
+  Vector(-36.84, 1.53, 7.65)
+}
+
+function onLoad()
+  self.createButton({
+    label = "Power\nDiverted",
+    click_function = "divertedPower",
+    function_owner = self,
+    position = { 0, 0.1, -0.35 },
+    height = 230,
+    width = 460,
+    scale = { x = 2, y = 2, z = 2 },
+    font_color = { r = 0, g = 0, b = 0 },
+    color = { r = 1, g = 1, b = 1 }
+  })
+
+  self.createButton({
+    label = "Wasn't",
+    click_function = "notDiverted",
+    function_owner = self,
+    position = { 0, 0.1, 0.55 },
+    height = 150,
+    width = 460,
+    scale = { x = 2, y = 2, z = 2 },
+    font_color = { r = 0, g = 0, b = 0 },
+    color = { r = 1, g = 1, b = 1 }
+  })
+end
+
+function setup(diverted)
+  function coinside()
+    -- set up Star Spawns
+    local starSpawns = getObjectFromGUID(starSpawnGUID)
+    local setAsideBox = getObjectFromGUID(setAsideBoxGUID)
+    starSpawns.shuffle()
+    coWaitSeconds(1)
+    for i = 1,2 do
+      card = starSpawns.takeObject()
+      trash.putObject(card)
+    end
+    spawnObject({
+      type = "Bag",
+      position = starSpawns.getPosition(Vector(-3, 0, 0)),
+      callback_function = function(spawned_object)
+        spawned_object.setName("Set-aside Star Spawns")
+        card = starSpawns.takeObject()
+        spawned_object.putObject(card)
+        spawned_object.putObject(starSpawns.remainder)
+        setAsideBox.putObject(spawned_object)
+      end
+    })
+
+    local mechanisms = getObjectFromGUID(mechanismsGUID)
+    mechanisms.shuffle()
+    coWaitSeconds(1)
+    card = mechanisms.takeObject()
+    trash.putObject(card)
+
+    local chambersDeck = getObjectFromGUID(chambersGUID)
+    deckLib.placeOrMergeIntoDeck(mechanisms, chambersDeck.getPosition(), chambersDeck.getRotation(), false, true)
+    coWaitSeconds(1)
+
+    activatedLocations = {}
+    for i = 1, 7 do
+      location = chambersDeck.takeObject({ position = grandVaultPositions[i] })
+      if diverted == "no" then
+        if i == 3 or i == 5 then
+          table.insert(activatedLocations, location)
+        end
+      end
+      if i == 7 then
+        table.insert(activatedLocations, location)
+      end
+    end
+
+    -- add resource tokens to activated locations    
+    coWaitSeconds(1)
+    if diverted == "no" then numActivatedLocations = 3 else numActivatedLocations = 1 end
+    for i = 1, numActivatedLocations do
+      tokenManagerApi.spawnTokenGroup(activatedLocations[i], "resource", 1)
+    end
+
+    local floodTokenPool = getObjectFromGUID(floodTokenPoolGUID)
+
+    for i = 5,7 do
+      floodTokenPool.takeObject({ position = grandVaultPositions[i] + Vector(2, 0, -1.5)})
+    end
+
+    return 1
+  end
+  startLuaCoroutine(self, "coinside")
+  self.destroy()
+end
+
+function divertedPower()
+  setup("yes")
+end
+
+function notDiverted()
+  setup("no")
+end
+
+-- pauses the current coroutine for 'seconds' seconds
+function coWaitSeconds(seconds)
+  local startTime = os.clock()
+  while os.clock() - startTime < seconds do
+    coroutine.yield(0)
+  end
+end
