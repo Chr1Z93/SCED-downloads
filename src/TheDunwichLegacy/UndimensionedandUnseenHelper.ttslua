@@ -1,12 +1,35 @@
 local guidReferenceApi = require("core/GUIDReferenceApi")
 
 LOCATIONS = {
-  { name = "Blasted Heath",    position = Vector({ -17.12, 1.62, -0.03 }) },
-  { name = "Devil's Hop Yard", position = Vector({ -17.12, 1.62, -7.70 }) },
-  { name = "Dunwich Village",  position = Vector({ -23.68, 1.63, 7.57 }) },
-  { name = "Ten-Acre Meadow",  position = Vector({ -23.68, 1.63, -0.03 }) },
-  { name = "Whateley Ruins",   position = Vector({ -23.68, 1.63, -7.70 }) },
-  { name = "Cold Spring Glen", position = Vector({ -30.22, 1.64, -0.03 }) }
+  { name = "Blasted Heath",    position = Vector(-17.04, 1.6, 0.00) },
+  { name = "Devil's Hop Yard", position = Vector(-17.04, 1.6, -7.65) },
+  { name = "Dunwich Village",  position = Vector(-23.64, 1.6, 7.65) },
+  { name = "Ten-Acre Meadow",  position = Vector(-23.64, 1.6, 0.00) },
+  { name = "Whateley Ruins",   position = Vector(-23.64, 1.6, -7.65) },
+  { name = "Cold Spring Glen", position = Vector(-30.24, 1.6, 0.00) }
+}
+
+ID_TO_NAME = {
+  ["02248"] = "Blasted Heath",
+  ["02249"] = "Blasted Heath",
+  ["02252"] = "Devil's Hop Yard",
+  ["02253"] = "Devil's Hop Yard",
+  ["02242"] = "Dunwich Village",
+  ["02243"] = "Dunwich Village",
+  ["02246"] = "Ten-Acre Meadow",
+  ["02247"] = "Ten-Acre Meadow",
+  ["02250"] = "Whateley Ruins",
+  ["02251"] = "Whateley Ruins",
+  ["02244"] = "Cold Spring Glen",
+  ["02245"] = "Cold Spring Glen"
+}
+
+BROOD_IDS = {
+  ["02255"] = true,
+  ["51042"] = true,
+  ["51043"] = true,
+  ["51044"] = true,
+  ["51045"] = true
 }
 
 BORDER_COLORS = {
@@ -18,16 +41,16 @@ BORDER_COLORS = {
 }
 
 SET_ASIDE = {
-  position = { -5.75, 1.54, 19.25 },
-  rotation = { x = 0, y = 270, z = 0 }
+  position = Vector(-5.75, 1.54, 19.25),
+  rotation = Vector(0, 270, 0)
 }
 
 function onSave()
   local dataToSave = ""
   if SETUP_DONE then
     dataToSave = {
-      SETUP_DONE = SETUP_DONE,
-      locationMap = locationMap,
+      SETUP_DONE    = SETUP_DONE,
+      locationMap   = locationMap,
       locationCards = locationCards
     }
   end
@@ -37,9 +60,9 @@ end
 function onLoad(savedData)
   if savedData ~= nil and savedData ~= "" then
     local loadedData = JSON.decode(savedData)
-    SETUP_DONE = loadedData.SETUP_DONE
-    locationMap = loadedData.locationMap
-    locationCards = loadedData.locationCards
+    SETUP_DONE       = loadedData.SETUP_DONE
+    locationMap      = loadedData.locationMap
+    locationCards    = loadedData.locationCards
   end
 
   self.createButton({
@@ -75,20 +98,27 @@ end
 
 function setup()
   if SETUP_DONE then return end
+  SETUP_DONE = true
+
   findLocations()
+
   locationCards = {}
-  for k, loc in pairs(locationMap) do
+  for _, locationData in pairs(locationMap) do
+    -- randomly get a GUID
     local chosen = math.random(2)
-    local guid = loc.guids[chosen]
-    local card = getObjectFromGUID(loc.guids[3 - chosen])
+    local guid = locationData.guids[chosen]
+
+    -- set aside this version of the location
+    local card = getObjectFromGUID(locationData.guids[3 - chosen])
     card.setPosition(SET_ASIDE.position)
     card.setRotation({ 0, 270, 0 })
+
+    -- put this version in play and store its guid
     card = getObjectFromGUID(guid)
-    card.setPosition(loc.position)
+    card.setPosition(locationData.position)
     card.setRotation({ 0, 270, 0 })
-    locationCards[loc.name] = guid
+    locationCards[locationData.name] = guid
   end
-  SETUP_DONE = true
 end
 
 function getPlayAreaObjects()
@@ -98,24 +128,26 @@ end
 
 function findLocations()
   locationMap = {}
-  for i, loc in ipairs(LOCATIONS) do
-    loc.guids = {}
-    locationMap[loc.name] = loc
+  for _, locationData in ipairs(LOCATIONS) do
+    locationData.guids = {}
+    locationMap[locationData.name] = locationData
   end
 
-  for i, obj in ipairs(getPlayAreaObjects()) do
-    local loc = locationMap[obj.getName()]
-    if loc ~= nil then
-      table.insert(loc.guids, obj.getGUID())
+  for _, obj in ipairs(getPlayAreaObjects()) do
+    local md = JSON.decode(obj.getGMNotes()) or {}
+    local locationName = ID_TO_NAME[md.id]
+    if locationName then
+      local locationData = locationMap[locationName]
+      table.insert(locationData.guids, obj.getGUID())
     end
   end
 end
 
-function moveBroods(_, color, _)
+function moveBroods(_, color)
   local broods = {}
-  for i, obj in ipairs(getPlayAreaObjects()) do
-    if obj.getName() == "Brood of Yog-Sothoth" then
-      obj.setVar("helperGuid", self.getGUID())
+  for _, obj in ipairs(getPlayAreaObjects()) do
+    local md = JSON.decode(obj.getGMNotes()) or {}
+    if md.id and BROOD_IDS[md.id] then -- "Brood of Yog-Sothoth"
       table.insert(broods, obj)
     end
   end
@@ -126,25 +158,29 @@ function moveBroods(_, color, _)
   end
 
   -- clear location highlights
-  for name, loc in pairs(locationCards) do
-    local obj = getObjectFromGUID(loc)
+  for _, guid in pairs(locationCards) do
+    local obj = getObjectFromGUID(guid)
     if obj ~= nil then obj.setVectorLines({}) end
   end
 
   locationBorders = {}
   for i, brood in ipairs(broods) do
     local j = math.random(6)
-    local loc = LOCATIONS[j].name
-    brood.setVar("targetLocation", loc)
+    local locationName = LOCATIONS[j].name
+
+    -- initialize table to track borders
+    locationBorders[locationName] = locationBorders[locationName] or {}
+
+    brood.setVar("targetLocation", locationName)
     brood.setVar("colorIndex", i)
     drawBorder(brood, { i })
-    if locationBorders[loc] == nil then locationBorders[loc] = {} end
-    table.insert(locationBorders[loc], i)
-    printToAll("Move brood once toward " .. loc, BORDER_COLORS[i])
+
+    table.insert(locationBorders[locationName], i)
+    printToAll("Move brood once toward " .. locationName, BORDER_COLORS[i])
   end
 
-  for loc, border in pairs(locationBorders) do
-    drawBorder(locationCards[loc], border)
+  for locationName, border in pairs(locationBorders) do
+    drawBorder(locationCards[locationName], border)
   end
 end
 
@@ -156,8 +192,9 @@ function drawBorder(card, colorIndexes)
   local bounds = card.getBoundsNormalized()
   local xSize = bounds.size.x / 2
   local zSize = bounds.size.z / 2
+  local offset = 0.15
   local borders = {}
-  for i, index in ipairs(colorIndexes) do
+  for _, index in ipairs(colorIndexes) do
     local color = BORDER_COLORS[index]
     table.insert(borders, {
       points = {
@@ -171,16 +208,17 @@ function drawBorder(card, colorIndexes)
       thickness = 0.1,
       rotation = { 0, 0, 0 }
     })
-    xSize = xSize + 0.12
-    zSize = zSize + 0.12
+    xSize = xSize + offset
+    zSize = zSize + offset
   end
   card.setVectorLines(borders)
 end
 
+-- called by the Brood script
 function removeBorder(params)
-  local loc = params.location
-  local card = locationCards[loc]
-  local indexes = locationBorders[loc]
+  local locationName = params.location
+  local card         = locationCards[locationName]
+  local indexes      = locationBorders[locationName]
   for i, index in ipairs(indexes) do
     if index == params.colorIndex then
       table.remove(indexes, i)
