@@ -6,6 +6,20 @@ local crumblingArchivesGUID    = "dd8244"
 local floodTokenPoolGUID       = "a759ec"
 local trash                    = guidReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
 local starSpawnGUID            = "176876"
+local stillBehindYouGUID       = "000ed5"
+local inescapableGUID          = "1acf22"
+local setAsideChestGUID        = "33c756"
+local greatLiftGUID            = "508ae3"
+
+local extraEncounterSetGUID = {
+  ["west"] = "aa8211",
+  ["east"] = "ddaa25"
+}
+
+local greatLiftLocations = {
+  ["west"] = Vector(-36.84, 1.53, 7.65),
+  ["east"] = Vector(-17.04, 1.53, 7.65)
+}
 
 local locationPositions = {
   Vector(-17.04, 1.53, 0.00),
@@ -44,12 +58,13 @@ function onLoad()
   })
 end
 
-function westernSetup()
+function westernSetup(_, color)
   local bag = getObjectFromGUID("d91323")
+  playerColor = color
   setup("west", bag)
 end
 
-function easternSetup()
+function easternSetup(_, color)
   local bag = getObjectFromGUID("118858")
   setup("east", bag)
 end
@@ -70,10 +85,16 @@ function setup(direction, bag)
       crumblingDeck.takeObject({
         position = locationPositions[i] })
     end
-
     
-    -- place flood tokens or extra Star Spwans
+    -- set up specific encounter sets based on direction
+    local extraEncounter = getObjectFromGUID(extraEncounterSetGUID[direction])
+    deckLib.placeOrMergeIntoDeck(extraEncounter, mythosAreaApi.getEncounterDeckPosition(), _, false, true)
+    
+    local greatLift = getObjectFromGUID(greatLiftGUID)
+    greatLift.setPosition(greatLiftLocations[direction])
+    coWaitSeconds(1)
     if direction == "east" then
+      -- add flood tokens
       local floodTokenPool = getObjectFromGUID(floodTokenPoolGUID)
       for i = 4, 8 do
         floodTokenPool.takeObject({
@@ -81,14 +102,34 @@ function setup(direction, bag)
           callback_function = function(spawnedObject) if i > 5 then spawnedObject.flip() end end
         })
       end
+      
+      -- add Still Behind You and Inescapable to set-aside chest
+      deckLib.placeOrMergeIntoDeck(getObjectFromGUID(stillBehindYouGUID), mythosAreaApi.getEncounterDeckPosition(), _, false, true)
+      local setAsideChest = getObjectFromGUID(setAsideChestGUID)
+      setAsideChest.putObject(getObjectFromGUID(inescapableGUID))
     else
+      -- add extra Star Spawns
       local starSpawnDeck = getObjectFromGUID(starSpawnGUID)
       starSpawnDeck.shuffle()
       coWaitSeconds(0.5)
       starSpawnCard = starSpawnDeck.takeObject()
       deckLib.placeOrMergeIntoDeck(starSpawnCard, mythosAreaApi.getEncounterDeckPosition(), _, false, true)
       trash.putObject(starSpawnDeck)
+
+      -- prompt user to report on the Inescapable
+      Player[playerColor].showOptionsDialog("Was the creature defeated?", { "Yes", "No" }, 1, function(text)
+        if text == "No" then
+          -- add Still Behind You and Inescapable to set-aside chest
+          deckLib.placeOrMergeIntoDeck(getObjectFromGUID(stillBehindYouGUID), mythosAreaApi.getEncounterDeckPosition(), _, false, true)
+          local setAsideChest = getObjectFromGUID(setAsideChestGUID)
+          setAsideChest.putObject(getObjectFromGUID(inescapableGUID))
+        else
+          trash.putObject(getObjectFromGUID(inescapableGUID))
+          trash.putObject(getObjectFromGUID(stillBehindYouGUID))
+        end
+      end)
     end
+
     return 1
   end
 
