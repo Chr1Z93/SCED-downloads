@@ -1,0 +1,173 @@
+local deckLib               = require("util/DeckLib")
+local guidReferenceApi      = require("core/GUIDReferenceApi")
+local mythosAreaApi         = require("mythos/MythosAreaApi")
+
+local crumblingArchivesGUID = "dd8244"
+local floodTokenPoolGUID    = "a759ec"
+local trash                 = guidReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+local starSpawnGUID         = "176876"
+local stillBehindYouGUID    = "000ed5"
+local inescapableGUID       = "1acf22"
+local setAsideChestGUID     = "33c756"
+local greatLiftGUID         = "508ae3"
+
+local extraEncounterSetGUID = {
+  ["west"] = "aa8211",
+  ["east"] = "ddaa25"
+}
+
+local greatLiftLocations    = {
+  ["west"] = Vector(-36.84, 1.53, 7.65),
+  ["east"] = Vector(-17.04, 1.53, 7.65)
+}
+
+local bagGUIDs              = {
+  ["west"] = "d91323",
+  ["east"] = "118858"
+}
+
+local locationPositions     = {
+  Vector(-17.04, 1.53, 0.00),
+  Vector(-23.64, 1.53, 15.30),
+  Vector(-23.64, 1.53, 0.00),
+  Vector(-30.24, 1.53, 15.30),
+  Vector(-30.24, 1.53, 0.00),
+  Vector(-36.84, 1.53, 15.30),
+  Vector(-36.84, 1.53, 0.00),
+  Vector(-36.84, 1.53, -7.65)
+}
+
+function onLoad()
+  self.createButton({
+    label = "Western",
+    click_function = "westernSetup",
+    function_owner = self,
+    position = { 0, 0.1, -0.5 },
+    height = 150,
+    width = 460,
+    scale = { x = 2, y = 2, z = 2 },
+    font_color = { r = 0, g = 0, b = 0 },
+    color = { r = 1, g = 1, b = 1 }
+  })
+
+  self.createButton({
+    label = "Eastern",
+    click_function = "easternSetup",
+    function_owner = self,
+    position = { 0, 0.1, 0.5 },
+    height = 150,
+    width = 460,
+    scale = { x = 2, y = 2, z = 2 },
+    font_color = { r = 0, g = 0, b = 0 },
+    color = { r = 1, g = 1, b = 1 }
+  })
+end
+
+function westernSetup(_, color)
+  playerColor = color
+  setup("west")
+end
+
+function easternSetup(_, color)
+  playerColor = color
+  setup("east")
+end
+
+function setup(direction)
+  local bag = getObjectFromGUID(bagGUIDs[direction])
+
+  if #bag.getObjects() > 0 then
+    bag.call("buttonClick_place")
+  end
+
+  function coinside()
+    -- remove one random locations
+    local crumblingDeck = getObjectFromGUID(crumblingArchivesGUID)
+    crumblingDeck.shuffle()
+
+    coWaitSeconds(0.5)
+
+    local card = crumblingDeck.takeObject()
+    trash.putObject(card)
+
+    coWaitSeconds(0.5)
+
+    for i = 1, 5 do
+      crumblingDeck.takeObject({ position = locationPositions[i] })
+    end
+
+    -- set up specific encounter sets based on direction
+    local extraEncounter = getObjectFromGUID(extraEncounterSetGUID[direction])
+    deckLib.placeOrMergeIntoDeck(extraEncounter, mythosAreaApi.getEncounterDeckPosition(), nil, false, true)
+
+    local greatLift = getObjectFromGUID(greatLiftGUID)
+    greatLift.setPosition(greatLiftLocations[direction])
+
+    coWaitSeconds(1)
+
+    if direction == "east" then
+      -- add flood tokens
+      local floodTokenPool = getObjectFromGUID(floodTokenPoolGUID)
+      for i = 4, 8 do
+        floodTokenPool.takeObject({
+          position = locationPositions[i] + Vector(2, 0, -1.5),
+          callback_function = function(spawnedObject) if i > 5 then spawnedObject.flip() end end
+        })
+      end
+
+      setAsideInescapable()
+
+      -- remove bag from unused direction
+      trash.putObject(getObjectFromGUID(bagGUIDs["west"]))
+    else
+      -- add extra Star Spawns
+      local starSpawnDeck = getObjectFromGUID(starSpawnGUID)
+      starSpawnDeck.shuffle()
+
+      coWaitSeconds(0.5)
+
+      starSpawnCard = starSpawnDeck.takeObject()
+      deckLib.placeOrMergeIntoDeck(starSpawnCard, mythosAreaApi.getEncounterDeckPosition(), nil, false, true)
+      trash.putObject(starSpawnDeck)
+
+      -- prompt user to report on the Inescapable
+      Player[playerColor].showOptionsDialog("Was the creature defeated?", { "Yes", "No" }, 1, function(text)
+        if text == "No" then
+          setAsideInescapable()
+        else
+          trash.putObject(getObjectFromGUID(inescapableGUID))
+          trash.putObject(getObjectFromGUID(stillBehindYouGUID))
+          broadcastToAll("Removed 'The Inescapable' Encounter Set from the game.", "White")
+        end
+      end)
+      -- remove bag from unused direction
+      trash.putObject(getObjectFromGUID(bagGUIDs["east"]))
+    end
+
+    trash.putObject(bag)
+
+    return 1
+  end
+
+  startLuaCoroutine(self, "coinside")
+  self.destroy()
+end
+
+-- add Still Behind You to the deck and Inescapable to set-aside chest
+function setAsideInescapable()
+  local stillBehindYou = getObjectFromGUID(stillBehindYouGUID)
+  deckLib.placeOrMergeIntoDeck(stillBehindYou, mythosAreaApi.getEncounterDeckPosition(), nil, false, true)
+
+  local setAsideChest = getObjectFromGUID(setAsideChestGUID)
+  setAsideChest.putObject(getObjectFromGUID(inescapableGUID))
+
+  broadcastToAll("Added 'The Inescapable' Encounter Set to the game.", "White")
+end
+
+-- pauses the current coroutine for 'seconds' seconds
+function coWaitSeconds(seconds)
+  local startTime = os.clock()
+  while os.clock() - startTime < seconds do
+    coroutine.yield(0)
+  end
+end

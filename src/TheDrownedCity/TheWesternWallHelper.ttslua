@@ -1,12 +1,20 @@
 local deckLib                  = require("util/DeckLib")
 local guidReferenceApi         = require("core/GUIDReferenceApi")
+local mythosAreaApi            = require("mythos/MythosAreaApi")
 
 local walkwaysDeckGUID         = "612a6b"
 local remainingWalkwaysGUID    = "3948c1"
 local obsidianFoundationsGUID  = "91eb93"
 local westernWallGUID          = "28aaa8"
 local floodTokenPoolGUID       = "5c6098"
+local inescapableSetGUID       = "09f2da"
+local setAsideChestGUID        = "66ad2d"
 local trash                    = guidReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+
+local bagGUIDs                 = {
+  ["west"] = "aff57b",
+  ["east"] = "7cd284"
+}
 
 local westernLocationPositions = {
   Vector(-23.64, 1.53, 0.00),
@@ -58,56 +66,65 @@ function onLoad()
   })
 end
 
-function westernSetup()
-  local bag = getObjectFromGUID("aff57b")
-  setup("west", bag, westernLocationPositions)
+function westernSetup(_, color)
+  playerColor = color
+  setup("west", westernLocationPositions)
 end
 
-function easternSetup()
-  local bag = getObjectFromGUID("7cd284")
-  setup("east", bag, easternLocationPositions)
+function easternSetup(_, color)
+  playerColor = color
+  setup("east", easternLocationPositions)
 end
 
-function setup(direction, bag, locationPositions)
+function setup(direction, locationPositions)
+  local bag = getObjectFromGUID(bagGUIDs[direction])
+
   if #bag.getObjects() > 0 then
     bag.call("buttonClick_place")
   end
+
   function coinside()
     -- remove two random locations
     local walkwaysDeck = getObjectFromGUID(walkwaysDeckGUID)
     walkwaysDeck.shuffle()
+
     coWaitSeconds(0.5)
+
     for i = 1, 2 do
       local card = walkwaysDeck.takeObject()
       trash.putObject(card)
     end
 
     -- shuffle together cards
-    local remainingWalkwaysDeck = getObjectFromGUID(remainingWalkwaysGUID)
-    deckLib.placeOrMergeIntoDeck(remainingWalkwaysDeck, walkwaysDeck.getPosition(), walkwaysDeck.getRotation(), false,
-      true)
+    local remainingWWDeck = getObjectFromGUID(remainingWalkwaysGUID)
+    deckLib.placeOrMergeIntoDeck(remainingWWDeck, walkwaysDeck.getPosition(), walkwaysDeck.getRotation(), false, true)
+
     coWaitSeconds(1)
+
     for i = 1, 6 do
-      walkwaysDeck.takeObject({
-        position = locationPositions[i] })
+      walkwaysDeck.takeObject({ position = locationPositions[i] })
     end
 
     coWaitSeconds(1)
+
     -- place final three locations
     if direction == "west" then
       finalLocation = getObjectFromGUID(obsidianFoundationsGUID)
     else
       finalLocation = getObjectFromGUID(westernWallGUID)
     end
+
     deckLib.placeOrMergeIntoDeck(finalLocation, walkwaysDeck.getPosition(), walkwaysDeck.getRotation(), false, true)
+
     coWaitSeconds(1)
+
     for i = 7, 9 do
-      walkwaysDeck.takeObject({
-        position = locationPositions[i] })
+      walkwaysDeck.takeObject({ position = locationPositions[i] })
     end
 
     local floodTokenPool = getObjectFromGUID(floodTokenPoolGUID)
-    -- place flood tokens
+
+    -- place flood tokens and deal with the Inescapable
     if direction == "west" then
       for i = 1, 9 do
         floodTokenPool.takeObject({
@@ -115,6 +132,19 @@ function setup(direction, bag, locationPositions)
           callback_function = function(spawnedObject) if i > 3 then spawnedObject.flip() end end
         })
       end
+
+      -- put The Inescapable into the set aside chest and shuffle the rest of the encounter set into the encounter deck
+      local inescapableSet = getObjectFromGUID(inescapableSetGUID)
+      local setAsideChest = getObjectFromGUID(setAsideChestGUID)
+
+      -- The Inescapable set is face-down for dramatic effect
+      local inescapable = inescapableSet.takeObject({ top = false })
+      setAsideChest.putObject(inescapable)
+
+      coWaitSeconds(0.5)
+
+      deckLib.placeOrMergeIntoDeck(inescapableSet, mythosAreaApi.getEncounterDeckPosition(), _, false, true)
+      trash.putObject(getObjectFromGUID(bagGUIDs["east"]))
     else
       for i = 1, 6 do
         floodTokenPool.takeObject({
@@ -122,9 +152,27 @@ function setup(direction, bag, locationPositions)
           callback_function = function(spawnedObject) if i == 1 then spawnedObject.flip() end end
         })
       end
-      floodTokenPool.takeObject({ position = Vector(-43.44, 1.53, 0.00) + Vector(2, 0, -1.5), callback_function = function(
-          spawnedObject) spawnedObject.flip() end })
+
+      floodTokenPool.takeObject({
+        position = Vector(-43.44, 1.53, 0.00) + Vector(2, 0, -1.5),
+        callback_function = function(spawnedObject) spawnedObject.flip() end
+      })
+
+      -- prompt user to report on the Inescapable
+      Player[playerColor].showOptionsDialog("Was the creature defeated?", { "Yes", "No" }, 1, function(text)
+        local inescapableSet = getObjectFromGUID(inescapableSetGUID)
+        if text == "No" then
+          -- add the entire Inescapable Encounter set to the deck
+          deckLib.placeOrMergeIntoDeck(inescapableSet, mythosAreaApi.getEncounterDeckPosition(), nil, false, true)
+          broadcastToAll("Added 'The Inescapable' Encounter Set to the game.", "White")
+        else
+          trash.putObject(inescapableSet)
+          broadcastToAll("Removed 'The Inescapable' Encounter Set from the game.", "White")
+        end
+      end)
+      trash.putObject(getObjectFromGUID(bagGUIDs["west"]))
     end
+    trash.putObject(bag)
     return 1
   end
 
