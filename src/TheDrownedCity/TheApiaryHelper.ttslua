@@ -61,6 +61,69 @@ function easternSetup(_, color)
   setup("east")
 end
 
+local CoroutineLib          = require("util/CoroutineLib")
+local DeckLib               = require("util/DeckLib")
+local GUIDReferenceApi      = require("core/GUIDReferenceApi")
+local MythosAreaApi         = require("mythos/MythosAreaApi")
+
+local stillBehindYouGUID    = "000ed5"
+local inescapableGUID       = "1acf22"
+
+
+local EXTRA_ENCOUNTER_SETS_GUID = {
+  ["west"] = "33bd39",
+  ["east"] = "ddaa25"
+}
+
+local trash
+
+local BAG_GUIDS              = {
+  ["west"] = "d54b36",
+  ["east"] = "c143ae"
+}
+
+function onLoad()
+  trash = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+  if not trash then
+    printToAll("Trash not found!", "Red")
+  end
+
+  self.createButton({
+    label = "Western",
+    click_function = "westernSetup",
+    function_owner = self,
+    position = { 0, 0.1, -0.5 },
+    height = 150,
+    width = 460,
+    scale = { x = 2, y = 2, z = 2 },
+    font_color = { r = 0, g = 0, b = 0 },
+    color = { r = 1, g = 1, b = 1 }
+  })
+
+  self.createButton({
+    label = "Eastern",
+    click_function = "easternSetup",
+    function_owner = self,
+    position = { 0, 0.1, 0.5 },
+    height = 150,
+    width = 460,
+    scale = { x = 2, y = 2, z = 2 },
+    font_color = { r = 0, g = 0, b = 0 },
+    color = { r = 1, g = 1, b = 1 }
+  })
+end
+
+function westernSetup(_, color)
+  chest = MythosAreaApi.getSetAsideChest
+  playerColor = color
+  setup("west")
+end
+
+function easternSetup(_, color)
+  playerColor = color
+  setup("east")
+end
+
 function setup(direction)
   local bag = getObjectFromGUID(BAG_GUIDS[direction])
 
@@ -69,26 +132,17 @@ function setup(direction)
   end
 
   function apiarySetupCoroutine()
-
     -- set up specific encounter sets based on direction
     local extraEncounter = getObjectFromGUID(EXTRA_ENCOUNTER_SETS_GUID[direction])
     DeckLib.placeOrMergeIntoDeck(extraEncounter, MythosAreaApi.getEncounterDeckPosition(), nil, false, true)
-    local encounterDeck =  MythosAreaApi.getEncounterDeckObjects()
-    
+
     CoroutineLib.yieldSeconds(1)
+
+    local encounterDeck = MythosAreaApi.getEncounterDeckObjects()
     local newLocation = getObjectFromGUID("100805")
-    log(newLocation)
-    log(encounterDeck)
-    Wait.time(function()
-      DeckLib.shuffleIntoTopOrBottomX(newLocation, encounterDeck.draw, true, 10, true)
-    end, 0.1)
+    DeckLib.shuffleIntoTopOrBottomX(newLocation, encounterDeck.draw, true, 10, true)
 
-    -- delay to not send the feedback before the operation happened
-    Wait.time(function()
-      broadcastToAll("Shuffled 'Luminous Tunnels' into the bottom 10 cards of the encounter deck.")
-    end, 0.5)
-
-  
+    broadcastToAll("Shuffled 'Luminous Tunnels' into the bottom 10 cards of the encounter deck.")
 
     trash.putObject(bag)
   end
@@ -99,7 +153,7 @@ end
 -- add Still Behind You to the deck and Inescapable to set-aside chest
 function setAsideInescapable()
   local stillBehindYou = getObjectFromGUID(stillBehindYouGUID)
-  deckLib.placeOrMergeIntoDeck(stillBehindYou, MythosAreaApi.getEncounterDeckPosition(), nil, false, true)
+  DeckLib.placeOrMergeIntoDeck(stillBehindYou, MythosAreaApi.getEncounterDeckPosition(), nil, false, true)
 
   local setAsideChest = MythosAreaApi.getSetAsideChest()
   setAsideChest.putObject(getObjectFromGUID(inescapableGUID))
