@@ -41,12 +41,23 @@ def __main__():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     for item in [item for item in read_library() if item["decomposed"]]:
+        # Sanitize folder name by removing apostrophes
+        safe_name = item["name"].replace("'", "")
+
+        json_file = next(
+            Path.cwd()
+            .joinpath(PATHS["decomposed"], item["type"], safe_name)
+            .glob("*.json"),
+            None,
+        )
+
+        if json_file is None:
+            raise FileNotFoundError(
+                f"No JSON file found in: {Path.cwd().joinpath(PATHS['decomposed'], item['type'], safe_name)}"
+            )
+
         exec_mod_manager(
-            next(
-                Path.cwd()
-                .joinpath(PATHS["decomposed"], item["type"], item["name"])
-                .glob("*.json")
-            ),
+            json_file,
             output_dir.joinpath(f'{item["filename"]}.json'),
         )
 
