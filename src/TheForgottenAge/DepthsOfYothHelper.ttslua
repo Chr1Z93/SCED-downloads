@@ -2,11 +2,11 @@ local guidReferenceApi     = require("core/GUIDReferenceApi")
 local searchLib            = require("util/SearchLib")
 local tokenSpawnTrackerApi = require("tokens/TokenSpawnTrackerApi")
 
-START       = { x = -30.24, y = 1.55, z = 0 }
-SET_ASIDE   = { x = -12.5, y = 1.8, z = 6.75 }
-EXPLORATION = { x = -11.5, y = 1.8, z = 11 }
+START                      = { x = -30.24, y = 1.55, z = 0 }
+SET_ASIDE                  = { x = -12.5, y = 1.8, z = 6.75 }
+EXPLORATION                = { x = -11.5, y = 1.8, z = 11 }
 
-LOCATIONS = {
+LOCATIONS                  = {
   "City of the Serpents",
   "Bridge over N'kai",
   "Abandoned Site",
@@ -19,6 +19,20 @@ LOCATIONS = {
   "Steps of Yoth"
 }
 
+local ID_TO_ENGLISH_NAME   = {
+  ["04287"] = "City of the Serpents",
+  ["04292"] = "Bridge over N'kai",
+  ["04294"] = "Abandoned Site",
+  ["04290"] = "Caverns of Yoth",
+  ["04288"] = "Hall of Heresy",
+  ["04295"] = "Bright Canyon",
+  ["04291"] = "Forked Path",
+  ["04289"] = "Crumbling Precipice",
+  ["04293"] = "Broken Passage",
+  ["04286"] = "Steps of Yoth"
+}
+local ENGLISH_NAME_TO_ID = {}
+
 function onLoad()
   self.createButton({
     label = "Set Up",
@@ -30,6 +44,10 @@ function onLoad()
     scale = { x = 1.75, y = 1.75, z = 1.75 },
     font_size = 125
   })
+
+  for key, value in pairs(ID_TO_ENGLISH_NAME) do
+    ENGLISH_NAME_TO_ID[value] = key
+  end
 end
 
 function getExploreDeckPosition()
@@ -42,22 +60,22 @@ function getExploreDeckPosition()
   return EXPLORATION
 end
 
-function setup(_, _color)
+function setup(_, playerColor)
   local zone = guidReferenceApi.getObjectByOwnerAndType("Mythos", "PlayAreaZone")
 
   -- make index of all cards in play area and remove all clues and doom
   local allCards = {}
   for _, obj in ipairs(zone.getObjects()) do
     if obj.type == "Card" then
-      local md = JSON.decode(obj.getGMNotes())
-      local name = obj.getName()
-      if ((md and md.type == "Location") or name == "Perils of Yoth") and name ~= nil then
-        allCards[name] = { card = obj, guid = obj.getGUID() }
+      local md = JSON.decode(obj.getGMNotes()) or {}
+      if md.id and (ID_TO_ENGLISH_NAME[md.id] or md.id == "53060") then -- Perils of Yoth
+        allCards[md.id] = { card = obj, guid = obj.getGUID() }
       end
     elseif obj.type == "Deck" then
       for _, card in ipairs(obj.getObjects()) do
-        if card.name ~= nil then
-          allCards[card.name] = { deck = obj, guid = card.guid }
+        local md = JSON.decode(card.gm_notes) or {}
+        if md.id and (ID_TO_ENGLISH_NAME[md.id] or md.id == "53060") then -- Perils of Yoth
+          allCards[md.id] = { deck = obj, guid = card.guid }
         end
       end
     elseif obj.memo == "clueDoom" then
@@ -66,7 +84,7 @@ function setup(_, _color)
   end
 
   -- Perils of Yoth
-  local peril = allCards["Perils of Yoth"]
+  local peril = allCards["53060"]
   if peril ~= nil then
     if peril.card ~= nil then
       placeCard(nil, peril.card, getExploreDeckPosition())
@@ -78,17 +96,18 @@ function setup(_, _color)
   -- find location cards
   local locCards = {}
   local notFound = {}
-  for i = 1, #LOCATIONS do
-    if allCards[LOCATIONS[i]] == nil then
-      table.insert(notFound, LOCATIONS[i])
+  for _, locName in ipairs(LOCATIONS) do
+    local cardId = ENGLISH_NAME_TO_ID[locName]
+    if allCards[cardId] == nil then
+      table.insert(notFound, locName)
     else
-      table.insert(locCards, allCards[LOCATIONS[i]])
+      table.insert(locCards, allCards[cardId])
     end
   end
 
   if #notFound > 0 then
-    printToColor("The following locations were not found: " .. table.concat(notFound, ", "), _color)
-    printToColor("Place them in the central play area and try again.", _color)
+    printToColor("The following locations were not found: " .. table.concat(notFound, ", "), playerColor)
+    printToColor("Place them in the central play area and try again.", playerColor)
     return
   end
 
@@ -121,11 +140,14 @@ function setup_2()
 
   local locMap = {}
   for _, card in ipairs(deck.getObjects()) do
-    locMap[card.name] = card.guid
+    local md = JSON.decode(card.gm_notes) or {}
+    if md.id then
+      locMap[md.id] = card.guid
+    end
   end
 
   -- assemble exploration deck (4 random locations + Steps of Yoth and Perils of Yoth (if necessary))
-  placeCard(deck, locMap["Steps of Yoth"], getExploreDeckPosition())
+  placeCard(deck, locMap[ENGLISH_NAME_TO_ID["Steps of Yoth"]], getExploreDeckPosition()) -- 
   deck.shuffle()
 
   for i = 1, 4 do
