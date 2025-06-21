@@ -45,7 +45,8 @@ def __main__():
             next(
                 Path.cwd()
                 .joinpath(PATHS["decomposed"], item["type"], item["name"])
-                .glob("*.json")
+                .glob("*.json"),
+                None,
             ),
             output_dir.joinpath(f'{item["filename"]}.json'),
         )
