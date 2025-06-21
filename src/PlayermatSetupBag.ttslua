@@ -55,14 +55,19 @@ end
 Some text here
 position = { 1.23, 4.56, 7.89 }
 rotation = { 90, 0, 180 }
+locked = true
 ]]
-function extractPositionAndRotation()
+function extractPositionRotationAndLocked()
   local description = self.getDescription()
   local posStr      = description:match("position%s*=%s*{.-}")
   local rotStr      = description:match("rotation%s*=%s*{.-}")
+  local lockedStr   = description:match("locked%s*=%s*%a+")
+
   local position    = posStr and parseVector(posStr)
   local rotation    = rotStr and parseVector(rotStr)
-  return position, rotation
+  local locked      = lockedStr and lockedStr:match("true") and true or false
+
+  return position, rotation, locked
 end
 
 function updateTransformData(data, position, rotation)
@@ -83,7 +88,7 @@ end
 
 function tryObjectEnter(object)
   if object.getName() == "" then
-    printToAll("Please name the object and try again.")
+    broadcastToAll("Please name the object and try again.")
     return false
   end
   return true
@@ -97,15 +102,15 @@ function buttonClick_spawn()
     return
   end
 
-  local position, rotation = extractPositionAndRotation()
+  local position, rotation, locked = extractPositionRotationAndLocked()
 
-  if not position or not rotation then
-    printToAll("Couldn't determine position/rotation from description.", "Red")
+  if position == nil or rotation == nil or locked == nil then
+    printToAll("Couldn't determine position/rotation/lock from description.", "Red")
     return
   end
 
   local objectData  = data.ContainedObjects[1]
-  objectData.Locked = true
+  objectData.Locked = locked
   objectData.GUID   = nil
 
   local cleanName   = objectData.Nickname:gsub(" ", "")
@@ -114,7 +119,6 @@ function buttonClick_spawn()
     local finalPosition = mat.positionToWorld(position)
     local finalRotation = mat.getRotation() + rotation
     updateTransformData(objectData, finalPosition, finalRotation)
-
     spawnObjectData({
       data = objectData,
       callback_function = function(o) GUIDReferenceApi.editIndex(matColor, cleanName, o.getGUID()) end
