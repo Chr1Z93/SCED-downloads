@@ -1,0 +1,147 @@
+local GUIDReferenceApi = require("core/GUIDReferenceApi")
+
+function onLoad()
+  -- make sure the model is loaded so that we can use the bounds
+  Wait.condition(function()
+    Wait.frames(function()
+      generateButtonData()
+      createButtonByName("Spawn")
+      createButtonByName("Remove")
+    end, 5)
+  end, function() return not self.loading_custom end)
+end
+
+function generateButtonData()
+  local selfScale  = self.getScale()
+  local selfBounds = self.getBoundsNormalized()
+  buttonScale      = Vector(1 / selfScale.x, 1, 1 / selfScale.z)
+
+  local buttonX    = math.max(selfBounds.size.x / 5, 1.7) / selfScale.x
+  local buttonY    = -(selfBounds.size.y / 2 + selfBounds.offset.y) / selfScale.y + 0.5
+  local buttonZ    = (selfBounds.size.z / 2 + 1) / selfScale.z
+
+  buttonData       = {
+    ["Spawn"]  = {
+      pos   = { buttonX, buttonY, buttonZ },
+      fSize = 350,
+      w     = 1400
+    },
+    ["Remove"] = {
+      pos   = { -buttonX, buttonY, buttonZ },
+      fSize = 350,
+      w     = 1400
+    }
+  }
+end
+
+function createButtonByName(label)
+  self.createButton({
+    label          = label,
+    tooltip        = buttonData[label].tooltip or "",
+    position       = buttonData[label].pos,
+    height         = buttonData[label].h or 500,
+    width          = buttonData[label].w or 1500,
+    font_size      = buttonData[label].fSize or 325,
+    font_color     = buttonData[label].fColor or { 1, 1, 1 },
+    function_owner = self,
+    color          = { 0, 0, 0 },
+    scale          = buttonScale,
+    click_function = "buttonClick_" .. string.lower(string.gsub(label, "%s+", ""))
+  })
+end
+
+-- expects the description in this format:
+--[[
+Some text here
+position = { 1.23, 4.56, 7.89 }
+rotation = { 90, 0, 180 }
+locked = true
+]]
+function extractPositionRotationAndLocked()
+  local description = self.getDescription()
+  local posStr      = description:match("position%s*=%s*{.-}")
+  local rotStr      = description:match("rotation%s*=%s*{.-}")
+  local lockedStr   = description:match("locked%s*=%s*%a+")
+
+  local position    = posStr and parseVector(posStr)
+  local rotation    = rotStr and parseVector(rotStr)
+  local locked      = lockedStr and lockedStr:match("true") and true or false
+
+  return position, rotation, locked
+end
+
+function updateTransformData(data, position, rotation)
+  data.Transform.posX = position.x
+  data.Transform.posY = position.y
+  data.Transform.posZ = position.z
+  data.Transform.rotX = rotation.x
+  data.Transform.rotY = rotation.y
+  data.Transform.rotZ = rotation.z
+end
+
+function parseVector(str)
+  local x, y, z = str:match("{%s*([%d%.-]+)%s*,%s*([%d%.-]+)%s*,%s*([%d%.-]+)%s*}")
+  if x and y and z then
+    return Vector(tonumber(x), tonumber(y), tonumber(z))
+  end
+end
+
+function tryObjectEnter(object)
+  if object.getName() == "" then
+    broadcastToAll("Please name the object and try again.")
+    return false
+  end
+  return true
+end
+
+function buttonClick_spawn()
+  local data = self.getData()
+
+  if not data.ContainedObjects then
+    printToAll("No contained object found.", "Orange")
+    return
+  end
+
+  local position, rotation, locked = extractPositionRotationAndLocked()
+
+  if position == nil or rotation == nil or locked == nil then
+    printToAll("Couldn't determine position/rotation/lock from description.", "Red")
+    return
+  end
+
+  local objectData  = data.ContainedObjects[1]
+  objectData.Locked = locked
+  objectData.GUID   = nil
+
+  local cleanName   = objectData.Nickname:gsub(" ", "")
+
+  for matColor, mat in pairs(GUIDReferenceApi.getObjectsByType("Playermat")) do
+    local doesAlreadyExist = GUIDReferenceApi.getObjectByOwnerAndType(matColor, cleanName)
+    if not doesAlreadyExist then
+      local finalPosition = mat.positionToWorld(position)
+      local finalRotation = mat.getRotation() + rotation
+      updateTransformData(objectData, finalPosition, finalRotation)
+      spawnObjectData({
+        data = objectData,
+        callback_function = function(o) GUIDReferenceApi.editIndex(matColor, cleanName, o.getGUID()) end
+      })
+    end
+  end
+end
+
+function buttonClick_remove()
+  local data = self.getData()
+
+  if not data.ContainedObjects then
+    printToAll("No contained object found.", "Orange")
+    return
+  end
+
+  local objectData = data.ContainedObjects[1]
+  local cleanName  = objectData.Nickname:gsub(" ", "")
+
+  for owner, object in pairs(GUIDReferenceApi.getObjectsByType(cleanName)) do
+    object.destruct()
+    GUIDReferenceApi.editIndex(owner, cleanName)
+  end
+end
