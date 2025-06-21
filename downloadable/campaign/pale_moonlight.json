@@ -1,13 +1,13 @@
 {
-  "GUID": "33b4d8",
+  "GUID": "0216cd",
   "Name": "Custom_Model_Bag",
   "Transform": {
-    "posX": 26.6308937,
-    "posY": 1.4814992,
-    "posZ": -6.309007,
-    "rotX": -5.025054E-07,
+    "posX": 30.809557,
+    "posY": 1.48149908,
+    "posZ": 4.435328,
+    "rotX": 1.35852957E-07,
     "rotY": 270.0,
-    "rotZ": 1.19479068E-07,
+    "rotZ": 3.11254468E-07,
     "scaleX": 1.0,
     "scaleY": 0.14,
     "scaleZ": 1.0
@@ -68,7 +68,7 @@
     "Order": 0
   },
   "LuaScript": "-- Bundled by luabundle {\"version\":\"1.6.0\"}\nlocal __bundle_require, __bundle_loaded, __bundle_register, __bundle_modules = (function(superRequire)\n\tlocal loadingPlaceholder = {[{}] = true}\n\n\tlocal register\n\tlocal modules = {}\n\n\tlocal require\n\tlocal loaded = {}\n\n\tregister = function(name, body)\n\t\tif not modules[name] then\n\t\t\tmodules[name] = body\n\t\tend\n\tend\n\n\trequire = function(name)\n\t\tlocal loadedModule = loaded[name]\n\n\t\tif loadedModule then\n\t\t\tif loadedModule == loadingPlaceholder then\n\t\t\t\treturn nil\n\t\t\tend\n\t\telse\n\t\t\tif not modules[name] then\n\t\t\t\tif not superRequire then\n\t\t\t\t\tlocal identifier = type(name) == 'string' and '\\\"' .. name .. '\\\"' or tostring(name)\n\t\t\t\t\terror('Tried to require ' .. identifier .. ', but no such module has been registered')\n\t\t\t\telse\n\t\t\t\t\treturn superRequire(name)\n\t\t\t\tend\n\t\t\tend\n\n\t\t\tloaded[name] = loadingPlaceholder\n\t\t\tloadedModule = modules[name](require, loaded, register, modules)\n\t\t\tloaded[name] = loadedModule\n\t\tend\n\n\t\treturn loadedModule\n\tend\n\n\treturn require, loaded, register, modules\nend)(nil)\n__bundle_register(\"MemoryBag\", function(require, _LOADED, __bundle_register, __bundle_modules)\nfunction updateSave()\n  self.script_state = JSON.encode({ ml = memoryList, setupButton = setupButton })\nend\n\nfunction onLoad(savedData)\n  if savedData and savedData ~= \"\" then\n    local loadedData = JSON.decode(savedData)\n    memoryList = loadedData.ml\n    setupButton = loadedData.setupButton\n  end\n\n  memoryList = memoryList or {}\n  self.addContextMenuItem(\"Toggle setup button\", toggleSetupButton)\n\n  -- make sure the model is loaded so that we can use the bounds\n  Wait.condition(function()\n    Wait.frames(function()\n      generateButtonData()\n      createMemoryActionButtons()\n    end, 5)\n  end, function() return not self.loading_custom end)\nend\n\nfunction generateButtonData()\n  local selfScale = self.getScale()\n  local selfBounds = self.getBoundsNormalized()\n  buttonScale = Vector(1 / selfScale.x, 1, 1 / selfScale.z)\n\n  buttonX = math.max(selfBounds.size.x / 5, 1.5) / selfScale.x\n  buttonY = -(selfBounds.size.y / 2 + selfBounds.offset.y) / selfScale.y + 0.5\n  buttonZ = {}\n  for i = 1, 4 do\n    buttonZ[i] = (selfBounds.size.z / 2 + i * 1.15 - 0.15) / selfScale.z\n  end\n\n  local upperButtonMult = 1.1\n  buttonData = {\n    [\"Add\"]       = {\n      tooltip = \"Add highlighted objects to memory\",\n      pos = { buttonX * upperButtonMult, buttonY, -buttonZ[1] },\n      fColor = { 0.25, 1, 0.25 }\n    },\n    [\"Cancel\"]    = {\n      tooltip = \"Abort setup mode\",\n      pos = { -buttonX * upperButtonMult, buttonY, -buttonZ[1] },\n    },\n    [\"Internal\"]    = {\n      tooltip = \"Copy memory from internal bags\",\n      pos = { -buttonX * upperButtonMult, buttonY, -buttonZ[4] },\n    },\n    [\"Place\"]     = {\n      pos = { buttonX, buttonY, buttonZ[1] },\n      fSize = 350,\n      w = 1200\n    },\n    [\"Recall\"]    = {\n      pos = { -buttonX, buttonY, buttonZ[1] },\n      fSize = 350,\n      w = 1200\n    },\n    [\"Remove\"]    = {\n      tooltip = \"Remove highlighted objects from memory\",\n      pos = { buttonX * upperButtonMult, buttonY, -buttonZ[2] },\n      fColor = { 1, 0.25, 0.25 }\n    },\n    [\"Reset\"]     = {\n      tooltip = \"Completely reset memory\",\n      pos = { -buttonX * upperButtonMult, buttonY, -buttonZ[3] },\n    },\n    [\"Selection\"] = {\n      tooltip = \"Add / Remove highlight for selected objects\",\n      pos = { -buttonX * upperButtonMult, buttonY, -buttonZ[2] },\n    },\n    [\"Setup\"]     = {\n      pos = { 0, buttonY, -buttonZ[1] },\n      fSize = 350\n    },\n    [\"Update\"]   = {\n      tooltip = \"Update memory for placed objects\",\n      pos = { buttonX * upperButtonMult, buttonY, -buttonZ[3] },\n      fColor = { 0.75, 0.75, 1 }\n    }\n  }\nend\n\nfunction createButtonByName(label)\n  self.createButton({\n    label = label,\n    tooltip = buttonData[label].tooltip or \"\",\n    position = buttonData[label].pos,\n    height = buttonData[label].h or 500,\n    width = buttonData[label].w or 1500,\n    font_size = buttonData[label].fSize or 325,\n    font_color = buttonData[label].fColor or { 1, 1, 1 },\n    function_owner = self,\n    color = { 0, 0, 0 },\n    scale = buttonScale,\n    click_function = \"buttonClick_\" .. string.lower(string.gsub(label, \"%s+\", \"\"))\n  })\nend\n\n-- context menu function to toggle the setup button visibility\nfunction toggleSetupButton()\n  if setupButton then\n    setupButton = false\n    broadcastToAll(\"Setup button disabled\")\n  else\n    setupButton = true\n    broadcastToAll(\"Setup button enabled\")\n  end\n  updateSave()\n  removeAllHighlights()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_setup()\n  tempList = {}\n  self.clearButtons()\n  createButtonsOnAllObjects()\n  createSetupActionButtons()\nend\n\nfunction broadcastFeedback(str1, count, name, str2, color)\n  local bcStr = count .. \" \" .. name\n  if str1 then\n    bcStr = str1 .. \" \" .. bcStr\n  end\n  if count ~= 1 then\n    bcStr = bcStr .. \"s\"\n  end\n  if str2 then\n    bcStr = bcStr .. \" \" .. str2\n  end\n  broadcastToAll(bcStr, color)\nend\n\nfunction createButtonsOnAllObjects()\n  buttonIndexMap = {}\n\n  local buttonCount = 0\n  for _, obj in ipairs(getObjects()) do\n    if obj ~= self and obj.type ~= \"Scripting\" and obj.type ~= \"Hand\" then\n      local objPos = obj.getPosition()\n      local objBounds = obj.getBounds()\n      local offSet = Vector(0, objBounds.size.y / 2 + 1, 0)\n      local scaleVec = Vector(-1, 1, 1)\n      local buttonPos = self.positionToLocal(objPos + offSet):scale(scaleVec)\n\n      local fName = \"selectButton_\" .. buttonCount\n      _G[fName] = function() buttonClick_selectObject(obj) end\n      self.createButton({\n        click_function = fName,\n        function_owner = self,\n        position = buttonPos,\n        height = 600,\n        width = 600,\n        color = { 0.75, 0.25, 0.25, 0.75 },\n        scale = buttonScale\n      })\n      buttonIndexMap[obj.getGUID()] = buttonCount\n      buttonCount = buttonCount + 1\n    end\n  end\nend\n\nfunction createSetupActionButtons()\n  createButtonByName(\"Cancel\")\n  createButtonByName(\"Selection\")\n  createButtonByName(\"Reset\")\n  createButtonByName(\"Internal\")\n  createButtonByName(\"Add\")\n\n  if next(memoryList) then\n    createButtonByName(\"Remove\")\n    createButtonByName(\"Update\")\n  end\nend\n\nfunction buttonClick_selectObject(obj)\n  local guid = obj.getGUID()\n  local index = buttonIndexMap[guid]\n  if not index then return end\n\n  if tempList[guid] == nil then\n    self.editButton({ index = index, color = { 0, 1, 0, 0.75 } })\n    tempList[guid] = {\n      pos = roundVector(obj.getPosition(), 3),\n      rot = roundVector(obj.getRotation(), 0),\n      lock = obj.getLock()\n    }\n    obj.highlightOn({ 0, 1, 0 })\n  else\n    self.editButton({ index = index, color = { 0.75, 0.25, 0.25, 0.75 } })\n    tempList[guid] = nil\n    obj.highlightOff()\n  end\nend\n\nfunction buttonClick_cancel()\n  broadcastToAll(\"Setup Canceled\")\n  removeAllHighlights()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_selection(_, playerColor)\n  local objList = Player[playerColor].getSelectedObjects()\n\n  if #objList == 0 then\n    broadcastToAll(\"No objects selected!\")\n  else\n    broadcastFeedback(\"Toggled selection for\", #objList, \"object\")\n    for _, obj in ipairs(objList) do\n      buttonClick_selectObject(obj)\n    end\n  end\nend\n\nfunction buttonClick_add()\n  local count = 0\n  for _ in pairs(tempList) do\n    count = count + 1\n  end\n  broadcastFeedback(\"Added\", count, \"Object\", \"from selection\")\n\n  -- copy data from tempList to memoryList\n  for guid, entry in pairs(tempList) do\n    memoryList[guid] = entry\n  end\n\n  updateSave()\n  removeAllHighlights()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_update()\n  local count = 0\n  for guid, entry in pairs(memoryList) do\n    local obj = getObjectFromGUID(guid)\n    if obj ~= nil then\n      count = count + 1\n      memoryList[guid] = {\n        pos = roundVector(obj.getPosition(), 3),\n        rot = roundVector(obj.getRotation(), 0),\n        lock = obj.getLock()\n      }\n    end\n  end\n  broadcastFeedback(\"Updated data for\", count, \"Object\")\n  updateSave()\nend\n\nfunction buttonClick_remove()\n  local count = 0\n  for guid in pairs(tempList) do\n    count = count + 1\n    memoryList[guid] = nil\n  end\n  broadcastFeedback(_, count, \"Object\", \"Removed\", { 1, 1, 1 })\n\n  updateSave()\n  removeAllHighlights()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_setNew()\n  local count = 0\n  for _, obj in ipairs(getObjects()) do\n    if memoryList[obj.guid] then\n      count = count + 1\n      memoryList[obj.guid].pos = roundVector(obj.getPosition(), 3)\n      memoryList[obj.guid].rot = roundVector(obj.getRotation(), 0)\n      memoryList[obj.guid].lock = obj.getLock()\n    end\n  end\n  broadcastFeedback(\"Updated Data for\", count, \"Object\", _, { 1, 1, 1 })\n  updateSave()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_reset()\n  memoryList = {}\n  updateSave()\n  removeAllHighlights()\n  broadcastToAll(\"Tool Reset\", { 1, 1, 1 })\n  self.clearButtons()\n\n  if setupButton then\n    createButtonByName(\"Setup\")\n  end\nend\n\nfunction buttonClick_internal()\n  local count = 0\n  for _, bagObj in ipairs(self.getObjects()) do\n    local data = bagObj.lua_script_state\n    if data ~= nil then\n      local j = JSON.decode(data)\n      if j ~= nil and j.ml ~= nil then\n        count = count + 1\n        for guid, entry in pairs(j.ml) do\n          memoryList[guid] = entry\n        end\n      end\n    end\n  end\n\n  if count > 0 then\n    broadcastFeedback(\"Added\", count, \"internal bag\", \"to existing memory\")\n  end\nend\n\nfunction createMemoryActionButtons()\n  self.clearButtons()\n\n  if next(memoryList) then\n    createButtonByName(\"Place\")\n    createButtonByName(\"Recall\")\n  end\n\n  if setupButton then\n    createButtonByName(\"Setup\")\n  end\nend\n\n-- Sends objects from bag/table to their saved position/rotation\nfunction buttonClick_place()\n  local data = self.getData()\n\n  -- get names of contained objects\n  local guidToName = {}\n  for _, bagObjData in ipairs(data.ContainedObjects or {}) do\n    guidToName[bagObjData[\"GUID\"]] = bagObjData[\"Nickname\"]\n  end\n\n  local updateGuids = {}\n  local placeCount = 0\n  local moveCount = 0\n  for guid, entry in pairs(memoryList) do\n    local obj = getObjectFromGUID(guid)\n    if obj ~= nil and (obj.getName() == guidToName[guid] or guidToName[guid] == nil) then\n      -- If obj is out on the table and has the same name (or there's no contained copy), move it\n      moveCount = moveCount + 1\n      obj.setPositionSmooth(entry.pos)\n      obj.setRotationSmooth(entry.rot)\n      obj.setLock(entry.lock)\n    elseif guidToName[guid] then\n      -- If obj is inside of the bag\n      placeCount = placeCount + 1\n      local item = self.takeObject({\n        guid = guid,\n        position = entry.pos,\n        rotation = entry.rot,\n        smooth = false\n      })\n      item.setLock(entry.lock)\n\n      if obj ~= nil then\n        updateGuids[guid] = item.getGUID()\n      end\n    end\n  end\n\n  -- update memoryList if we placed an item that got a new GUID\n  if next(updateGuids) then\n    for oldGuid, newGuid in pairs(updateGuids) do\n      memoryList[newGuid] = memoryList[oldGuid]\n      memoryList[oldGuid] = nil\n    end\n    updateSave()\n  end\n\n  if placeCount > 0 then\n    broadcastFeedback(_, placeCount, \"Object\", \"Placed\", { 1, 1, 1 })\n  end\n\n  if moveCount > 0 then\n    broadcastFeedback(_, moveCount, \"Object\", \"Moved\", { 1, 1, 1 })\n  end\n\n  if placeCount == 0 and moveCount == 0 then\n    broadcastToAll(\"Bag is empty and no matching objects were found in play\", { 1, 1, 1 })\n  end\nend\n\nfunction buttonClick_recall()\n  local count = 0\n  for guid, _ in pairs(memoryList) do\n    local obj = getObjectFromGUID(guid)\n    if obj ~= nil then\n      self.putObject(obj)\n      count = count + 1\n    end\n  end\n  broadcastFeedback(_, count, \"Object\", \"Recalled\", { 1, 1, 1 })\nend\n\nfunction removeAllHighlights()\n  for _, obj in ipairs(getObjects()) do\n    obj.highlightOff()\n  end\nend\n\n-- Round vector to the Nth decimal\nfunction roundVector(vec, dec)\n  local mult = 10 ^ (dec or 0)\n  local t = {}\n  for _, k in ipairs({ \"x\", \"y\", \"z\" }) do\n    t[k] = math.floor(vec[k] * mult + 0.5) / mult\n  end\n  return t\nend\nend)\n__bundle_register(\"__root\", function(require, _LOADED, __bundle_register, __bundle_modules)\nrequire(\"MemoryBag\")\nend)\nreturn __bundle_require(\"__root\")",
-  "LuaScriptState": "{\"ml\":{\"00de99\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":-23.1502},\"rot\":{\"x\":0,\"y\":270.0038,\"z\":0}},\"1af4c3\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":-31.1502},\"rot\":{\"x\":0,\"y\":270.0216,\"z\":0}},\"388210\":{\"lock\":false,\"pos\":{\"x\":-1.353,\"y\":1.5815,\"z\":-26.603},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"530ea8\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":16.8498},\"rot\":{\"x\":0,\"y\":270.0097,\"z\":0}},\"7c46b7\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":8.8498},\"rot\":{\"x\":0,\"y\":270.0297,\"z\":0}},\"830eb7\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":24.8498},\"rot\":{\"x\":0,\"y\":270.0056,\"z\":0}},\"8da10a\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":0.8498},\"rot\":{\"x\":0,\"y\":270.0264,\"z\":0}},\"ba0841\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":-7.1502},\"rot\":{\"x\":0,\"y\":270.0089,\"z\":0}},\"be7507\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.5815,\"z\":32.8498},\"rot\":{\"x\":0,\"y\":270.0125,\"z\":0}},\"c79a80\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":-15.1502},\"rot\":{\"x\":0,\"y\":270.0211,\"z\":0}},\"ecc8ed\":{\"lock\":false,\"pos\":{\"x\":6.102,\"y\":1.481,\"z\":53.366},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"f842c8\":{\"lock\":false,\"pos\":{\"x\":3.8229,\"y\":1.4815,\"z\":52.6843},\"rot\":{\"x\":0,\"y\":270.0007,\"z\":0}}},\"setupButton\":false}",
+  "LuaScriptState": "{\"ml\":{\"00de99\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":-23.1502},\"rot\":{\"x\":0,\"y\":270.0038,\"z\":0}},\"1af4c3\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":-31.1502},\"rot\":{\"x\":0,\"y\":270.0216,\"z\":0}},\"388210\":{\"lock\":false,\"pos\":{\"x\":-1.353,\"y\":1.5815,\"z\":-26.603},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"530ea8\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":16.8498},\"rot\":{\"x\":0,\"y\":270.0097,\"z\":0}},\"7c46b7\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":8.8498},\"rot\":{\"x\":0,\"y\":270.0297,\"z\":0}},\"830eb7\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":24.8498},\"rot\":{\"x\":0,\"y\":270.0056,\"z\":0}},\"8da10a\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":0.8498},\"rot\":{\"x\":0,\"y\":270.0264,\"z\":0}},\"9e9d86\":{\"lock\":false,\"pos\":{\"x\":6.121,\"y\":1.481,\"z\":54.475},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"ba0841\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":-7.1502},\"rot\":{\"x\":0,\"y\":270.0089,\"z\":0}},\"be7507\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.5815,\"z\":32.8498},\"rot\":{\"x\":0,\"y\":270.0125,\"z\":0}},\"c79a80\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":-15.1502},\"rot\":{\"x\":0,\"y\":270.0211,\"z\":0}},\"ecc8ed\":{\"lock\":false,\"pos\":{\"x\":6.102,\"y\":1.481,\"z\":53.366},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"f842c8\":{\"lock\":false,\"pos\":{\"x\":3.8229,\"y\":1.4815,\"z\":52.6843},\"rot\":{\"x\":0,\"y\":270.0007,\"z\":0}}},\"setupButton\":false}",
   "XmlUI": "",
   "ContainedObjects": [
     {
@@ -78,9 +78,9 @@
         "posX": 13.1644,
         "posY": 1.66188049,
         "posZ": -23.1502,
-        "rotX": 7.611011E-09,
+        "rotX": 1.01598925E-08,
         "rotY": 270.003845,
-        "rotZ": 5.666182E-08,
+        "rotZ": 5.15192369E-08,
         "scaleX": 5.510745,
         "scaleY": 0.360763043,
         "scaleZ": 8.266118
@@ -136,12 +136,12 @@
           "GUID": "34e12e",
           "Name": "Deck",
           "Transform": {
-            "posX": -2.94150162,
+            "posX": -2.94150066,
             "posY": 1.628001,
-            "posZ": -5.05050468,
-            "rotX": -9.430721E-08,
-            "rotY": 269.928558,
-            "rotZ": -1.09559117E-08,
+            "posZ": -5.05050135,
+            "rotX": 3.65984647E-08,
+            "rotY": 269.9286,
+            "rotZ": -5.892045E-08,
             "scaleX": 0.783099234,
             "scaleY": 1.0,
             "scaleZ": 0.783099234
@@ -546,12 +546,12 @@
           "GUID": "4461fb",
           "Name": "CardCustom",
           "Transform": {
-            "posX": -12.427289,
+            "posX": -12.4272966,
             "posY": 1.53360486,
-            "posZ": 10.6039085,
-            "rotX": 4.73384922E-08,
+            "posZ": 10.6039028,
+            "rotX": -8.96535646E-09,
             "rotY": 269.997,
-            "rotZ": 2.06434834E-08,
+            "rotZ": 1.32128388E-08,
             "scaleX": 1.0,
             "scaleY": 1.0,
             "scaleZ": 1.0
@@ -609,12 +609,12 @@
           "GUID": "453026",
           "Name": "CardCustom",
           "Transform": {
-            "posX": -3.715001,
+            "posX": -3.715,
             "posY": 1.59660506,
-            "posZ": -10.4000092,
-            "rotX": 6.728719E-08,
+            "posZ": -10.4000044,
+            "rotX": -3.658325E-08,
             "rotY": 269.9971,
-            "rotZ": 8.3948E-08,
+            "rotZ": 1.90676079E-08,
             "scaleX": 1.0,
             "scaleY": 1.0,
             "scaleZ": 1.0
@@ -670,12 +670,12 @@
           "GUID": "49feb8",
           "Name": "CardCustom",
           "Transform": {
-            "posX": -12.4272881,
+            "posX": -12.4272957,
             "posY": 1.53360486,
-            "posZ": 12.8914089,
-            "rotX": 5.72898564E-08,
+            "posZ": 12.8914032,
+            "rotX": 1.82814E-08,
             "rotY": 269.9969,
-            "rotZ": 7.79956153E-08,
+            "rotZ": -7.325077E-08,
             "scaleX": 1.0,
             "scaleY": 1.0,
             "scaleZ": 1.0
@@ -733,12 +733,12 @@
           "GUID": "4d2675",
           "Name": "CardCustom",
           "Transform": {
-            "posX": -4.26080227,
+            "posX": -4.26080036,
             "posY": 1.59660506,
-            "posZ": 13.78111,
-            "rotX": -2.22203322E-08,
-            "rotY": 269.996582,
-            "rotZ": -7.999773E-09,
+            "posZ": 13.7811031,
+            "rotX": 1.42426924E-08,
+            "rotY": 269.9966,
+            "rotZ": 3.20854845E-08,
             "scaleX": 1.0,
             "scaleY": 1.0,
             "scaleZ": 1.0
@@ -794,12 +794,12 @@
           "GUID": "69f3b1",
           "Name": "Deck",
           "Transform": {
-            "posX": -2.94150138,
+            "posX": -2.94150043,
             "posY": 1.61355889,
-            "posZ": 0.3639996,
-            "rotX": 1.534765E-08,
+            "posZ": 0.363999873,
+            "rotX": 5.985944E-08,
             "rotY": 269.9322,
-            "rotZ": -5.07836662E-09,
+            "rotZ": -2.84196915E-08,
             "scaleX": 0.783099234,
             "scaleY": 1.0,
             "scaleZ": 0.783099234
@@ -1048,12 +1048,12 @@
           "GUID": "98dd8e",
           "Name": "Deck",
           "Transform": {
-            "posX": -4.26080275,
+            "posX": -4.260801,
             "posY": 1.623187,
-            "posZ": 16.0686131,
-            "rotX": -2.16698851E-07,
-            "rotY": 269.996857,
-            "rotZ": -2.46529481E-07,
+            "posZ": 16.0686035,
+            "rotX": -5.59222038E-08,
+            "rotY": 269.9969,
+            "rotZ": 1.53665709E-07,
             "scaleX": 1.0,
             "scaleY": 1.0,
             "scaleZ": 1.0
@@ -1387,12 +1387,12 @@
           "GUID": "ad53e9",
           "Name": "Bag",
           "Transform": {
-            "posX": 2.4791007,
+            "posX": 2.47910047,
             "posY": 1.39796638,
-            "posZ": -6.982002,
-            "rotX": -3.00531468E-07,
+            "posZ": -6.9820013,
+            "rotX": 4.67682753E-07,
             "rotY": 270.017944,
-            "rotZ": 3.31851084E-06,
+            "rotZ": -1.97657323E-06,
             "scaleX": 1.0,
             "scaleY": 1.0,
             "scaleZ": 1.0
@@ -1408,7 +1408,7 @@
           "ColorDiffuse": {
             "r": 0.882353,
             "g": 0.0,
-            "b": 0.213207215
+            "b": 0.213207185
           },
           "LayoutGroupSortIndex": 0,
           "Value": 0,
@@ -2682,11 +2682,11 @@
           "Name": "Bag",
           "Transform": {
             "posX": 2.33140063,
-            "posY": 1.39796662,
+            "posY": 1.39796674,
             "posZ": 4.535401,
-            "rotX": -1.748129E-06,
-            "rotY": 270.0197,
-            "rotZ": -3.65090727E-07,
+            "rotX": 1.25300448E-06,
+            "rotY": 270.019745,
+            "rotZ": 1.46365039E-06,
             "scaleX": 1.0,
             "scaleY": 1.0,
             "scaleZ": 1.0
@@ -2700,7 +2700,7 @@
             "z": 0.0
           },
           "ColorDiffuse": {
-            "r": 0.241805762,
+            "r": 0.241805732,
             "g": 0.644018531,
             "b": 0.0
           },
@@ -4035,12 +4035,12 @@
           "GUID": "b99a11",
           "Name": "Custom_Model_Bag",
           "Transform": {
-            "posX": 1.69320226,
-            "posY": 1.55803645,
-            "posZ": 14.2413063,
-            "rotX": -8.975368E-07,
-            "rotY": 225.00177,
-            "rotZ": -6.774372E-08,
+            "posX": 1.69320071,
+            "posY": 1.55803657,
+            "posZ": 14.2413034,
+            "rotX": -2.86407726E-07,
+            "rotY": 225.001785,
+            "rotZ": 1.03844593E-06,
             "scaleX": 2.0,
             "scaleY": 2.0,
             "scaleZ": 2.0
@@ -4742,12 +4742,12 @@
           "GUID": "c8e73a",
           "Name": "Bag",
           "Transform": {
-            "posX": 2.38170147,
-            "posY": 1.39796662,
+            "posX": 2.38170171,
+            "posY": 1.39796686,
             "posZ": -3.07820082,
-            "rotX": 8.68041468E-07,
-            "rotY": 210.010834,
-            "rotZ": -7.65176935E-07,
+            "rotX": 6.592662E-07,
+            "rotY": 210.0108,
+            "rotZ": -2.4594874E-06,
             "scaleX": 1.0,
             "scaleY": 1.0,
             "scaleZ": 1.0
@@ -4762,7 +4762,7 @@
           },
           "ColorDiffuse": {
             "r": 0.6858303,
-            "g": 0.06013935,
+            "g": 0.06013932,
             "b": 0.6579182
           },
           "LayoutGroupSortIndex": 0,
@@ -6097,12 +6097,12 @@
           "GUID": "d766fa",
           "Name": "Deck",
           "Transform": {
-            "posX": -12.27039,
+            "posX": -12.2703962,
             "posY": 1.5698148,
-            "posZ": 7.67970467,
-            "rotX": -1.5972023E-07,
-            "rotY": 269.9971,
-            "rotZ": 1.29426212E-07,
+            "posZ": 7.67970133,
+            "rotX": -2.355347E-08,
+            "rotY": 269.99707,
+            "rotZ": 2.187625E-07,
             "scaleX": 1.0,
             "scaleY": 1.0,
             "scaleZ": 1.0
@@ -6585,10 +6585,10 @@
           "GUID": "f061ae",
           "Name": "Deck",
           "Transform": {
-            "posX": -3.85150146,
+            "posX": -3.85150051,
             "posY": 1.74835181,
-            "posZ": 5.72000456,
-            "rotX": 1.86791425E-07,
+            "posZ": 5.720001,
+            "rotX": -1.16886376E-07,
             "rotY": 269.9966,
             "rotZ": 180.0,
             "scaleX": 1.0,
@@ -18228,7 +18228,7 @@
         }
       },
       "LuaScript": "    \n    \n    \n    \nfunction onload(saved_data)\n    sheetLocked = self.script_state.sheetLocked or false\n    local inverseScale = {x=math.floor(100/self.getScale().x)/100, y=math.floor(100/self.getScale().z)/100}\n    scale = self.script_state.scale or inverseScale\n    flip = self.script_state.flip or \"False\"\n    fields = self.script_state.fields or {}\n    checks = self.script_state.checks or {}\n    decals = self.script_state.decals or {}\n    height = self.script_state.height or 0.5\n    locks = self.script_state.locks or {fields=false, checks=false, decals=false}\n    lookupInputIndexToInfo = {}\n    lookupButtonIndexToInfo = {}\n    lookupFieldIndices = {}\n    lookupCheckIndices = {}\n    lookupDecalIndices = {}\n    lookupSelectionButtonIndices = {}\n    lastFieldLockedMessage = 0\n    buttonIndex = 0\n    inputIndex = 0\n    dirtyUpdateWait = nil\n    if saved_data ~= \"\" then\n        local loadedData = JSON.decode(saved_data)\n        sheetLocked = loadedData.sheetLocked or false\n        flip = loadedData.flip  or \"False\"\n        height = loadedData.height or 0.5\n        fields = loadedData.fields or {}\n        checks = loadedData.checks or {}\n        decals = loadedData.decals or {}\n        scale = loadedData.scale or inverseScale\n        locks = loadedData.locks or {fields=false, checks=false, decals=false}\n    end\n    if (not getCommited()) then\n        self.addContextMenuItem(\"Edit Layout\", showEditPanel)\n        self.addContextMenuItem(\"Commit Layout\", showCommitPanel)\n        nudgeDistance = self.script_state.nudgeDistance or 0.1\n        page = 1\n        editingSheet = false\n        selectedId = 0\n        selectedArrayId = 1\n        selectedType = \"\"\n        selectedMax = 5\n        creating = false\n    else\n        makeContextMenuItems()\n    end\n    createAll()\nend\n\nfunction makeContextMenuItems()\n    self.clearContextMenu()\n    if (not sheetLocked) then\n        local getLocked = function(element)\n            if (locks[element]) then return \"◆ Lock\" else return \"◇ Lock\" end\n        end\n        local allLocked = \"Lock\"\n        if (locks.fields and locks.checks and locks.decals) then allLocked = \"Unlock\" end\n        if (#fields > 0 and #checks > 0 and #decals > 0) then\n            self.addContextMenuItem(allLocked..\" everything\", toggleAllLocks)\n        end\n        for k, v in pairs(fields) do\n            if (v.locked != \"True\") then\n                self.addContextMenuItem(getLocked(\"fields\")..\" texts\", toggleLockFields)\n                break\n            end\n        end\n        for k, v in pairs(checks) do\n            if (v.locked != \"True\") then\n                self.addContextMenuItem(getLocked(\"checks\")..\" checkboxes\", toggleLockChecks)\n                break\n            end\n        end\n        for k, v in pairs(decals) do\n            if (v.locked != \"True\") then\n                self.addContextMenuItem(getLocked(\"decals\")..\" images\", toggleLockDecals)\n                break\n            end\n        end\n    end\nend\n\nfunction toggleAllLocks(ply, pos, obj)\n    if (locks.fields and locks.checks and locks.decals) then\n        locks.fields = false\n        locks.checks = false\n        locks.decals = false\n        broadcastToColor(\"Unlocked everything\", ply)\n    else\n        locks.fields = true\n        locks.checks = true\n        locks.decals = true\n        broadcastToColor(\"Locked everything\", ply)\n    end\n    updateSave()\n    makeContextMenuItems()\n    refresh()\nend\n\nfunction toggleLockFields(ply, pos, obj)\n    if (locks.fields) then\n        locks.fields = false\n        broadcastToColor(\"Unlocked texts\", ply)\n    else\n        locks.fields = true\n        broadcastToColor(\"Locked texts\", ply)\n    end\n    updateSave()\n    makeContextMenuItems()\n    refresh()\nend\n\nfunction toggleLockChecks(ply, pos, obj)\n    if (locks.checks) then\n        locks.checks = false\n        broadcastToColor(\"Unlocked checkboxes\", ply)\n    else\n        locks.checks = true\n        broadcastToColor(\"Locked checkboxes\", ply)\n    end\n    updateSave()\n    makeContextMenuItems()\n    refresh()\nend\n\nfunction toggleLockDecals(ply, pos, obj)\n    if (locks.decals) then\n        locks.decals = false\n        broadcastToColor(\"Unlocked images\", ply)\n    else\n        locks.decals = true\n        broadcastToColor(\"Locked images\", ply)\n    end\n    updateSave()\n    makeContextMenuItems()\n    refresh()\nend\n\nfunction updateSave()\n    local data_to_save = {scale=scale, height=height, fields=fields, checks=checks, decals=decals, flip=flip, sheetLocked=sheetLocked, locks=locks}\n    if (not getCommited()) then\n        data_to_save.nudgeDistance=nudgeDistance\n    else\n        data_to_save.nudgeDistance=nil\n    end\n    saved_data = JSON.encode(data_to_save)\n    self.script_state = saved_data\nend\n\nfunction null() end\n\nfunction refresh()\n    if (not creating) then\n        self.clearInputs()\n        self.clearButtons()\n        inputIndex = 0\n        buttonIndex = 0\n        if (editingSheet) then\n            createSelectionHighlight()       \n        end\n        createAll()\n    end\nend\n\nfunction createAll()\n    lookupInputIndexToInfo = {}\n    lookupButtonIndexToInfo = {}\n    lookupFieldIndices = {}\n    lookupCheckIndices = {}\n    lookupDecalIndices = {}\n    startLuaCoroutine(self, \"createAllCoroutine\")    \nend\n\nfunction createAllCoroutine()\n    if (not getCommited()) then\n        UI.setAttribute(getPanelId(\"Loading\"), \"active\", \"True\")\n    end\n    coroutine.yield(0)\n    creating = true\n    for fieldID, field in pairs(fields) do\n        lookupFieldIndices[fieldID] = {\n            inputs={},\n            colTotals={},\n            rowTotals={},\n            counterButtons={},\n            selectionButtons={}\n        }\n        local posx = field.pos.x\n        local posy = field.pos.y\n        local func = \"edit\"\n        if (field.vsum == \"True\" or field.hsum == \"True\") then\n            func = 'MarumEditableRecalculateSum_'..fieldID\n            _G[func] = function(obj, ply, input_value, selected)\n                local fID = fieldID\n                edit(obj, ply, input_value, selected)\n                obj.call(\"recalculateSums\",fID)\n            end\n        else\n            local iIndex = inputIndex\n            if (field.locked == \"True\" or sheetLocked or locks.fields) then\n                func = 'MarumEditableRevert_'..fieldID\n                _G[func] = function(obj, ply, input_value, selected)\n                    local fID = fieldID\n                    local iID = iIndex\n                    local sel = selected\n                    obj.call(\"revertField\",{fID, ply, iID, sel})\n                end\n            end\n        end\n\n        local fieldScale = {x=scale.x,y=1,z=scale.y}\n        local rotation = {x=0,y=0,z=0}\n        local posMulx = 1\n        local flipped = 1\n        if (flip == \"True\") then\n            rotation.y = 180\n            flipped = -1\n        end\n        local upright = self.getTransformUp().y > 0\n        local shouldFlip = (field.locked == \"True\" or sheetLocked or locks.fields) and upright\n        local unlockedRotation = {x=rotation.x, y=rotation.y, z=rotation.z}\n        if (editingSheet or shouldFlip) then\n            rotation.z = 180\n            posMulx = -posMulx\n            fieldScale.x = -fieldScale.x\n        end\n        local vsum = 0\n        local hsums = {}\n        local fontSize = field.font\n        fontSize = math.min(field.size.y - 24, fontSize)\n        local color = getFieldTextColor(fieldID)\n        for x=1, field.array.x do\n            vsum = 0\n            for y=1, field.array.y do\n                local arrayID = x+(y-1)*field.array.x\n                local pos = getFieldPosition(fieldID, x, y)\n                self.createInput({\n                    value = field.value[arrayID],\n                    tooltip=getFieldTooltip(fieldID, arrayID),\n                    input_function = func,\n                    function_owner = self, \n                    alignment = field.align,\n                    position = pos, \n                    width = field.size.x, \n                    height = field.size.y, \n                    rotation=rotation,\n                    font_size = fontSize, \n                    scale=fieldScale,\n                    font_color=color,\n                    color = field.fieldColor,\n                    tab = 2\n                })\n                if (field.counter == \"True\") then\n                    local counterButtonWidth = fontSize*0.75\n                    _G['MarumEditableCounterIncrease_'..fieldID..'_'..arrayID] = function(obj, ply, alt)\n                        local fID = fieldID\n                        local aID = arrayID\n                        obj.call(\"increaseCounter\",{fID, aID, ply})\n                    end\n                    buttonIndex = buttonIndex+1\n                    lookupButtonIndexToInfo[buttonIndex] = {type=\"counter\", id=fieldID}\n                    table.insert(lookupFieldIndices[fieldID].counterButtons, {index=buttonIndex, x=x, y=y, side=1})\n                    self.createButton({\n                        click_function = 'MarumEditableCounterIncrease_'..fieldID..'_'..arrayID,\n                        tooltip=\"↑ Increase ↑\",\n                        function_owner = self,\n                        label=\"[b]+[/b]\",\n                        position={x=pos.x+(field.size.x + counterButtonWidth) / 1000 * fieldScale.x * posMulx * flipped, y=pos.y, z=pos.z},\n                        rotation=unlockedRotation,\n                        scale=fieldScale,\n                        width=counterButtonWidth,\n                        height=counterButtonWidth,\n                        font_size=fontSize/2,\n                        font_color= color,\n                        color = field.fieldColor,\n                    })\n\n                    _G['MarumEditableCounterDecrease_'..fieldID..'_'..arrayID] = function(obj, ply, alt)\n                        local fID = fieldID\n                        local aID = arrayID\n                        obj.call(\"decreaseCounter\",{fID, aID, ply})\n                    end\n                    buttonIndex = buttonIndex+1\n                    table.insert(lookupFieldIndices[fieldID].counterButtons, {index=buttonIndex, x=x, y=y, side=-1})\n                    self.createButton({\n                        click_function = 'MarumEditableCounterDecrease_'..fieldID..'_'..arrayID,\n                        tooltip=\"↓ Decrease ↓\",\n                        function_owner = self,\n                        label=\"[b]-[/b]\",\n                        position={x=pos.x-(field.size.x + counterButtonWidth) / 1000 * fieldScale.x * posMulx * flipped, y=pos.y, z=pos.z},\n                        unlockedRotation=rotation,\n                        scale=fieldScale,\n                        width=counterButtonWidth,\n                        height=counterButtonWidth,\n                        font_size=fontSize/2,\n                        font_color= color,\n                        color = field.fieldColor,\n                    })\n                end\n                inputIndex = inputIndex+1\n                lookupInputIndexToInfo[inputIndex] = {type=\"field\", id=fieldID, arrayID=arrayID}\n                table.insert(lookupFieldIndices[fieldID].inputs, {index=inputIndex, arrayID=arrayID, x=x, y=y})\n                if (field.vsum == \"True\") then\n                    if (tonumber(field.value[arrayID])) then\n                        vsum = vsum + tonumber(field.value[arrayID])\n                    end\n                end\n                if (field.hsum == \"True\") then\n                    if (tonumber(field.value[arrayID])) then\n                        if (hsums[x] == nil) then\n                            hsums[x] = tonumber(field.value[arrayID])\n                        else\n                            hsums[x] = hsums[x] + tonumber(field.value[arrayID])\n                        end\n                    end\n                end\n\n                if (x == 1 and field.hsum == \"True\") then\n                    local pos = getFieldPosition(fieldID, field.array.x + 1, y)\n                    local func = 'MarumEditableRevertSum_'..fieldID\n                    _G[func] = function(obj, ply, input_value, selected)\n                        obj.call(\"revertFieldSum\",{fieldID, ply, iIndex, selected})\n                    end\n                    self.createInput({\n                        value = \"[u]-[/u]\",\n                        tooltip=\"[Sum]\",\n                        input_function = func,\n                        function_owner = self, \n                        alignment = field.align,\n                        position = pos,\n                        width = field.size.x,\n                        height = field.size.y,\n                        rotation={x=unlockedRotation.x, y=unlockedRotation.y, z=unlockedRotation.z+180},\n                        font_size = fontSize, \n                        scale={x=-scale.x,y=1,z=scale.y},\n                        font_color= color,\n                        color = field.fieldColor,\n                        tab = 0\n                    })\n                    inputIndex = inputIndex+1\n                    table.insert(lookupFieldIndices[fieldID].rowTotals, {index=inputIndex, y=y})\n                end\n\n                if (inputIndex%10==0) then coroutine.yield(0) end\n            end\n\n            if (field.vsum == \"True\") then\n                local pos = getFieldPosition(fieldID, x, field.array.y+1)\n                local func = 'MarumEditableRevertSum_'..fieldID\n                _G[func] = function(obj, ply, input_value, selected)\n                    obj.call(\"revertFieldSum\",{fieldID, ply, iIndex, selected})\n                end\n                self.createInput({\n                    value = \"[u]\"..vsum..\"[/u]\",\n                    tooltip=\"[Sum]\",\n                    input_function = func,\n                    function_owner = self, \n                    alignment = field.align,\n                    position = pos,\n                    width = field.size.x,\n                    height = field.size.y,\n                    rotation={x=unlockedRotation.x, y=unlockedRotation.y, z=unlockedRotation.z+180},\n                    font_size = fontSize, \n                    scale={x=-scale.x,y=1,z=scale.y},\n                    font_color= color,\n                    color = field.fieldColor,\n                    tab = 0\n                })\n                inputIndex = inputIndex+1\n                table.insert(lookupFieldIndices[fieldID].colTotals, {index=inputIndex, x=x})\n            end\n        end\n\n        if (field.hsum == \"True\") then\n            Wait.frames(\n                function()\n                    recalculateSums(fieldID)\n                end,\n                10\n            )\n        end\n    end\n\n    createDecals()\n    for decalID, decal in pairs(decals) do\n        lookupDecalIndices[decalID] = {\n            inputs={},\n            selectionButtons={}\n        }\n        local rotationAdd = 180\n        local posMulx = 1\n        if (flip == \"True\") then\n            rotationAdd = 0\n        end\n        local pos = getDecalPosition(decalID)\n        if (decal.locked != \"True\" and not sheetLocked and not locks.decals and not editingSheet) then\n            local func = 'MarumEditableSetURL_'..decalID\n            _G[func] = function(obj, ply, alt)\n                obj.call(\"showImageURLPanel\",{decalID, ply})\n            end\n            local tooltip = getDecalTooltip(decalID)\n            self.createButton({\n                value = decal.url,\n                tooltip=tooltip,\n                click_function = func,\n                function_owner = self, \n                position = pos, \n                width = 490, \n                height = 490, \n                rotation={x=0,y=0,z=0},\n                font_size = 10,\n                scale={x=decal.scale.x*scale.x, y=decal.scale.y*scale.y, z=decal.scale.y*scale.y},\n                font_color= {r=0, g=0, b=0, a=0},\n                color = {r=0, g=0, b=0, a=0},\n            })\n            buttonIndex = buttonIndex+1\n            lookupButtonIndexToInfo[buttonIndex] = {type=\"decal\", id=decalID}\n            table.insert(lookupDecalIndices[decalID].inputs, {index=buttonIndex})\n        end\n\n        if (inputIndex%10==0) then coroutine.yield(0) end\n    end\n\n    for checkID, check in pairs(checks) do\n        lookupCheckIndices[checkID] = {\n            buttons={},\n            selectionButtons={}\n        }\n        local rotationZ = 0\n        local checkScale = {x=scale.x * check.size.x,y=1,z=scale.y * check.size.y}\n        local upright = self.getTransformUp().y > 0\n        local shouldFlip = (check.locked == \"True\" or sheetLocked or locks.checks) and upright\n        if (editingSheet or shouldFlip) then\n            checkScale.x = -checkScale.x\n            rotationZ = 180\n        end\n        for x=1, check.array.x do\n            for y=1, check.array.y do\n                local arrayID = x+(y-1)*check.array.x\n                local func = \"MarumEditableClickCheckbox_\"..checkID..\"_\"..arrayID\n                if (check.locked == \"True\" or sheetLocked or locks.checks) then\n                    func = \"null\"\n                end\n                local rotationY = 0\n                local posMul = 1\n                if (flip == \"True\") then\n                    rotationY = 180\n                    posMul = -posMul\n                end\n                local pos = getCheckPosition(checkID, x, y)\n                local bindex = buttonIndex\n                _G['MarumEditableClickCheckbox_'..checkID..'_'..arrayID] = function(obj, ply, alt)\n                    local fID = checkID\n                    local aID = arrayID\n                    local bi = bindex\n                    obj.call(\"clickcheck\",{fID, aID, alt, bi, ply})\n                end\n\n                local tooltip = getCheckTooltip(checkID)\n                local label, color, alphaCorrectedColor = getCheckLabelAndColor(checkID, arrayID)\n                buttonIndex = buttonIndex+1\n                lookupButtonIndexToInfo[buttonIndex] = {type=\"check\", id=checkID, arrayID=arrayID}\n                table.insert(lookupCheckIndices[checkID].buttons, {index=buttonIndex, x=x, y=y, arrayID=arrayID})\n                self.createButton({\n                    label = label,\n                    tooltip=tooltip,\n                    click_function = func,\n                    function_owner = self, \n                    alignment = 3,\n                    position = pos, \n                    width = 250, \n                    height = 250, \n                    rotation={x=0,y=rotationY,z=rotationZ},\n                    font_size = check.font,\n                    scale={x=checkScale.x, y=checkScale.y, z=checkScale.z},\n                    font_color=alphaCorrectedColor,\n                    color = check.checkColor,\n                    tab = 0\n                })\n\n                if (buttonIndex%10==0) then coroutine.yield(0) end\n            end\n        end\n    end\n    if (not getCommited() and editingSheet) then\n        createSelectionButtons()\n    end\n    creating = false\n    return 1\nend\n\nfunction revertField(args)\n    local fieldID = args[1]\n    local ply = args[2]\n    local index = args[3]\n    local selected = args[4]\n    if (not selected) then\n        Wait.frames(\n            function()\n                for k, v in pairs(lookupFieldIndices[fieldID].inputs) do\n                    self.editInput({index=v.index-1, value=fields[fieldID].value[v.arrayID]})\n                end\n            end,\n            1\n        )\n    else\n        if (lastFieldLockedMessage != fieldID) then\n            broadcastToColor(\"This text is locked\", ply, {r=1,g=0.5,b=0})\n            lastFieldLockedMessage = fieldID\n        end\n    end\nend\n\nfunction recalculateSums(fieldID)\n    local field = fields[fieldID]\n    if (field.vsum) then\n        for k, v in pairs(lookupFieldIndices[fieldID].colTotals) do\n            local vsum = 0\n            for y=1, field.array.y do\n                local arrayID = v.x+(y-1)*field.array.x\n                if (tonumber(field.value[arrayID])) then\n                    vsum = vsum + tonumber(field.value[arrayID])\n                end\n            end\n            self.editInput({index=v.index-1, value=\"[u]\"..vsum..\"[/u]\"})\n        end\n    end\n    if (field.hsum) then\n        for k, v in pairs(lookupFieldIndices[fieldID].rowTotals) do\n            local hsum = 0\n            for x=1, field.array.x do\n                local arrayID = x+(v.y-1)*field.array.x\n                if (tonumber(field.value[arrayID])) then\n                    hsum = hsum + tonumber(field.value[arrayID])\n                end\n            end\n            self.editInput({index=v.index-1, value=\"[u]\"..hsum..\"[/u]\"})\n        end\n    end\nend\nfunction revertFieldSum(args)\n    local fieldID = args[1]\n    local ply = args[2]\n    local index = args[3]\n    local selected = args[4]\n    if (not selected) then\n        Wait.frames(\n            function()\n                recalculateSums(fieldID)\n            end,\n            1\n        )\n    else\n        if (lastFieldLockedMessage != fieldID) then\n            broadcastToColor(\"This text is reserved for the total sum\", ply, {r=1,g=1,b=0})\n            lastFieldLockedMessage = fieldID\n        end\n    end\nend\n\nfunction createDecals()\n    local decalParameters = {}\n    for decalID, decal in pairs(decals) do\n        local rotationAdd = 180\n        if (flip == \"True\") then\n            rotationAdd = 0\n        end\n        local pos = getDecalPosition(decalID)\n        table.insert(decalParameters, {\n            url=decal.url,\n            name=\"Image #\"..decalID,\n            position={x=-pos.x, y=pos.y, z=pos.z},\n            rotation={x=90, y=rotationAdd+decal.rotation, z=0},\n            scale={x=decal.scale.x*scale.x, y=decal.scale.y*scale.y, z=1}\n        })\n    end\n    self.setDecals(decalParameters)\nend\n\nfunction getFieldPosition(fieldID, x, y)\n    local field = fields[fieldID]\n    local mul = 1\n    if (flip == \"True\") then mul = -1 end\n    return {x=(field.pos.x+(x-1)*field.distance.x) * scale.x * mul,y=height+0.002,z=(field.pos.y+(y-1)*field.distance.y) * scale.y * mul}\nend\nfunction getFieldTooltip(fieldID, arrayID)\n    local field = fields[fieldID]\n    local tooltip = \"\"\n    if (not field.locked) then\n        if (field.tooltip == nil or field.tooltip:find(\"name\")) then\n            tooltip = field.name or \"\"\n        elseif (field.tooltip:find(\"content\")) then\n            tooltip = field.value[arrayID]\n        end\n    end\n    return tooltip\nend\n\nfunction getCheckPosition(checkID, x, y) \n    local check = checks[checkID]\n    local mul = 1\n    if (flip == \"True\") then mul = -1 end\n    return {x=(check.pos.x+(x-1)*check.distance.x) * mul*scale.x,y=height+0.002,z=(check.pos.y+(y-1)*check.distance.y) * mul*scale.y}\nend\n\nfunction getDecalPosition(decalID)\n    local decal = decals[decalID]\n    local mul = 1\n    if (flip == \"True\") then mul = -1 end\n    return {x=decal.pos.x*mul*scale.x, y=height+0.005, z=decal.pos.y*mul*scale.y}\nend\nfunction getDecalTooltip(decalID)\n    local decal = decals[decalID]\n    local tooltip = \"\"\n    if (decal.tooltip == nil) then\n        tooltip = decal.name or \"\"\n    elseif (decal.tooltip:find(\"name\")) then\n        tooltip = decal.name or \"\"\n    elseif (decal.tooltip:find(\"hint\")) then\n        tooltip = \"Click to change image\"\n    end\n    return tooltip\nend\n\nfunction increaseCounter(args)\n    local fieldID = tonumber(args[1])\n    local arrayID = tonumber(args[2])\n    local ply = args[3]\n    local field = fields[fieldID]\n    if (field.value[arrayID] == nil or field.value[arrayID] == \"\") then\n        field.value[arrayID] = 0\n    end\n    if (tonumber(field.value[arrayID])) then\n        field.value[arrayID] = tonumber(field.value[arrayID])+1\n        updateFieldNameContentAndTooltip(fieldID)\n        if (field.vsum == \"True\") then\n            recalculateSums(fieldID)\n        end\n        updateSave()\n    else\n        broadcastToColor(\"Field does not contain a valid number\", ply)\n    end\nend\n\nfunction decreaseCounter(args)\n    local fieldID = tonumber(args[1])\n    local arrayID = tonumber(args[2])\n    local ply = args[3]\n    local field = fields[fieldID]\n    if (field.value[arrayID] == nil or field.value[arrayID] == \"\") then\n        field.value[arrayID] = 0\n    end\n    if (tonumber(field.value[arrayID])) then\n        field.value[arrayID] = tonumber(field.value[arrayID])-1\n        updateFieldNameContentAndTooltip(fieldID)\n        if (field.vsum == \"True\") then\n            recalculateSums(fieldID)\n        end\n        updateSave()\n    else\n        broadcastToColor(\"Field does not contain a valid number\", ply)\n    end\nend\n\nfunction scheduleUpdate()\n    if (dirtyUpdateWait != nil) then\n        Wait.stop(dirtyUpdateWait)\n    end\n    dirtyUpdateWait = Wait.time(\n        function()\n            for k, v in pairs(self.getInputs()) do\n                if (lookupInputIndexToInfo[k] != nil) then\n                    if (lookupInputIndexToInfo[k].type==\"field\") then\n                        local field = fields[lookupInputIndexToInfo[k].id]\n                        field.value[lookupInputIndexToInfo[k].arrayID] = v.value\n                        if (field.tooltip != nil) then\n                            if (field.tooltip:find(\"content\")) then\n                                self.editInput({index=k-1, tooltip=v.value})\n                            end\n                        end\n                    end\n                end\n            end\n        end, 1\n    )\nend\n\nfunction edit(obj, ply, value, selected)\n    for k, v in pairs(obj.getInputs()) do\n        if (lookupInputIndexToInfo[k] != nil) then\n            if (lookupInputIndexToInfo[k].type==\"field\") then\n                local field = fields[lookupInputIndexToInfo[k].id]\n                if (v.value != field.value[lookupInputIndexToInfo[k].arrayID]) then\n                    field.value[lookupInputIndexToInfo[k].arrayID] = v.value\n                    if (field.tooltip != nil) then\n                        if (field.tooltip:find(\"content\")) then\n                            scheduleUpdate()\n                        end\n                    end\n                    if (field.role != nil) then\n                        if (field.role:find(\"name\")) then\n                            self.setName(value)\n                        elseif  (field.role:find(\"description\")) then\n                            self.setDescription(value)\n                        end\n                    end\n                    updateSave()\n                    break\n                end\n            end\n        end\n    end\nend\n\nfunction editUrl(obj, ply, value, selected)\n    local shouldRefresh = false\n    local shouldUpdateSave = false\n    for k, v in pairs(obj.getInputs()) do\n        if (lookupInputIndexToInfo[k] != nil) then\n            if (lookupInputIndexToInfo[k].type==\"decal\") then\n                if (v.value != decals[lookupInputIndexToInfo[k].id].url) then\n                    decals[lookupInputIndexToInfo[k].id].url = v.value\n                    shouldRefresh = true\n                    shouldUpdateSave = true\n                    updateSave()\n                    createDecals()\n                    break\n                end\n            end\n        end\n    end\nend\n\nfunction clickcheck(args)\n    local checkID = tonumber(args[1])\n    local arrayID = tonumber(args[2])\n    local alt_click = args[3]\n    local buttonIndex = args[4]\n    local ply = args[5]\n    local check = checks[checkID]\n    local value = tonumber(check.value[arrayID])\n    if (value == nil) then value = 1 end\n    if (alt_click) then\n        if (value > 0) then\n            check.value[arrayID] = 0\n        else\n            check.value[arrayID] = 1\n        end\n    else\n        if (value == 1) then\n            check.value[arrayID] = 2\n        else\n            if (value == 2) then\n                check.value[arrayID] = 1\n            elseif (check.fillFromDisabled == \"True\") then\n                check.value[arrayID] = 2\n            else\n                broadcastToColor(\"This checkbox is disabled. You can enable/disable checkboxes with Right click.\", ply)\n            end\n        end\n    end\n\n    local label, color, alphaCorrectedColor = getCheckLabelAndColor(checkID, arrayID)\n    self.editButton({index=buttonIndex, label=label, font_color=alphaCorrectedColor})\n    updateSave()\nend\n\nfunction getFieldTextColor(fieldID)\n    local field = fields[fieldID]\n    local textAlpha = field.textColor.a\n    if (tonumber(field.fieldColor.a) > 0) then\n        textAlpha = tonumber(field.textColor.a)/tonumber(field.fieldColor.a)\n    else\n        textAlpha = tonumber(field.textColor.a)*100\n    end\n    return {r=field.textColor.r,g=field.textColor.g,b=field.textColor.b,a=textAlpha}\nend\n\nfunction getCheckTooltip(checkID)\n    local check=checks[checkID]\n    local tooltip = \"\"\n    if (not check.locked) then\n        if (check.tooltip == nil or check.tooltip:find(\"name\")) then\n            tooltip = check.name\n        elseif (check.tooltip:find(\"hint\")) then\n            tooltip = \"Left click to toggle, Right click to enable/disable\"\n        end\n    end\n    return tooltip\nend\n\nfunction getCheckLabelAndColor(checkID, arrayID)\n    local check = checks[checkID]\n    local label = check.characters.empty\n    if (check.value[arrayID] == 0) then\n        label = check.characters.disabled\n    elseif (check.value[arrayID] == 2) then\n        label = check.characters.filled\n    end\n\n    local color = nil\n    if (check.separateColors == \"True\") then\n        if (check.value[arrayID] == 0) then\n            color = check.textColorDisabled or check.textColor\n        elseif (check.value[arrayID] == 1) then\n            color = check.textColorOff or check.textColor\n        elseif (check.value[arrayID] == 2) then\n            color = check.textColorOn or check.textColor\n        else\n            color = check.textColorOff or check.textColor\n        end\n    else\n        color = check.textColorOn or check.textColor\n    end\n\n    local alpha = 1\n    local checkAlpha = math.max(1/255, check.checkColor.a)\n    if (tonumber(check.checkColor.a) > 0) then\n        alpha = tonumber(color.a)/tonumber(checkAlpha)\n    else\n        alpha = tonumber(color.a)*100\n    end \n    return label, color, {r=color.r, g=color.g, b=color.b, a=color.a*alpha}\nend\n\nfunction split (inputstr, sep)\n    if sep == nil then\n            sep = \"%s\"\n    end\n    local t={}\n    for str in string.gmatch(inputstr, \"([^\"..sep..\"]+)\") do\n            table.insert(t, str)\n    end\n    return t\nend\n\nfunction onRotate(spin, flip, player_color, old_spin, old_flip)\n    updateLockedFieldOrientation(flip < 90)\nend\nfunction onDrop(ply)\n    updateLockedFieldOrientation(self.getTransformUp().y >= 0)\nend\n\nfunction updateLockedFieldOrientation(upright)\n    for k, v in pairs(fields) do\n        if (v.locked == \"True\" or sheetLocked or locks.fields or v.vsum == \"True\") then\n            local field = v\n            local fieldScale = {x=scale.x,y=1,z=scale.y}\n            local rotation = {x=0,y=0,z=0}\n            if (flip == \"True\") then\n                rotation.y = 180\n            end\n            if (upright) then\n                rotation.z = 180\n                fieldScale.x = -scale.x\n            end\n            if (v.locked == \"True\" or sheetLocked or locks.fields) then\n                for arrayID, inp in pairs(lookupFieldIndices[k].inputs) do\n                    self.editInput({index=inp.index-1, rotation=rotation, scale=fieldScale})\n                end\n            end\n            for arrayID, inp in pairs(lookupFieldIndices[k].colTotals) do\n                self.editInput({index=inp.index-1, rotation=rotation, scale=fieldScale})\n            end\n            for arrayID, inp in pairs(lookupFieldIndices[k].rowTotals) do\n                self.editInput({index=inp.index-1, rotation=rotation, scale=fieldScale})\n            end\n        end\n    end\n    for k, v in pairs(checks) do\n        if (v.locked == \"True\" or sheetLocked or locks.fields) then\n            local check=v\n            local rotationZ = 0\n            local checkScale = {x=scale.x * check.size.x,y=1,z=scale.y * check.size.y}\n            if (upright) then\n                checkScale.x = -checkScale.x\n                rotationZ = 180\n            end\n            local rotationY = 0\n            if (flip == \"True\") then\n                rotationY = 180\n            end\n            for arrayID, inp in pairs(lookupCheckIndices[k].buttons) do\n                self.editButton({index=inp.index-1, rotation={x=0,y=rotationY,z=rotationZ}, scale=checkScale})\n            end\n        end\n    end\nend\n\nfunction showImageURLPanel(args)\n    local decalID = args[1]\n    local ply = args[2]\n    Player[ply].showInputDialog(\"Set image URL\",\n        function (text, player_color)\n            decals[decalID].url = text\n            createDecals()\n            updateSave()\n        end\n    )\nend\n\nfunction updateFieldNameContentAndTooltip(fieldID)\n    local field = fields[fieldID]\n    for k, v in pairs(lookupFieldIndices[fieldID].inputs) do\n        self.editInput({index=v.index-1, value=field.value[v.arrayID], tooltip=getFieldTooltip(fieldID, v.arrayID)})\n    end\n    local name = \"T\"..fieldID\n    local tooltip = \"Select \"..(field.name or name)\n    for k, v in pairs(lookupFieldIndices[fieldID].selectionButtons) do\n        self.editButton({index=v.index-1, tooltip = tooltip})\n    end\nend\n\nfunction getCommited()\n    return true\nend\n\n--",
-      "LuaScriptState": "{\"checks\":[],\"decals\":[],\"fields\":[{\"align\":3,\"array\":{\"x\":1,\"y\":1},\"distance\":{\"x\":1,\"y\":1},\"fieldColor\":{\"a\":1,\"b\":0.749004423618317,\"g\":0.749004423618317,\"r\":0.806620121002197},\"font\":\"100\",\"locked\":false,\"name\":\"\",\"pos\":{\"x\":-1.9,\"y\":2.9},\"role\":\"Normal Field\",\"size\":{\"x\":\"2000\",\"y\":\"2400\"},\"textColor\":{\"a\":1,\"b\":0,\"g\":0,\"r\":0},\"tooltip\":\"None\",\"value\":[\"Enter your campaign notes here...\"]},{\"align\":3,\"array\":{\"x\":1,\"y\":1},\"distance\":{\"x\":1,\"y\":1},\"fieldColor\":{\"a\":1,\"b\":0.749004423618317,\"g\":0.749004423618317,\"r\":0.806620121002197},\"font\":\"100\",\"locked\":false,\"name\":\"\",\"pos\":{\"x\":\"3.1\",\"y\":1.4},\"role\":\"Normal Field\",\"size\":{\"x\":\"1100\",\"y\":\"900\"},\"textColor\":{\"a\":1,\"b\":0,\"g\":0,\"r\":0},\"tooltip\":\"None\",\"value\":[\"\\nSkull x 2\\nCultist x 3\\nTablet x 0\\nElder Thing x 0\\n\\n(Blue) Elder sign x 1\\n(Red)Tentacle x 1\"]},{\"align\":3,\"array\":{\"x\":1,\"y\":1},\"distance\":{\"x\":1,\"y\":1},\"fieldColor\":{\"a\":1,\"b\":0.749004423618317,\"g\":0.749004423618317,\"r\":0.806620121002197},\"font\":\"100\",\"locked\":false,\"name\":\"\",\"pos\":{\"x\":3.2,\"y\":4},\"role\":\"Normal Field\",\"size\":{\"x\":\"1500\",\"y\":\"500\"},\"textColor\":{\"a\":1,\"b\":0,\"g\":0,\"r\":0},\"tooltip\":\"None\",\"value\":[\"Those who have fallen...\"]},{\"align\":3,\"array\":{\"x\":1,\"y\":1},\"distance\":{\"x\":1,\"y\":1},\"fieldColor\":{\"a\":1,\"b\":0.749004423618317,\"g\":0.749004423618317,\"r\":0.806620121002197},\"font\":\"600\",\"locked\":false,\"name\":\"\",\"pos\":{\"x\":2.4,\"y\":5.9},\"role\":\"Normal Field\",\"size\":{\"x\":\"600\",\"y\":\"550\"},\"textColor\":{\"a\":1,\"b\":0,\"g\":0,\"r\":0},\"tooltip\":\"None\",\"value\":[\"0\"],\"vsum\":\"False\"},{\"align\":3,\"array\":{\"x\":\"4\",\"y\":\"2\"},\"distance\":{\"x\":\"2.2\",\"y\":\"0.5\"},\"fieldColor\":{\"a\":1,\"b\":0.749004423618317,\"g\":0.749004423618317,\"r\":0.806620121002197},\"font\":\"100\",\"locked\":false,\"name\":\"\",\"pos\":{\"x\":-3.4,\"y\":-5.3},\"role\":\"Normal Field\",\"size\":{\"x\":\"900\",\"y\":\"180\"},\"textColor\":{\"a\":1,\"b\":0,\"g\":0,\"r\":0},\"tooltip\":\"None\",\"value\":[\"Player...\",\"Player...\",\"Player...\",\"Player...\",\"Investigator...\",\"Investigator...\",\"Investigator...\",\"Investigator...\"]},{\"align\":3,\"array\":{\"x\":\"8\",\"y\":\"1\"},\"distance\":{\"x\":\"1.1\",\"y\":\"1\"},\"fieldColor\":{\"a\":1,\"b\":0.749004423618317,\"g\":0.749004423618317,\"r\":0.806620121002197},\"font\":\"150\",\"locked\":false,\"name\":\"\",\"pos\":{\"x\":\"-3.9\",\"y\":-3.4},\"role\":\"Normal Field\",\"size\":{\"x\":\"150\",\"y\":\"150\"},\"textColor\":{\"a\":1,\"b\":0,\"g\":0,\"r\":0},\"tooltip\":\"None\",\"value\":[\"0\",\"0\",\"0\",\"0\",\"0\",\"0\",\"0\",\"0\"]},{\"align\":3,\"array\":{\"x\":\"4\",\"y\":1},\"distance\":{\"x\":\"2.25\",\"y\":\"1\"},\"fieldColor\":{\"a\":1,\"b\":0.749004423618317,\"g\":0.749004423618317,\"r\":0.806620121002197},\"font\":\"100\",\"locked\":false,\"name\":\"\",\"pos\":{\"x\":-3.48,\"y\":-1.8},\"role\":\"Normal Field\",\"size\":{\"x\":\"900\",\"y\":\"900\"},\"textColor\":{\"a\":1,\"b\":0,\"g\":0,\"r\":0},\"tooltip\":\"None\",\"value\":[\"Campaign cards...\",\"Campaign cards...\",\"Campaign cards...\",\"Campaign cards...\"]},{\"align\":3,\"array\":{\"x\":\"4\",\"y\":1},\"distance\":{\"x\":\"2.3\",\"y\":1},\"fieldColor\":{\"a\":1,\"b\":0.749004423618317,\"g\":0.749004423618317,\"r\":0.806620121002197},\"font\":150,\"locked\":false,\"name\":\"\",\"pos\":{\"x\":-3.5,\"y\":-4.2},\"role\":\"Normal Field\",\"size\":{\"x\":\"300\",\"y\":\"150\"},\"textColor\":{\"a\":1,\"b\":0,\"g\":0,\"r\":0},\"tooltip\":\"None\",\"value\":[\"0\",\"0\",\"0\",\"0\"]}],\"flip\":\"False\",\"height\":\"0.1\",\"locks\":{\"checks\":false,\"decals\":false,\"fields\":false},\"scale\":{\"x\":0.32,\"y\":0.32},\"sheetLocked\":false}",
+      "LuaScriptState": "{\"checks\":[],\"decals\":[],\"fields\":[{\"align\":3,\"array\":{\"x\":1,\"y\":1},\"distance\":{\"x\":1,\"y\":1},\"fieldColor\":{\"a\":1,\"b\":0.749004423618317,\"g\":0.749004423618317,\"r\":0.806620121002197},\"font\":\"100\",\"locked\":false,\"name\":\"\",\"pos\":{\"x\":-1.9,\"y\":2.9},\"role\":\"Normal Field\",\"size\":{\"x\":\"2000\",\"y\":\"2400\"},\"textColor\":{\"a\":1,\"b\":0,\"g\":0,\"r\":0},\"tooltip\":\"None\",\"value\":[\"Enter your campaign notes here...\"]},{\"align\":3,\"array\":{\"x\":1,\"y\":1},\"distance\":{\"x\":1,\"y\":1},\"fieldColor\":{\"a\":1,\"b\":0.749004423618317,\"g\":0.749004423618317,\"r\":0.806620121002197},\"font\":\"100\",\"locked\":false,\"name\":\"\",\"pos\":{\"x\":\"3.1\",\"y\":1.4},\"role\":\"Normal Field\",\"size\":{\"x\":\"1100\",\"y\":\"900\"},\"textColor\":{\"a\":1,\"b\":0,\"g\":0,\"r\":0},\"tooltip\":\"None\",\"value\":[\"\\nSkull x 2\\nCultist x 3\\nTablet x 0\\nElder Thing x 0\\n\\n(Blue) Elder Sign x 1\\n(Red)Tentacle x 1\"]},{\"align\":3,\"array\":{\"x\":1,\"y\":1},\"distance\":{\"x\":1,\"y\":1},\"fieldColor\":{\"a\":1,\"b\":0.749004423618317,\"g\":0.749004423618317,\"r\":0.806620121002197},\"font\":\"100\",\"locked\":false,\"name\":\"\",\"pos\":{\"x\":3.2,\"y\":4},\"role\":\"Normal Field\",\"size\":{\"x\":\"1500\",\"y\":\"500\"},\"textColor\":{\"a\":1,\"b\":0,\"g\":0,\"r\":0},\"tooltip\":\"None\",\"value\":[\"Those who have fallen...\"]},{\"align\":3,\"array\":{\"x\":1,\"y\":1},\"distance\":{\"x\":1,\"y\":1},\"fieldColor\":{\"a\":1,\"b\":0.749004423618317,\"g\":0.749004423618317,\"r\":0.806620121002197},\"font\":\"600\",\"locked\":false,\"name\":\"\",\"pos\":{\"x\":2.4,\"y\":5.9},\"role\":\"Normal Field\",\"size\":{\"x\":\"600\",\"y\":\"550\"},\"textColor\":{\"a\":1,\"b\":0,\"g\":0,\"r\":0},\"tooltip\":\"None\",\"value\":[\"0\"],\"vsum\":\"False\"},{\"align\":3,\"array\":{\"x\":\"4\",\"y\":\"2\"},\"distance\":{\"x\":\"2.2\",\"y\":\"0.5\"},\"fieldColor\":{\"a\":1,\"b\":0.749004423618317,\"g\":0.749004423618317,\"r\":0.806620121002197},\"font\":\"100\",\"locked\":false,\"name\":\"\",\"pos\":{\"x\":-3.4,\"y\":-5.3},\"role\":\"Normal Field\",\"size\":{\"x\":\"900\",\"y\":\"180\"},\"textColor\":{\"a\":1,\"b\":0,\"g\":0,\"r\":0},\"tooltip\":\"None\",\"value\":[\"Player...\",\"Player...\",\"Player...\",\"Player...\",\"Investigator...\",\"Investigator...\",\"Investigator...\",\"Investigator...\"]},{\"align\":3,\"array\":{\"x\":\"8\",\"y\":\"1\"},\"distance\":{\"x\":\"1.1\",\"y\":\"1\"},\"fieldColor\":{\"a\":1,\"b\":0.749004423618317,\"g\":0.749004423618317,\"r\":0.806620121002197},\"font\":\"150\",\"locked\":false,\"name\":\"\",\"pos\":{\"x\":\"-3.9\",\"y\":-3.4},\"role\":\"Normal Field\",\"size\":{\"x\":\"150\",\"y\":\"150\"},\"textColor\":{\"a\":1,\"b\":0,\"g\":0,\"r\":0},\"tooltip\":\"None\",\"value\":[\"0\",\"0\",\"0\",\"0\",\"0\",\"0\",\"0\",\"0\"]},{\"align\":3,\"array\":{\"x\":\"4\",\"y\":1},\"distance\":{\"x\":\"2.25\",\"y\":\"1\"},\"fieldColor\":{\"a\":1,\"b\":0.749004423618317,\"g\":0.749004423618317,\"r\":0.806620121002197},\"font\":\"100\",\"locked\":false,\"name\":\"\",\"pos\":{\"x\":-3.48,\"y\":-1.8},\"role\":\"Normal Field\",\"size\":{\"x\":\"900\",\"y\":\"900\"},\"textColor\":{\"a\":1,\"b\":0,\"g\":0,\"r\":0},\"tooltip\":\"None\",\"value\":[\"Campaign cards...\",\"Campaign cards...\",\"Campaign cards...\",\"Campaign cards...\"]},{\"align\":3,\"array\":{\"x\":\"4\",\"y\":1},\"distance\":{\"x\":\"2.3\",\"y\":1},\"fieldColor\":{\"a\":1,\"b\":0.749004423618317,\"g\":0.749004423618317,\"r\":0.806620121002197},\"font\":150,\"locked\":false,\"name\":\"\",\"pos\":{\"x\":-3.5,\"y\":-4.2},\"role\":\"Normal Field\",\"size\":{\"x\":\"300\",\"y\":\"150\"},\"textColor\":{\"a\":1,\"b\":0,\"g\":0,\"r\":0},\"tooltip\":\"None\",\"value\":[\"0\",\"0\",\"0\",\"0\"]}],\"flip\":\"False\",\"height\":\"0.1\",\"locks\":{\"checks\":false,\"decals\":false,\"fields\":false},\"scale\":{\"x\":0.32,\"y\":0.32},\"sheetLocked\":false}",
       "XmlUI": ""
     },
     {
@@ -18289,19 +18289,65 @@
         "Order": 0
       },
       "LuaScript": "-- Bundled by luabundle {\"version\":\"1.6.0\"}\nlocal __bundle_require, __bundle_loaded, __bundle_register, __bundle_modules = (function(superRequire)\n\tlocal loadingPlaceholder = {[{}] = true}\n\n\tlocal register\n\tlocal modules = {}\n\n\tlocal require\n\tlocal loaded = {}\n\n\tregister = function(name, body)\n\t\tif not modules[name] then\n\t\t\tmodules[name] = body\n\t\tend\n\tend\n\n\trequire = function(name)\n\t\tlocal loadedModule = loaded[name]\n\n\t\tif loadedModule then\n\t\t\tif loadedModule == loadingPlaceholder then\n\t\t\t\treturn nil\n\t\t\tend\n\t\telse\n\t\t\tif not modules[name] then\n\t\t\t\tif not superRequire then\n\t\t\t\t\tlocal identifier = type(name) == 'string' and '\\\"' .. name .. '\\\"' or tostring(name)\n\t\t\t\t\terror('Tried to require ' .. identifier .. ', but no such module has been registered')\n\t\t\t\telse\n\t\t\t\t\treturn superRequire(name)\n\t\t\t\tend\n\t\t\tend\n\n\t\t\tloaded[name] = loadingPlaceholder\n\t\t\tloadedModule = modules[name](require, loaded, register, modules)\n\t\t\tloaded[name] = loadedModule\n\t\tend\n\n\t\treturn loadedModule\n\tend\n\n\treturn require, loaded, register, modules\nend)(nil)\n__bundle_register(\"MemoryBag\", function(require, _LOADED, __bundle_register, __bundle_modules)\nfunction updateSave()\n  self.script_state = JSON.encode({ ml = memoryList, setupButton = setupButton })\nend\n\nfunction onLoad(savedData)\n  if savedData and savedData ~= \"\" then\n    local loadedData = JSON.decode(savedData)\n    memoryList = loadedData.ml\n    setupButton = loadedData.setupButton\n  end\n\n  memoryList = memoryList or {}\n  self.addContextMenuItem(\"Toggle setup button\", toggleSetupButton)\n\n  -- make sure the model is loaded so that we can use the bounds\n  Wait.condition(function()\n    Wait.frames(function()\n      generateButtonData()\n      createMemoryActionButtons()\n    end, 5)\n  end, function() return not self.loading_custom end)\nend\n\nfunction generateButtonData()\n  local selfScale = self.getScale()\n  local selfBounds = self.getBoundsNormalized()\n  buttonScale = Vector(1 / selfScale.x, 1, 1 / selfScale.z)\n\n  buttonX = math.max(selfBounds.size.x / 5, 1.5) / selfScale.x\n  buttonY = -(selfBounds.size.y / 2 + selfBounds.offset.y) / selfScale.y + 0.5\n  buttonZ = {}\n  for i = 1, 4 do\n    buttonZ[i] = (selfBounds.size.z / 2 + i * 1.15 - 0.15) / selfScale.z\n  end\n\n  local upperButtonMult = 1.1\n  buttonData = {\n    [\"Add\"]       = {\n      tooltip = \"Add highlighted objects to memory\",\n      pos = { buttonX * upperButtonMult, buttonY, -buttonZ[1] },\n      fColor = { 0.25, 1, 0.25 }\n    },\n    [\"Cancel\"]    = {\n      tooltip = \"Abort setup mode\",\n      pos = { -buttonX * upperButtonMult, buttonY, -buttonZ[1] },\n    },\n    [\"Internal\"]    = {\n      tooltip = \"Copy memory from internal bags\",\n      pos = { -buttonX * upperButtonMult, buttonY, -buttonZ[4] },\n    },\n    [\"Place\"]     = {\n      pos = { buttonX, buttonY, buttonZ[1] },\n      fSize = 350,\n      w = 1200\n    },\n    [\"Recall\"]    = {\n      pos = { -buttonX, buttonY, buttonZ[1] },\n      fSize = 350,\n      w = 1200\n    },\n    [\"Remove\"]    = {\n      tooltip = \"Remove highlighted objects from memory\",\n      pos = { buttonX * upperButtonMult, buttonY, -buttonZ[2] },\n      fColor = { 1, 0.25, 0.25 }\n    },\n    [\"Reset\"]     = {\n      tooltip = \"Completely reset memory\",\n      pos = { -buttonX * upperButtonMult, buttonY, -buttonZ[3] },\n    },\n    [\"Selection\"] = {\n      tooltip = \"Add / Remove highlight for selected objects\",\n      pos = { -buttonX * upperButtonMult, buttonY, -buttonZ[2] },\n    },\n    [\"Setup\"]     = {\n      pos = { 0, buttonY, -buttonZ[1] },\n      fSize = 350\n    },\n    [\"Update\"]   = {\n      tooltip = \"Update memory for placed objects\",\n      pos = { buttonX * upperButtonMult, buttonY, -buttonZ[3] },\n      fColor = { 0.75, 0.75, 1 }\n    }\n  }\nend\n\nfunction createButtonByName(label)\n  self.createButton({\n    label = label,\n    tooltip = buttonData[label].tooltip or \"\",\n    position = buttonData[label].pos,\n    height = buttonData[label].h or 500,\n    width = buttonData[label].w or 1500,\n    font_size = buttonData[label].fSize or 325,\n    font_color = buttonData[label].fColor or { 1, 1, 1 },\n    function_owner = self,\n    color = { 0, 0, 0 },\n    scale = buttonScale,\n    click_function = \"buttonClick_\" .. string.lower(string.gsub(label, \"%s+\", \"\"))\n  })\nend\n\n-- context menu function to toggle the setup button visibility\nfunction toggleSetupButton()\n  if setupButton then\n    setupButton = false\n    broadcastToAll(\"Setup button disabled\")\n  else\n    setupButton = true\n    broadcastToAll(\"Setup button enabled\")\n  end\n  updateSave()\n  removeAllHighlights()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_setup()\n  tempList = {}\n  self.clearButtons()\n  createButtonsOnAllObjects()\n  createSetupActionButtons()\nend\n\nfunction broadcastFeedback(str1, count, name, str2, color)\n  local bcStr = count .. \" \" .. name\n  if str1 then\n    bcStr = str1 .. \" \" .. bcStr\n  end\n  if count ~= 1 then\n    bcStr = bcStr .. \"s\"\n  end\n  if str2 then\n    bcStr = bcStr .. \" \" .. str2\n  end\n  broadcastToAll(bcStr, color)\nend\n\nfunction createButtonsOnAllObjects()\n  buttonIndexMap = {}\n\n  local buttonCount = 0\n  for _, obj in ipairs(getObjects()) do\n    if obj ~= self and obj.type ~= \"Scripting\" and obj.type ~= \"Hand\" then\n      local objPos = obj.getPosition()\n      local objBounds = obj.getBounds()\n      local offSet = Vector(0, objBounds.size.y / 2 + 1, 0)\n      local scaleVec = Vector(-1, 1, 1)\n      local buttonPos = self.positionToLocal(objPos + offSet):scale(scaleVec)\n\n      local fName = \"selectButton_\" .. buttonCount\n      _G[fName] = function() buttonClick_selectObject(obj) end\n      self.createButton({\n        click_function = fName,\n        function_owner = self,\n        position = buttonPos,\n        height = 600,\n        width = 600,\n        color = { 0.75, 0.25, 0.25, 0.75 },\n        scale = buttonScale\n      })\n      buttonIndexMap[obj.getGUID()] = buttonCount\n      buttonCount = buttonCount + 1\n    end\n  end\nend\n\nfunction createSetupActionButtons()\n  createButtonByName(\"Cancel\")\n  createButtonByName(\"Selection\")\n  createButtonByName(\"Reset\")\n  createButtonByName(\"Internal\")\n  createButtonByName(\"Add\")\n\n  if next(memoryList) then\n    createButtonByName(\"Remove\")\n    createButtonByName(\"Update\")\n  end\nend\n\nfunction buttonClick_selectObject(obj)\n  local guid = obj.getGUID()\n  local index = buttonIndexMap[guid]\n  if not index then return end\n\n  if tempList[guid] == nil then\n    self.editButton({ index = index, color = { 0, 1, 0, 0.75 } })\n    tempList[guid] = {\n      pos = roundVector(obj.getPosition(), 3),\n      rot = roundVector(obj.getRotation(), 0),\n      lock = obj.getLock()\n    }\n    obj.highlightOn({ 0, 1, 0 })\n  else\n    self.editButton({ index = index, color = { 0.75, 0.25, 0.25, 0.75 } })\n    tempList[guid] = nil\n    obj.highlightOff()\n  end\nend\n\nfunction buttonClick_cancel()\n  broadcastToAll(\"Setup Canceled\")\n  removeAllHighlights()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_selection(_, playerColor)\n  local objList = Player[playerColor].getSelectedObjects()\n\n  if #objList == 0 then\n    broadcastToAll(\"No objects selected!\")\n  else\n    broadcastFeedback(\"Toggled selection for\", #objList, \"object\")\n    for _, obj in ipairs(objList) do\n      buttonClick_selectObject(obj)\n    end\n  end\nend\n\nfunction buttonClick_add()\n  local count = 0\n  for _ in pairs(tempList) do\n    count = count + 1\n  end\n  broadcastFeedback(\"Added\", count, \"Object\", \"from selection\")\n\n  -- copy data from tempList to memoryList\n  for guid, entry in pairs(tempList) do\n    memoryList[guid] = entry\n  end\n\n  updateSave()\n  removeAllHighlights()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_update()\n  local count = 0\n  for guid, entry in pairs(memoryList) do\n    local obj = getObjectFromGUID(guid)\n    if obj ~= nil then\n      count = count + 1\n      memoryList[guid] = {\n        pos = roundVector(obj.getPosition(), 3),\n        rot = roundVector(obj.getRotation(), 0),\n        lock = obj.getLock()\n      }\n    end\n  end\n  broadcastFeedback(\"Updated data for\", count, \"Object\")\n  updateSave()\nend\n\nfunction buttonClick_remove()\n  local count = 0\n  for guid in pairs(tempList) do\n    count = count + 1\n    memoryList[guid] = nil\n  end\n  broadcastFeedback(_, count, \"Object\", \"Removed\", { 1, 1, 1 })\n\n  updateSave()\n  removeAllHighlights()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_setNew()\n  local count = 0\n  for _, obj in ipairs(getObjects()) do\n    if memoryList[obj.guid] then\n      count = count + 1\n      memoryList[obj.guid].pos = roundVector(obj.getPosition(), 3)\n      memoryList[obj.guid].rot = roundVector(obj.getRotation(), 0)\n      memoryList[obj.guid].lock = obj.getLock()\n    end\n  end\n  broadcastFeedback(\"Updated Data for\", count, \"Object\", _, { 1, 1, 1 })\n  updateSave()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_reset()\n  memoryList = {}\n  updateSave()\n  removeAllHighlights()\n  broadcastToAll(\"Tool Reset\", { 1, 1, 1 })\n  self.clearButtons()\n\n  if setupButton then\n    createButtonByName(\"Setup\")\n  end\nend\n\nfunction buttonClick_internal()\n  local count = 0\n  for _, bagObj in ipairs(self.getObjects()) do\n    local data = bagObj.lua_script_state\n    if data ~= nil then\n      local j = JSON.decode(data)\n      if j ~= nil and j.ml ~= nil then\n        count = count + 1\n        for guid, entry in pairs(j.ml) do\n          memoryList[guid] = entry\n        end\n      end\n    end\n  end\n\n  if count > 0 then\n    broadcastFeedback(\"Added\", count, \"internal bag\", \"to existing memory\")\n  end\nend\n\nfunction createMemoryActionButtons()\n  self.clearButtons()\n\n  if next(memoryList) then\n    createButtonByName(\"Place\")\n    createButtonByName(\"Recall\")\n  end\n\n  if setupButton then\n    createButtonByName(\"Setup\")\n  end\nend\n\n-- Sends objects from bag/table to their saved position/rotation\nfunction buttonClick_place()\n  local data = self.getData()\n\n  -- get names of contained objects\n  local guidToName = {}\n  for _, bagObjData in ipairs(data.ContainedObjects or {}) do\n    guidToName[bagObjData[\"GUID\"]] = bagObjData[\"Nickname\"]\n  end\n\n  local updateGuids = {}\n  local placeCount = 0\n  local moveCount = 0\n  for guid, entry in pairs(memoryList) do\n    local obj = getObjectFromGUID(guid)\n    if obj ~= nil and (obj.getName() == guidToName[guid] or guidToName[guid] == nil) then\n      -- If obj is out on the table and has the same name (or there's no contained copy), move it\n      moveCount = moveCount + 1\n      obj.setPositionSmooth(entry.pos)\n      obj.setRotationSmooth(entry.rot)\n      obj.setLock(entry.lock)\n    elseif guidToName[guid] then\n      -- If obj is inside of the bag\n      placeCount = placeCount + 1\n      local item = self.takeObject({\n        guid = guid,\n        position = entry.pos,\n        rotation = entry.rot,\n        smooth = false\n      })\n      item.setLock(entry.lock)\n\n      if obj ~= nil then\n        updateGuids[guid] = item.getGUID()\n      end\n    end\n  end\n\n  -- update memoryList if we placed an item that got a new GUID\n  if next(updateGuids) then\n    for oldGuid, newGuid in pairs(updateGuids) do\n      memoryList[newGuid] = memoryList[oldGuid]\n      memoryList[oldGuid] = nil\n    end\n    updateSave()\n  end\n\n  if placeCount > 0 then\n    broadcastFeedback(_, placeCount, \"Object\", \"Placed\", { 1, 1, 1 })\n  end\n\n  if moveCount > 0 then\n    broadcastFeedback(_, moveCount, \"Object\", \"Moved\", { 1, 1, 1 })\n  end\n\n  if placeCount == 0 and moveCount == 0 then\n    broadcastToAll(\"Bag is empty and no matching objects were found in play\", { 1, 1, 1 })\n  end\nend\n\nfunction buttonClick_recall()\n  local count = 0\n  for guid, _ in pairs(memoryList) do\n    local obj = getObjectFromGUID(guid)\n    if obj ~= nil then\n      self.putObject(obj)\n      count = count + 1\n    end\n  end\n  broadcastFeedback(_, count, \"Object\", \"Recalled\", { 1, 1, 1 })\nend\n\nfunction removeAllHighlights()\n  for _, obj in ipairs(getObjects()) do\n    obj.highlightOff()\n  end\nend\n\n-- Round vector to the Nth decimal\nfunction roundVector(vec, dec)\n  local mult = 10 ^ (dec or 0)\n  local t = {}\n  for _, k in ipairs({ \"x\", \"y\", \"z\" }) do\n    t[k] = math.floor(vec[k] * mult + 0.5) / mult\n  end\n  return t\nend\nend)\n__bundle_register(\"__root\", function(require, _LOADED, __bundle_register, __bundle_modules)\nrequire(\"MemoryBag\")\nend)\nreturn __bundle_require(\"__root\")",
-      "LuaScriptState": "{\"ml\":{\"140546\":{\"lock\":false,\"pos\":{\"x\":1.6932,\"y\":1.558,\"z\":14.2413},\"rot\":{\"x\":0,\"y\":225.0015,\"z\":0}},\"245dd1\":{\"lock\":false,\"pos\":{\"x\":-30.24,\"y\":1.5336,\"z\":7.65},\"rot\":{\"x\":0,\"y\":269.9966,\"z\":180}},\"7923e2\":{\"lock\":false,\"pos\":{\"x\":-3.8515,\"y\":1.7002,\"z\":5.72},\"rot\":{\"x\":0,\"y\":269.8896,\"z\":180}},\"7e97a3\":{\"lock\":false,\"pos\":{\"x\":-30.24,\"y\":1.5336,\"z\":0},\"rot\":{\"x\":0,\"y\":269.9966,\"z\":180}},\"9428a6\":{\"lock\":false,\"pos\":{\"x\":-2.9415,\"y\":1.6136,\"z\":-5.0505},\"rot\":{\"x\":0,\"y\":269.9966,\"z\":0}},\"9d89fa\":{\"lock\":false,\"pos\":{\"x\":-30.24,\"y\":1.5336,\"z\":-7.65},\"rot\":{\"x\":0,\"y\":269.9967,\"z\":180}},\"a23c49\":{\"lock\":false,\"pos\":{\"x\":-3.7324,\"y\":1.583,\"z\":-14.6489},\"rot\":{\"x\":0,\"y\":269.9977,\"z\":0}},\"a2f932\":{\"lock\":true,\"pos\":{\"x\":-27.94,\"y\":3.5,\"z\":0},\"rot\":{\"x\":0,\"y\":0,\"z\":0}},\"c3c063\":{\"lock\":false,\"pos\":{\"x\":-23.64,\"y\":1.5336,\"z\":0},\"rot\":{\"x\":0,\"y\":269.9966,\"z\":180}},\"d5363d\":{\"lock\":false,\"pos\":{\"x\":-6.1432,\"y\":1.5966,\"z\":16.2218},\"rot\":{\"x\":0,\"y\":269.9971,\"z\":180}},\"ef8f0c\":{\"lock\":false,\"pos\":{\"x\":-6.1449,\"y\":1.6376,\"z\":13.6909},\"rot\":{\"x\":0,\"y\":269.9966,\"z\":180}},\"f48684\":{\"lock\":false,\"pos\":{\"x\":-3.715,\"y\":1.5966,\"z\":-10.4},\"rot\":{\"x\":0,\"y\":269.9779,\"z\":0}},\"f78297\":{\"lock\":false,\"pos\":{\"x\":-2.9415,\"y\":1.6136,\"z\":0.364},\"rot\":{\"x\":0,\"y\":269.9523,\"z\":0}}}}",
+      "LuaScriptState": "{\"ml\":{\"140546\":{\"lock\":false,\"pos\":{\"x\":1.6932,\"y\":1.558,\"z\":14.2413},\"rot\":{\"x\":0,\"y\":225.0015,\"z\":0}},\"245dd1\":{\"lock\":false,\"pos\":{\"x\":-30.24,\"y\":1.5336,\"z\":7.65},\"rot\":{\"x\":0,\"y\":269.9966,\"z\":180}},\"3fd763\":{\"lock\":false,\"pos\":{\"x\":-2.942,\"y\":1.614,\"z\":0.364},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"7923e2\":{\"lock\":false,\"pos\":{\"x\":-3.8515,\"y\":1.7002,\"z\":5.72},\"rot\":{\"x\":0,\"y\":269.8896,\"z\":180}},\"7e97a3\":{\"lock\":false,\"pos\":{\"x\":-30.24,\"y\":1.5336,\"z\":0},\"rot\":{\"x\":0,\"y\":269.9966,\"z\":180}},\"9428a6\":{\"lock\":false,\"pos\":{\"x\":-2.9415,\"y\":1.6136,\"z\":-5.0505},\"rot\":{\"x\":0,\"y\":269.9966,\"z\":0}},\"9d89fa\":{\"lock\":false,\"pos\":{\"x\":-30.24,\"y\":1.5336,\"z\":-7.65},\"rot\":{\"x\":0,\"y\":269.9967,\"z\":180}},\"a23c49\":{\"lock\":false,\"pos\":{\"x\":-3.7324,\"y\":1.583,\"z\":-14.6489},\"rot\":{\"x\":0,\"y\":269.9977,\"z\":0}},\"a2f932\":{\"lock\":true,\"pos\":{\"x\":-27.94,\"y\":3.5,\"z\":0},\"rot\":{\"x\":0,\"y\":0,\"z\":0}},\"c3c063\":{\"lock\":false,\"pos\":{\"x\":-23.64,\"y\":1.5336,\"z\":0},\"rot\":{\"x\":0,\"y\":269.9966,\"z\":180}},\"d5363d\":{\"lock\":false,\"pos\":{\"x\":-6.1432,\"y\":1.5966,\"z\":16.2218},\"rot\":{\"x\":0,\"y\":269.9971,\"z\":180}},\"ef8f0c\":{\"lock\":false,\"pos\":{\"x\":-6.1449,\"y\":1.6376,\"z\":13.6909},\"rot\":{\"x\":0,\"y\":269.9966,\"z\":180}},\"f48684\":{\"lock\":false,\"pos\":{\"x\":-3.715,\"y\":1.5966,\"z\":-10.4},\"rot\":{\"x\":0,\"y\":269.9779,\"z\":0}},\"f78297\":{\"lock\":false,\"pos\":{\"x\":-2.9415,\"y\":1.6136,\"z\":0.364},\"rot\":{\"x\":0,\"y\":269.9523,\"z\":0}}},\"setupButton\":false}",
       "XmlUI": "",
       "ContainedObjects": [
+        {
+          "GUID": "a2f932",
+          "Name": "ScriptingTrigger",
+          "Transform": {
+            "posX": -27.94,
+            "posY": 3.5,
+            "posZ": 0.0,
+            "rotX": 0.0,
+            "rotY": 0.0,
+            "rotZ": 0.0,
+            "scaleX": 37.0,
+            "scaleY": 4.0,
+            "scaleZ": 37.0
+          },
+          "Nickname": "PlayAreaZone",
+          "Description": "",
+          "GMNotes": "",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 1.0,
+            "g": 1.0,
+            "b": 1.0,
+            "a": 0.509803951
+          },
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": true,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": false,
+          "Hands": false,
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
         {
           "GUID": "140546",
           "Name": "Custom_Model_Bag",
           "Transform": {
-            "posX": 1.69320166,
-            "posY": 1.5580368,
-            "posZ": 14.2413073,
-            "rotX": 1.33115543E-06,
+            "posX": 1.69320118,
+            "posY": 1.55803633,
+            "posZ": 14.2413034,
+            "rotX": 5.873103E-06,
             "rotY": 225.00148,
-            "rotZ": -1.41351688E-06,
+            "rotZ": 3.53433762E-07,
             "scaleX": 2.0,
             "scaleY": 2.0,
             "scaleZ": 2.0
@@ -18435,9 +18481,9 @@
           "Transform": {
             "posX": -30.24,
             "posY": 1.53360486,
-            "posZ": 7.65000772,
-            "rotX": -3.95328641E-08,
-            "rotY": 269.9967,
+            "posZ": 7.65000248,
+            "rotX": -3.39519168E-08,
+            "rotY": 269.996643,
             "rotZ": 180.0,
             "scaleX": 1.0,
             "scaleY": 1.0,
@@ -18495,11 +18541,11 @@
           "GUID": "7923e2",
           "Name": "Deck",
           "Transform": {
-            "posX": -3.851503,
+            "posX": -3.85150075,
             "posY": 1.70021164,
-            "posZ": 5.72000551,
-            "rotX": -1.42485035E-07,
-            "rotY": 269.889618,
+            "posZ": 5.720001,
+            "rotX": -9.856878E-08,
+            "rotY": 269.8896,
             "rotZ": 180.0,
             "scaleX": 1.0,
             "scaleY": 1.0,
@@ -19889,11 +19935,11 @@
           "GUID": "7e97a3",
           "Name": "CardCustom",
           "Transform": {
-            "posX": -30.2400017,
+            "posX": -30.24,
             "posY": 1.53360486,
-            "posZ": 5.21418031E-07,
-            "rotX": -3.23352438E-08,
-            "rotY": 269.9967,
+            "posZ": 2.99424059E-08,
+            "rotX": 2.232916E-08,
+            "rotY": 269.996643,
             "rotZ": 180.0,
             "scaleX": 1.0,
             "scaleY": 1.0,
@@ -19951,12 +19997,12 @@
           "GUID": "9428a6",
           "Name": "Deck",
           "Transform": {
-            "posX": -2.94150186,
+            "posX": -2.94150043,
             "posY": 1.61355889,
-            "posZ": -5.05050564,
-            "rotX": -2.16650822E-08,
+            "posZ": -5.05050135,
+            "rotX": 3.27054082E-08,
             "rotY": 269.9966,
-            "rotZ": 2.45232314E-08,
+            "rotZ": 3.47475564E-12,
             "scaleX": 0.783099234,
             "scaleY": 1.0,
             "scaleZ": 0.783099234
@@ -20150,8 +20196,8 @@
           "Transform": {
             "posX": -30.24,
             "posY": 1.53360486,
-            "posZ": -7.65000772,
-            "rotX": -1.93536884E-08,
+            "posZ": -7.650002,
+            "rotX": -2.70127849E-08,
             "rotY": 269.996674,
             "rotZ": 180.0,
             "scaleX": 1.0,
@@ -20213,9 +20259,9 @@
             "posX": -3.73240042,
             "posY": 1.58300042,
             "posZ": -14.6489038,
-            "rotX": -2.88945312E-08,
+            "rotX": 1.14065148E-08,
             "rotY": 269.997681,
-            "rotZ": -3.533116E-09,
+            "rotZ": -1.00707735E-08,
             "scaleX": 2.2,
             "scaleY": 1.0,
             "scaleZ": 2.2
@@ -20315,8 +20361,8 @@
           "Transform": {
             "posX": -23.64,
             "posY": 1.53360486,
-            "posZ": -1.45424281E-07,
-            "rotX": -4.27413926E-09,
+            "posZ": 4.22837232E-08,
+            "rotX": -9.015553E-09,
             "rotY": 269.9966,
             "rotZ": 180.0,
             "scaleX": 1.0,
@@ -20375,11 +20421,11 @@
           "GUID": "d5363d",
           "Name": "CardCustom",
           "Transform": {
-            "posX": -6.14320469,
+            "posX": -6.14320135,
             "posY": 1.59660506,
-            "posZ": 16.221817,
-            "rotX": 1.128693E-09,
-            "rotY": 269.997131,
+            "posZ": 16.2218037,
+            "rotX": -1.45726382E-08,
+            "rotY": 269.9971,
             "rotZ": 180.0,
             "scaleX": 1.0,
             "scaleY": 1.0,
@@ -20436,10 +20482,10 @@
           "GUID": "ef8f0c",
           "Name": "Deck",
           "Transform": {
-            "posX": -6.144904,
+            "posX": -6.144901,
             "posY": 1.637629,
-            "posZ": 13.6909132,
-            "rotX": -8.9493174E-10,
+            "posZ": 13.6909037,
+            "rotX": -1.206607E-07,
             "rotY": 269.9966,
             "rotZ": 180.0,
             "scaleX": 1.0,
@@ -20934,12 +20980,12 @@
           "GUID": "f48684",
           "Name": "CardCustom",
           "Transform": {
-            "posX": -3.715001,
+            "posX": -3.71499968,
             "posY": 1.59660506,
-            "posZ": -10.4000139,
-            "rotX": 2.93497742E-08,
-            "rotY": 269.977844,
-            "rotZ": -3.52940255E-08,
+            "posZ": -10.4000044,
+            "rotX": 4.28984173E-08,
+            "rotY": 269.9779,
+            "rotZ": -2.306298E-09,
             "scaleX": 1.0,
             "scaleY": 1.0,
             "scaleZ": 1.0
@@ -20992,18 +21038,18 @@
           "XmlUI": ""
         },
         {
-          "GUID": "f78297",
+          "GUID": "3fd763",
           "Name": "Deck",
           "Transform": {
-            "posX": -2.94150186,
+            "posX": -2.94200039,
             "posY": 1.61355889,
-            "posZ": 0.3639998,
-            "rotX": 9.682701E-09,
-            "rotY": 269.952271,
-            "rotZ": -4.28882743E-08,
-            "scaleX": 0.783099234,
+            "posZ": 0.364000052,
+            "rotX": -2.38540321E-09,
+            "rotY": 270.0,
+            "rotZ": -1.36923006E-08,
+            "scaleX": 0.7822733,
             "scaleY": 1.0,
-            "scaleZ": 0.783099234
+            "scaleZ": 0.7822733
           },
           "Nickname": "",
           "Description": "",
@@ -21018,9 +21064,6 @@
             "g": 0.713235259,
             "b": 0.713235259
           },
-          "Tags": [
-            "ScenarioCard"
-          ],
           "LayoutGroupSortIndex": 0,
           "Value": 0,
           "Locked": false,
@@ -21037,12 +21080,12 @@
           "Hands": false,
           "SidewaysCard": false,
           "DeckIDs": [
-            270800,
+            299800,
             270900
           ],
           "CustomDeck": {
-            "2708": {
-              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/16872500229963082143/4BB05F426A1E4899B924D0DFE9F0EBFBB46A1FF3/",
+            "2998": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/16495762032960598340/8F5350E5C905E90B52BD049830AC628771F96A15/",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/10887038449035735662/6A7FD5FEB5DA4B0FBAD0C99502C2EDB4C3A60DC5/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -21065,18 +21108,18 @@
           "XmlUI": "",
           "ContainedObjects": [
             {
-              "GUID": "242502",
+              "GUID": "d85826",
               "Name": "CardCustom",
               "Transform": {
-                "posX": -0.174699932,
-                "posY": 1.49501324,
-                "posZ": 90.49269,
-                "rotX": 0.00127277873,
-                "rotY": 179.956558,
-                "rotZ": -0.0009568835,
-                "scaleX": 1.0,
+                "posX": -2.94150233,
+                "posY": 1.59659791,
+                "posZ": 0.364000142,
+                "rotX": 9.99561E-05,
+                "rotY": 270.0,
+                "rotZ": -0.000316573,
+                "scaleX": 0.7822733,
                 "scaleY": 1.0,
-                "scaleZ": 1.0
+                "scaleZ": 0.7822733
               },
               "Nickname": "Man vs Nature",
               "Description": "",
@@ -21091,9 +21134,6 @@
                 "g": 0.713235259,
                 "b": 0.713235259
               },
-              "Tags": [
-                "ScenarioCard"
-              ],
               "LayoutGroupSortIndex": 0,
               "Value": 0,
               "Locked": false,
@@ -21108,11 +21148,11 @@
               "GridProjection": false,
               "HideWhenFaceDown": true,
               "Hands": true,
-              "CardID": 270800,
+              "CardID": 299800,
               "SidewaysCard": false,
               "CustomDeck": {
-                "2708": {
-                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/16872500229963082143/4BB05F426A1E4899B924D0DFE9F0EBFBB46A1FF3/",
+                "2998": {
+                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/16495762032960598340/8F5350E5C905E90B52BD049830AC628771F96A15/",
                   "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/10887038449035735662/6A7FD5FEB5DA4B0FBAD0C99502C2EDB4C3A60DC5/",
                   "NumWidth": 1,
                   "NumHeight": 1,
@@ -21129,15 +21169,15 @@
               "GUID": "32d4ea",
               "Name": "CardCustom",
               "Transform": {
-                "posX": 0.22534056,
-                "posY": 1.52846134,
-                "posZ": 90.67527,
-                "rotX": 0.004267786,
-                "rotY": 179.911148,
-                "rotZ": 0.00223102374,
-                "scaleX": 1.0,
+                "posX": -2.94150019,
+                "posY": 1.64084709,
+                "posZ": 0.363999844,
+                "rotX": 0.0007688643,
+                "rotY": 270.0,
+                "rotZ": -0.00245257118,
+                "scaleX": 0.783099234,
                 "scaleY": 1.0,
-                "scaleZ": 1.0
+                "scaleZ": 0.783099234
               },
               "Nickname": "Ancient Oak",
               "Description": "",
@@ -26583,18 +26623,18 @@
         "Order": 0
       },
       "LuaScript": "-- Bundled by luabundle {\"version\":\"1.6.0\"}\nlocal __bundle_require, __bundle_loaded, __bundle_register, __bundle_modules = (function(superRequire)\n\tlocal loadingPlaceholder = {[{}] = true}\n\n\tlocal register\n\tlocal modules = {}\n\n\tlocal require\n\tlocal loaded = {}\n\n\tregister = function(name, body)\n\t\tif not modules[name] then\n\t\t\tmodules[name] = body\n\t\tend\n\tend\n\n\trequire = function(name)\n\t\tlocal loadedModule = loaded[name]\n\n\t\tif loadedModule then\n\t\t\tif loadedModule == loadingPlaceholder then\n\t\t\t\treturn nil\n\t\t\tend\n\t\telse\n\t\t\tif not modules[name] then\n\t\t\t\tif not superRequire then\n\t\t\t\t\tlocal identifier = type(name) == 'string' and '\\\"' .. name .. '\\\"' or tostring(name)\n\t\t\t\t\terror('Tried to require ' .. identifier .. ', but no such module has been registered')\n\t\t\t\telse\n\t\t\t\t\treturn superRequire(name)\n\t\t\t\tend\n\t\t\tend\n\n\t\t\tloaded[name] = loadingPlaceholder\n\t\t\tloadedModule = modules[name](require, loaded, register, modules)\n\t\t\tloaded[name] = loadedModule\n\t\tend\n\n\t\treturn loadedModule\n\tend\n\n\treturn require, loaded, register, modules\nend)(nil)\n__bundle_register(\"MemoryBag\", function(require, _LOADED, __bundle_register, __bundle_modules)\nfunction updateSave()\n  self.script_state = JSON.encode({ ml = memoryList, setupButton = setupButton })\nend\n\nfunction onLoad(savedData)\n  if savedData and savedData ~= \"\" then\n    local loadedData = JSON.decode(savedData)\n    memoryList = loadedData.ml\n    setupButton = loadedData.setupButton\n  end\n\n  memoryList = memoryList or {}\n  self.addContextMenuItem(\"Toggle setup button\", toggleSetupButton)\n\n  -- make sure the model is loaded so that we can use the bounds\n  Wait.condition(function()\n    Wait.frames(function()\n      generateButtonData()\n      createMemoryActionButtons()\n    end, 5)\n  end, function() return not self.loading_custom end)\nend\n\nfunction generateButtonData()\n  local selfScale = self.getScale()\n  local selfBounds = self.getBoundsNormalized()\n  buttonScale = Vector(1 / selfScale.x, 1, 1 / selfScale.z)\n\n  buttonX = math.max(selfBounds.size.x / 5, 1.5) / selfScale.x\n  buttonY = -(selfBounds.size.y / 2 + selfBounds.offset.y) / selfScale.y + 0.5\n  buttonZ = {}\n  for i = 1, 4 do\n    buttonZ[i] = (selfBounds.size.z / 2 + i * 1.15 - 0.15) / selfScale.z\n  end\n\n  local upperButtonMult = 1.1\n  buttonData = {\n    [\"Add\"]       = {\n      tooltip = \"Add highlighted objects to memory\",\n      pos = { buttonX * upperButtonMult, buttonY, -buttonZ[1] },\n      fColor = { 0.25, 1, 0.25 }\n    },\n    [\"Cancel\"]    = {\n      tooltip = \"Abort setup mode\",\n      pos = { -buttonX * upperButtonMult, buttonY, -buttonZ[1] },\n    },\n    [\"Internal\"]    = {\n      tooltip = \"Copy memory from internal bags\",\n      pos = { -buttonX * upperButtonMult, buttonY, -buttonZ[4] },\n    },\n    [\"Place\"]     = {\n      pos = { buttonX, buttonY, buttonZ[1] },\n      fSize = 350,\n      w = 1200\n    },\n    [\"Recall\"]    = {\n      pos = { -buttonX, buttonY, buttonZ[1] },\n      fSize = 350,\n      w = 1200\n    },\n    [\"Remove\"]    = {\n      tooltip = \"Remove highlighted objects from memory\",\n      pos = { buttonX * upperButtonMult, buttonY, -buttonZ[2] },\n      fColor = { 1, 0.25, 0.25 }\n    },\n    [\"Reset\"]     = {\n      tooltip = \"Completely reset memory\",\n      pos = { -buttonX * upperButtonMult, buttonY, -buttonZ[3] },\n    },\n    [\"Selection\"] = {\n      tooltip = \"Add / Remove highlight for selected objects\",\n      pos = { -buttonX * upperButtonMult, buttonY, -buttonZ[2] },\n    },\n    [\"Setup\"]     = {\n      pos = { 0, buttonY, -buttonZ[1] },\n      fSize = 350\n    },\n    [\"Update\"]   = {\n      tooltip = \"Update memory for placed objects\",\n      pos = { buttonX * upperButtonMult, buttonY, -buttonZ[3] },\n      fColor = { 0.75, 0.75, 1 }\n    }\n  }\nend\n\nfunction createButtonByName(label)\n  self.createButton({\n    label = label,\n    tooltip = buttonData[label].tooltip or \"\",\n    position = buttonData[label].pos,\n    height = buttonData[label].h or 500,\n    width = buttonData[label].w or 1500,\n    font_size = buttonData[label].fSize or 325,\n    font_color = buttonData[label].fColor or { 1, 1, 1 },\n    function_owner = self,\n    color = { 0, 0, 0 },\n    scale = buttonScale,\n    click_function = \"buttonClick_\" .. string.lower(string.gsub(label, \"%s+\", \"\"))\n  })\nend\n\n-- context menu function to toggle the setup button visibility\nfunction toggleSetupButton()\n  if setupButton then\n    setupButton = false\n    broadcastToAll(\"Setup button disabled\")\n  else\n    setupButton = true\n    broadcastToAll(\"Setup button enabled\")\n  end\n  updateSave()\n  removeAllHighlights()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_setup()\n  tempList = {}\n  self.clearButtons()\n  createButtonsOnAllObjects()\n  createSetupActionButtons()\nend\n\nfunction broadcastFeedback(str1, count, name, str2, color)\n  local bcStr = count .. \" \" .. name\n  if str1 then\n    bcStr = str1 .. \" \" .. bcStr\n  end\n  if count ~= 1 then\n    bcStr = bcStr .. \"s\"\n  end\n  if str2 then\n    bcStr = bcStr .. \" \" .. str2\n  end\n  broadcastToAll(bcStr, color)\nend\n\nfunction createButtonsOnAllObjects()\n  buttonIndexMap = {}\n\n  local buttonCount = 0\n  for _, obj in ipairs(getObjects()) do\n    if obj ~= self and obj.type ~= \"Scripting\" and obj.type ~= \"Hand\" then\n      local objPos = obj.getPosition()\n      local objBounds = obj.getBounds()\n      local offSet = Vector(0, objBounds.size.y / 2 + 1, 0)\n      local scaleVec = Vector(-1, 1, 1)\n      local buttonPos = self.positionToLocal(objPos + offSet):scale(scaleVec)\n\n      local fName = \"selectButton_\" .. buttonCount\n      _G[fName] = function() buttonClick_selectObject(obj) end\n      self.createButton({\n        click_function = fName,\n        function_owner = self,\n        position = buttonPos,\n        height = 600,\n        width = 600,\n        color = { 0.75, 0.25, 0.25, 0.75 },\n        scale = buttonScale\n      })\n      buttonIndexMap[obj.getGUID()] = buttonCount\n      buttonCount = buttonCount + 1\n    end\n  end\nend\n\nfunction createSetupActionButtons()\n  createButtonByName(\"Cancel\")\n  createButtonByName(\"Selection\")\n  createButtonByName(\"Reset\")\n  createButtonByName(\"Internal\")\n  createButtonByName(\"Add\")\n\n  if next(memoryList) then\n    createButtonByName(\"Remove\")\n    createButtonByName(\"Update\")\n  end\nend\n\nfunction buttonClick_selectObject(obj)\n  local guid = obj.getGUID()\n  local index = buttonIndexMap[guid]\n  if not index then return end\n\n  if tempList[guid] == nil then\n    self.editButton({ index = index, color = { 0, 1, 0, 0.75 } })\n    tempList[guid] = {\n      pos = roundVector(obj.getPosition(), 3),\n      rot = roundVector(obj.getRotation(), 0),\n      lock = obj.getLock()\n    }\n    obj.highlightOn({ 0, 1, 0 })\n  else\n    self.editButton({ index = index, color = { 0.75, 0.25, 0.25, 0.75 } })\n    tempList[guid] = nil\n    obj.highlightOff()\n  end\nend\n\nfunction buttonClick_cancel()\n  broadcastToAll(\"Setup Canceled\")\n  removeAllHighlights()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_selection(_, playerColor)\n  local objList = Player[playerColor].getSelectedObjects()\n\n  if #objList == 0 then\n    broadcastToAll(\"No objects selected!\")\n  else\n    broadcastFeedback(\"Toggled selection for\", #objList, \"object\")\n    for _, obj in ipairs(objList) do\n      buttonClick_selectObject(obj)\n    end\n  end\nend\n\nfunction buttonClick_add()\n  local count = 0\n  for _ in pairs(tempList) do\n    count = count + 1\n  end\n  broadcastFeedback(\"Added\", count, \"Object\", \"from selection\")\n\n  -- copy data from tempList to memoryList\n  for guid, entry in pairs(tempList) do\n    memoryList[guid] = entry\n  end\n\n  updateSave()\n  removeAllHighlights()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_update()\n  local count = 0\n  for guid, entry in pairs(memoryList) do\n    local obj = getObjectFromGUID(guid)\n    if obj ~= nil then\n      count = count + 1\n      memoryList[guid] = {\n        pos = roundVector(obj.getPosition(), 3),\n        rot = roundVector(obj.getRotation(), 0),\n        lock = obj.getLock()\n      }\n    end\n  end\n  broadcastFeedback(\"Updated data for\", count, \"Object\")\n  updateSave()\nend\n\nfunction buttonClick_remove()\n  local count = 0\n  for guid in pairs(tempList) do\n    count = count + 1\n    memoryList[guid] = nil\n  end\n  broadcastFeedback(_, count, \"Object\", \"Removed\", { 1, 1, 1 })\n\n  updateSave()\n  removeAllHighlights()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_setNew()\n  local count = 0\n  for _, obj in ipairs(getObjects()) do\n    if memoryList[obj.guid] then\n      count = count + 1\n      memoryList[obj.guid].pos = roundVector(obj.getPosition(), 3)\n      memoryList[obj.guid].rot = roundVector(obj.getRotation(), 0)\n      memoryList[obj.guid].lock = obj.getLock()\n    end\n  end\n  broadcastFeedback(\"Updated Data for\", count, \"Object\", _, { 1, 1, 1 })\n  updateSave()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_reset()\n  memoryList = {}\n  updateSave()\n  removeAllHighlights()\n  broadcastToAll(\"Tool Reset\", { 1, 1, 1 })\n  self.clearButtons()\n\n  if setupButton then\n    createButtonByName(\"Setup\")\n  end\nend\n\nfunction buttonClick_internal()\n  local count = 0\n  for _, bagObj in ipairs(self.getObjects()) do\n    local data = bagObj.lua_script_state\n    if data ~= nil then\n      local j = JSON.decode(data)\n      if j ~= nil and j.ml ~= nil then\n        count = count + 1\n        for guid, entry in pairs(j.ml) do\n          memoryList[guid] = entry\n        end\n      end\n    end\n  end\n\n  if count > 0 then\n    broadcastFeedback(\"Added\", count, \"internal bag\", \"to existing memory\")\n  end\nend\n\nfunction createMemoryActionButtons()\n  self.clearButtons()\n\n  if next(memoryList) then\n    createButtonByName(\"Place\")\n    createButtonByName(\"Recall\")\n  end\n\n  if setupButton then\n    createButtonByName(\"Setup\")\n  end\nend\n\n-- Sends objects from bag/table to their saved position/rotation\nfunction buttonClick_place()\n  local data = self.getData()\n\n  -- get names of contained objects\n  local guidToName = {}\n  for _, bagObjData in ipairs(data.ContainedObjects or {}) do\n    guidToName[bagObjData[\"GUID\"]] = bagObjData[\"Nickname\"]\n  end\n\n  local updateGuids = {}\n  local placeCount = 0\n  local moveCount = 0\n  for guid, entry in pairs(memoryList) do\n    local obj = getObjectFromGUID(guid)\n    if obj ~= nil and (obj.getName() == guidToName[guid] or guidToName[guid] == nil) then\n      -- If obj is out on the table and has the same name (or there's no contained copy), move it\n      moveCount = moveCount + 1\n      obj.setPositionSmooth(entry.pos)\n      obj.setRotationSmooth(entry.rot)\n      obj.setLock(entry.lock)\n    elseif guidToName[guid] then\n      -- If obj is inside of the bag\n      placeCount = placeCount + 1\n      local item = self.takeObject({\n        guid = guid,\n        position = entry.pos,\n        rotation = entry.rot,\n        smooth = false\n      })\n      item.setLock(entry.lock)\n\n      if obj ~= nil then\n        updateGuids[guid] = item.getGUID()\n      end\n    end\n  end\n\n  -- update memoryList if we placed an item that got a new GUID\n  if next(updateGuids) then\n    for oldGuid, newGuid in pairs(updateGuids) do\n      memoryList[newGuid] = memoryList[oldGuid]\n      memoryList[oldGuid] = nil\n    end\n    updateSave()\n  end\n\n  if placeCount > 0 then\n    broadcastFeedback(_, placeCount, \"Object\", \"Placed\", { 1, 1, 1 })\n  end\n\n  if moveCount > 0 then\n    broadcastFeedback(_, moveCount, \"Object\", \"Moved\", { 1, 1, 1 })\n  end\n\n  if placeCount == 0 and moveCount == 0 then\n    broadcastToAll(\"Bag is empty and no matching objects were found in play\", { 1, 1, 1 })\n  end\nend\n\nfunction buttonClick_recall()\n  local count = 0\n  for guid, _ in pairs(memoryList) do\n    local obj = getObjectFromGUID(guid)\n    if obj ~= nil then\n      self.putObject(obj)\n      count = count + 1\n    end\n  end\n  broadcastFeedback(_, count, \"Object\", \"Recalled\", { 1, 1, 1 })\nend\n\nfunction removeAllHighlights()\n  for _, obj in ipairs(getObjects()) do\n    obj.highlightOff()\n  end\nend\n\n-- Round vector to the Nth decimal\nfunction roundVector(vec, dec)\n  local mult = 10 ^ (dec or 0)\n  local t = {}\n  for _, k in ipairs({ \"x\", \"y\", \"z\" }) do\n    t[k] = math.floor(vec[k] * mult + 0.5) / mult\n  end\n  return t\nend\nend)\n__bundle_register(\"__root\", function(require, _LOADED, __bundle_register, __bundle_modules)\nrequire(\"MemoryBag\")\nend)\nreturn __bundle_require(\"__root\")",
-      "LuaScriptState": "{\"ml\":{\"0ccc70\":{\"lock\":false,\"pos\":{\"x\":-3.8515,\"y\":1.705,\"z\":5.72},\"rot\":{\"x\":0,\"y\":269.9064,\"z\":180}},\"2b10c2\":{\"lock\":false,\"pos\":{\"x\":-13.0943,\"y\":1.335,\"z\":10.9325},\"rot\":{\"x\":0,\"y\":-0.0003,\"z\":0}},\"3dbb13\":{\"lock\":false,\"pos\":{\"x\":-3.715,\"y\":1.5966,\"z\":-10.4001},\"rot\":{\"x\":0,\"y\":269.9965,\"z\":0}},\"48dc47\":{\"lock\":false,\"pos\":{\"x\":-17.0399,\"y\":1.5336,\"z\":-7.65},\"rot\":{\"x\":0,\"y\":269.9969,\"z\":180}},\"65a229\":{\"lock\":false,\"pos\":{\"x\":-23.64,\"y\":1.5336,\"z\":0},\"rot\":{\"x\":0,\"y\":269.9966,\"z\":180}},\"8057ec\":{\"lock\":false,\"pos\":{\"x\":-30.24,\"y\":1.5336,\"z\":0},\"rot\":{\"x\":0,\"y\":269.9966,\"z\":180}},\"9913b1\":{\"lock\":false,\"pos\":{\"x\":-36.84,\"y\":1.565,\"z\":0},\"rot\":{\"x\":0,\"y\":269.9971,\"z\":180}},\"9aa0b3\":{\"lock\":false,\"pos\":{\"x\":-3.8534,\"y\":1.583,\"z\":-14.9982},\"rot\":{\"x\":0,\"y\":269.9977,\"z\":0}},\"a35b39\":{\"lock\":false,\"pos\":{\"x\":-2.9415,\"y\":1.6232,\"z\":0.364},\"rot\":{\"x\":0,\"y\":269.9966,\"z\":0}},\"e82671\":{\"lock\":false,\"pos\":{\"x\":1.693,\"y\":1.558,\"z\":14.2414},\"rot\":{\"x\":0,\"y\":225.0008,\"z\":0}},\"ebbcf2\":{\"lock\":false,\"pos\":{\"x\":-2.9415,\"y\":1.6184,\"z\":-5.0505},\"rot\":{\"x\":0,\"y\":269.9953,\"z\":0}},\"fafe5d\":{\"lock\":false,\"pos\":{\"x\":-17.0399,\"y\":1.5336,\"z\":0},\"rot\":{\"x\":0,\"y\":269.9966,\"z\":180}}}}",
+      "LuaScriptState": "{\"ml\":{\"0ccc70\":{\"lock\":false,\"pos\":{\"x\":-3.8515,\"y\":1.705,\"z\":5.72},\"rot\":{\"x\":0,\"y\":269.9064,\"z\":180}},\"2b10c2\":{\"lock\":false,\"pos\":{\"x\":-13.0943,\"y\":1.335,\"z\":10.9325},\"rot\":{\"x\":0,\"y\":-0.0003,\"z\":0}},\"3c6744\":{\"lock\":false,\"pos\":{\"x\":-2.942,\"y\":1.623,\"z\":0.364},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"3dbb13\":{\"lock\":false,\"pos\":{\"x\":-3.715,\"y\":1.5966,\"z\":-10.4001},\"rot\":{\"x\":0,\"y\":269.9965,\"z\":0}},\"48dc47\":{\"lock\":false,\"pos\":{\"x\":-17.0399,\"y\":1.5336,\"z\":-7.65},\"rot\":{\"x\":0,\"y\":269.9969,\"z\":180}},\"65a229\":{\"lock\":false,\"pos\":{\"x\":-23.64,\"y\":1.5336,\"z\":0},\"rot\":{\"x\":0,\"y\":269.9966,\"z\":180}},\"8057ec\":{\"lock\":false,\"pos\":{\"x\":-30.24,\"y\":1.5336,\"z\":0},\"rot\":{\"x\":0,\"y\":269.9966,\"z\":180}},\"9913b1\":{\"lock\":false,\"pos\":{\"x\":-36.84,\"y\":1.565,\"z\":0},\"rot\":{\"x\":0,\"y\":269.9971,\"z\":180}},\"9aa0b3\":{\"lock\":false,\"pos\":{\"x\":-3.8534,\"y\":1.583,\"z\":-14.9982},\"rot\":{\"x\":0,\"y\":269.9977,\"z\":0}},\"a35b39\":{\"lock\":false,\"pos\":{\"x\":-2.9415,\"y\":1.6232,\"z\":0.364},\"rot\":{\"x\":0,\"y\":269.9966,\"z\":0}},\"e82671\":{\"lock\":false,\"pos\":{\"x\":1.693,\"y\":1.558,\"z\":14.2414},\"rot\":{\"x\":0,\"y\":225.0008,\"z\":0}},\"ebbcf2\":{\"lock\":false,\"pos\":{\"x\":-2.9415,\"y\":1.6184,\"z\":-5.0505},\"rot\":{\"x\":0,\"y\":269.9953,\"z\":0}},\"fafe5d\":{\"lock\":false,\"pos\":{\"x\":-17.0399,\"y\":1.5336,\"z\":0},\"rot\":{\"x\":0,\"y\":269.9966,\"z\":180}}},\"setupButton\":false}",
       "XmlUI": "",
       "ContainedObjects": [
         {
           "GUID": "0ccc70",
           "Name": "Deck",
           "Transform": {
-            "posX": -3.85150123,
+            "posX": -3.85150051,
             "posY": 1.70502555,
-            "posZ": 5.72000456,
-            "rotX": 1.05933182E-07,
-            "rotY": 269.906433,
+            "posZ": 5.720001,
+            "rotX": 1.19996827E-07,
+            "rotY": 269.9064,
             "rotZ": 180.0,
             "scaleX": 1.0,
             "scaleY": 1.0,
@@ -28064,12 +28104,12 @@
           "GUID": "2b10c2",
           "Name": "Bag",
           "Transform": {
-            "posX": -13.0942974,
+            "posX": -13.0942965,
             "posY": 1.33496606,
             "posZ": 10.9325027,
-            "rotX": -3.47346418E-06,
-            "rotY": -0.000285253773,
-            "rotZ": -2.44792068E-06,
+            "rotX": -3.34505012E-06,
+            "rotY": -0.0002756555,
+            "rotZ": 3.45012086E-06,
             "scaleX": 1.0,
             "scaleY": 1.0,
             "scaleZ": 1.0
@@ -28550,12 +28590,12 @@
           "GUID": "3dbb13",
           "Name": "CardCustom",
           "Transform": {
-            "posX": -3.71500063,
+            "posX": -3.71499968,
             "posY": 1.59660506,
-            "posZ": -10.4000092,
-            "rotX": -2.30231745E-08,
+            "posZ": -10.4000044,
+            "rotX": -7.856958E-09,
             "rotY": 269.99646,
-            "rotZ": 6.31993569E-09,
+            "rotZ": -1.48592418E-08,
             "scaleX": 1.0,
             "scaleY": 1.0,
             "scaleZ": 1.0
@@ -28611,10 +28651,10 @@
           "GUID": "48dc47",
           "Name": "CardCustom",
           "Transform": {
-            "posX": -17.03989,
+            "posX": -17.039896,
             "posY": 1.53360486,
-            "posZ": -7.650006,
-            "rotX": -2.54514476E-09,
+            "posZ": -7.65000248,
+            "rotX": -1.23007124E-08,
             "rotY": 269.996948,
             "rotZ": 180.0,
             "scaleX": 1.0,
@@ -28675,8 +28715,8 @@
           "Transform": {
             "posX": -23.64,
             "posY": 1.53360486,
-            "posZ": -1.46813619E-07,
-            "rotX": -1.12888685E-08,
+            "posZ": 4.22796518E-08,
+            "rotX": 3.66025681E-08,
             "rotY": 269.9966,
             "rotZ": 180.0,
             "scaleX": 1.0,
@@ -28735,11 +28775,11 @@
           "GUID": "8057ec",
           "Name": "CardCustom",
           "Transform": {
-            "posX": -30.2400017,
+            "posX": -30.24,
             "posY": 1.53360486,
-            "posZ": 6.883464E-07,
-            "rotX": -1.22282984E-07,
-            "rotY": 269.9967,
+            "posZ": 2.99424059E-08,
+            "rotX": 2.232916E-08,
+            "rotY": 269.996643,
             "rotZ": 180.0,
             "scaleX": 1.0,
             "scaleY": 1.0,
@@ -28797,11 +28837,11 @@
           "GUID": "9913b1",
           "Name": "Deck",
           "Transform": {
-            "posX": -36.8400078,
+            "posX": -36.840004,
             "posY": 1.56500077,
-            "posZ": 8.253451E-07,
-            "rotX": -2.42102772E-07,
-            "rotY": 269.9972,
+            "posZ": 1.82346355E-07,
+            "rotX": -5.38281775E-08,
+            "rotY": 269.9971,
             "rotZ": 180.0,
             "scaleX": 1.0,
             "scaleY": 1.0,
@@ -29216,9 +29256,9 @@
             "posX": -3.85340047,
             "posY": 1.58300042,
             "posZ": -14.9982042,
-            "rotX": 8.33021E-08,
+            "rotX": 6.552674E-08,
             "rotY": 269.997681,
-            "rotZ": 2.24342145E-08,
+            "rotZ": 6.519205E-09,
             "scaleX": 2.2,
             "scaleY": 1.0,
             "scaleZ": 2.2
@@ -29267,354 +29307,15 @@
           "XmlUI": ""
         },
         {
-          "GUID": "a35b39",
-          "Name": "Deck",
-          "Transform": {
-            "posX": -2.941501,
-            "posY": 1.623187,
-            "posZ": 0.3639999,
-            "rotX": 1.3114429E-07,
-            "rotY": 269.9966,
-            "rotZ": -8.241101E-08,
-            "scaleX": 0.783099234,
-            "scaleY": 1.0,
-            "scaleZ": 0.783099234
-          },
-          "Nickname": "",
-          "Description": "",
-          "GMNotes": "",
-          "AltLookAngle": {
-            "x": 0.0,
-            "y": 0.0,
-            "z": 0.0
-          },
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "Tags": [
-            "ScenarioCard"
-          ],
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": false,
-          "SidewaysCard": false,
-          "DeckIDs": [
-            267200,
-            267500,
-            267300,
-            267400
-          ],
-          "CustomDeck": {
-            "2672": {
-              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/16458723108110252464/EAF9CCEE7F51FF883BF6B2E40DA4AAD2B26B00A4/",
-              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/12563685111925988110/78007928246BABF9A38EEE82E483647D139C06FF/",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": false,
-              "Type": 0
-            },
-            "2675": {
-              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15008537200618142654/64693A19944706A0079CA56A3E23CC68ED76AA37/",
-              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/10559891726888612870/3CF9479E4E2E76BB7EE2E19309ADB9D3E2C90585/",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": false,
-              "Type": 0
-            },
-            "2673": {
-              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/9361486784090826424/D6A55F88FC58235723078A4D3D60C2F181ECCE58/",
-              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13354291900378580144/BF2F7DCF7BCACA199561BD190AFFA684E2A74929/",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": false,
-              "Type": 0
-            },
-            "2674": {
-              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12259401871517735572/EE5453749A773D1549F6620605F18EC305E22CEA/",
-              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/12625397818987911720/F15DAD6DC0535EA7D200978075437AFF99D7F6DC/",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": false,
-              "Type": 0
-            }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": "",
-          "ContainedObjects": [
-            {
-              "GUID": "955742",
-              "Name": "CardCustom",
-              "Transform": {
-                "posX": 7.10996342,
-                "posY": 1.49506521,
-                "posZ": 91.76646,
-                "rotX": 0.000351447874,
-                "rotY": 180.0017,
-                "rotZ": -0.0009850372,
-                "scaleX": 1.0,
-                "scaleY": 1.0,
-                "scaleZ": 1.0
-              },
-              "Nickname": "Lost Hope",
-              "Description": "",
-              "GMNotes": "{\n  \"id\": \"00000006\",\n  \"type\": \"Agenda\",\n  \"class\": \"Mythos\",\n  \"cycle\": \"Standalone\"\n}",
-              "AltLookAngle": {
-                "x": 0.0,
-                "y": 0.0,
-                "z": 0.0
-              },
-              "ColorDiffuse": {
-                "r": 0.713235259,
-                "g": 0.713235259,
-                "b": 0.713235259
-              },
-              "Tags": [
-                "ScenarioCard"
-              ],
-              "LayoutGroupSortIndex": 0,
-              "Value": 0,
-              "Locked": false,
-              "Grid": true,
-              "Snap": true,
-              "IgnoreFoW": false,
-              "MeasureMovement": false,
-              "DragSelectable": true,
-              "Autoraise": true,
-              "Sticky": true,
-              "Tooltip": true,
-              "GridProjection": false,
-              "HideWhenFaceDown": true,
-              "Hands": true,
-              "CardID": 267200,
-              "SidewaysCard": false,
-              "CustomDeck": {
-                "2672": {
-                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/16458723108110252464/EAF9CCEE7F51FF883BF6B2E40DA4AAD2B26B00A4/",
-                  "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/12563685111925988110/78007928246BABF9A38EEE82E483647D139C06FF/",
-                  "NumWidth": 1,
-                  "NumHeight": 1,
-                  "BackIsHidden": true,
-                  "UniqueBack": false,
-                  "Type": 0
-                }
-              },
-              "LuaScript": "",
-              "LuaScriptState": "",
-              "XmlUI": ""
-            },
-            {
-              "GUID": "55600b",
-              "Name": "CardCustom",
-              "Transform": {
-                "posX": 7.093211,
-                "posY": 1.5284363,
-                "posZ": 91.76535,
-                "rotX": 0.006184373,
-                "rotY": 179.98822,
-                "rotZ": -0.001758657,
-                "scaleX": 1.0,
-                "scaleY": 1.0,
-                "scaleZ": 1.0
-              },
-              "Nickname": "A Forgotten Memory",
-              "Description": "",
-              "GMNotes": "{\n  \"id\": \"00000006\",\n  \"type\": \"Agenda\",\n  \"class\": \"Mythos\",\n  \"doomThreshold\": 3,\n  \"cycle\": \"Standalone\"\n}",
-              "AltLookAngle": {
-                "x": 0.0,
-                "y": 0.0,
-                "z": 0.0
-              },
-              "ColorDiffuse": {
-                "r": 0.713235259,
-                "g": 0.713235259,
-                "b": 0.713235259
-              },
-              "Tags": [
-                "ScenarioCard"
-              ],
-              "LayoutGroupSortIndex": 0,
-              "Value": 0,
-              "Locked": false,
-              "Grid": true,
-              "Snap": true,
-              "IgnoreFoW": false,
-              "MeasureMovement": false,
-              "DragSelectable": true,
-              "Autoraise": true,
-              "Sticky": true,
-              "Tooltip": true,
-              "GridProjection": false,
-              "HideWhenFaceDown": true,
-              "Hands": true,
-              "CardID": 267500,
-              "SidewaysCard": false,
-              "CustomDeck": {
-                "2675": {
-                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15008537200618142654/64693A19944706A0079CA56A3E23CC68ED76AA37/",
-                  "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/10559891726888612870/3CF9479E4E2E76BB7EE2E19309ADB9D3E2C90585/",
-                  "NumWidth": 1,
-                  "NumHeight": 1,
-                  "BackIsHidden": true,
-                  "UniqueBack": false,
-                  "Type": 0
-                }
-              },
-              "LuaScript": "",
-              "LuaScriptState": "",
-              "XmlUI": ""
-            },
-            {
-              "GUID": "70bfc5",
-              "Name": "CardCustom",
-              "Transform": {
-                "posX": 11.4531746,
-                "posY": 1.4950701,
-                "posZ": 92.06398,
-                "rotX": 0.0003406134,
-                "rotY": 180.001862,
-                "rotZ": -0.00109805237,
-                "scaleX": 1.0,
-                "scaleY": 1.0,
-                "scaleZ": 1.0
-              },
-              "Nickname": "A Sleeping Dream",
-              "Description": "",
-              "GMNotes": "{\n  \"id\": \"00000006\",\n  \"type\": \"Agenda\",\n  \"class\": \"Mythos\",\n  \"doomThreshold\": 10,\n  \"cycle\": \"Standalone\"\n}",
-              "AltLookAngle": {
-                "x": 0.0,
-                "y": 0.0,
-                "z": 0.0
-              },
-              "ColorDiffuse": {
-                "r": 0.713235259,
-                "g": 0.713235259,
-                "b": 0.713235259
-              },
-              "Tags": [
-                "ScenarioCard"
-              ],
-              "LayoutGroupSortIndex": 0,
-              "Value": 0,
-              "Locked": false,
-              "Grid": true,
-              "Snap": true,
-              "IgnoreFoW": false,
-              "MeasureMovement": false,
-              "DragSelectable": true,
-              "Autoraise": true,
-              "Sticky": true,
-              "Tooltip": true,
-              "GridProjection": false,
-              "HideWhenFaceDown": true,
-              "Hands": true,
-              "CardID": 267300,
-              "SidewaysCard": false,
-              "CustomDeck": {
-                "2673": {
-                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/9361486784090826424/D6A55F88FC58235723078A4D3D60C2F181ECCE58/",
-                  "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13354291900378580144/BF2F7DCF7BCACA199561BD190AFFA684E2A74929/",
-                  "NumWidth": 1,
-                  "NumHeight": 1,
-                  "BackIsHidden": true,
-                  "UniqueBack": false,
-                  "Type": 0
-                }
-              },
-              "LuaScript": "",
-              "LuaScriptState": "",
-              "XmlUI": ""
-            },
-            {
-              "GUID": "abaa47",
-              "Name": "CardCustom",
-              "Transform": {
-                "posX": -2.94150019,
-                "posY": 1.68456793,
-                "posZ": 0.363999844,
-                "rotX": 0.000466829923,
-                "rotY": 270.0,
-                "rotZ": 0.006454148,
-                "scaleX": 0.783099234,
-                "scaleY": 1.0,
-                "scaleZ": 0.783099234
-              },
-              "Nickname": "An Eerie Feeling",
-              "Description": "",
-              "GMNotes": "{\n  \"id\": \"00000006\",\n  \"type\": \"Agenda\",\n  \"class\": \"Mythos\",\n  \"doomThreshold\": 4,\n  \"cycle\": \"Standalone\"\n}",
-              "AltLookAngle": {
-                "x": 0.0,
-                "y": 0.0,
-                "z": 0.0
-              },
-              "ColorDiffuse": {
-                "r": 0.713235259,
-                "g": 0.713235259,
-                "b": 0.713235259
-              },
-              "Tags": [
-                "ScenarioCard"
-              ],
-              "LayoutGroupSortIndex": 0,
-              "Value": 0,
-              "Locked": false,
-              "Grid": true,
-              "Snap": true,
-              "IgnoreFoW": false,
-              "MeasureMovement": false,
-              "DragSelectable": true,
-              "Autoraise": true,
-              "Sticky": true,
-              "Tooltip": true,
-              "GridProjection": false,
-              "HideWhenFaceDown": true,
-              "Hands": true,
-              "CardID": 267400,
-              "SidewaysCard": false,
-              "CustomDeck": {
-                "2674": {
-                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12259401871517735572/EE5453749A773D1549F6620605F18EC305E22CEA/",
-                  "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/12625397818987911720/F15DAD6DC0535EA7D200978075437AFF99D7F6DC/",
-                  "NumWidth": 1,
-                  "NumHeight": 1,
-                  "BackIsHidden": true,
-                  "UniqueBack": false,
-                  "Type": 0
-                }
-              },
-              "LuaScript": "",
-              "LuaScriptState": "",
-              "XmlUI": ""
-            }
-          ]
-        },
-        {
           "GUID": "e82671",
           "Name": "Custom_Model_Bag",
           "Transform": {
             "posX": 1.69300044,
             "posY": 1.55803657,
             "posZ": 14.2414036,
-            "rotX": -1.64803225E-06,
+            "rotX": -1.67418932E-06,
             "rotY": 225.0008,
-            "rotZ": 1.51830488E-06,
+            "rotZ": 1.55502346E-06,
             "scaleX": 2.0,
             "scaleY": 2.0,
             "scaleZ": 2.0
@@ -29868,12 +29569,12 @@
           "GUID": "ebbcf2",
           "Name": "Deck",
           "Transform": {
-            "posX": -2.94150114,
+            "posX": -2.94150019,
             "posY": 1.61837292,
-            "posZ": -5.05050468,
-            "rotX": 1.18243925E-07,
+            "posZ": -5.050502,
+            "rotX": 1.06580657E-07,
             "rotY": 269.9953,
-            "rotZ": -3.315199E-08,
+            "rotZ": 7.01554059E-09,
             "scaleX": 0.783099234,
             "scaleY": 1.0,
             "scaleZ": 0.783099234
@@ -30073,15 +29774,15 @@
               "GUID": "9179f6",
               "Name": "CardCustom",
               "Transform": {
-                "posX": 4.513496,
-                "posY": 1.5624814,
-                "posZ": 95.95315,
-                "rotX": 0.000839965942,
-                "rotY": 180.029312,
-                "rotZ": -0.000309173716,
-                "scaleX": 1.0,
+                "posX": -2.94149971,
+                "posY": 1.67479777,
+                "posZ": -5.050501,
+                "rotX": 0.0006912749,
+                "rotY": 269.9953,
+                "rotZ": -0.000157485541,
+                "scaleX": 0.783099234,
                 "scaleY": 1.0,
-                "scaleZ": 1.0
+                "scaleZ": 0.783099234
               },
               "Nickname": "Sins of the Father",
               "Description": "",
@@ -30136,11 +29837,11 @@
           "GUID": "fafe5d",
           "Name": "CardCustom",
           "Transform": {
-            "posX": -17.0398922,
+            "posX": -17.039896,
             "posY": 1.53360486,
-            "posZ": 2.01968476E-07,
-            "rotX": 4.649914E-08,
-            "rotY": 269.996643,
+            "posZ": 1.01674615E-08,
+            "rotX": -1.31680435E-08,
+            "rotY": 269.9966,
             "rotZ": 180.0,
             "scaleX": 1.0,
             "scaleY": 1.0,
@@ -30193,6 +29894,339 @@
           "LuaScript": "",
           "LuaScriptState": "",
           "XmlUI": ""
+        },
+        {
+          "GUID": "3c6744",
+          "Name": "Deck",
+          "Transform": {
+            "posX": -2.94200015,
+            "posY": 1.623187,
+            "posZ": 0.364000231,
+            "rotX": 1.24921641E-07,
+            "rotY": 270.0,
+            "rotZ": -8.21051E-08,
+            "scaleX": 0.783099234,
+            "scaleY": 1.0,
+            "scaleZ": 0.783099234
+          },
+          "Nickname": "",
+          "Description": "",
+          "GMNotes": "",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": false,
+          "SidewaysCard": false,
+          "DeckIDs": [
+            267200,
+            300100,
+            267300,
+            267400
+          ],
+          "CustomDeck": {
+            "2672": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/16458723108110252464/EAF9CCEE7F51FF883BF6B2E40DA4AAD2B26B00A4/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/12563685111925988110/78007928246BABF9A38EEE82E483647D139C06FF/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            },
+            "3001": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15549400510898054366/3D73FDE3EF074E4559C72AC6AAAE711121D0AE63/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/10559891726888612870/3CF9479E4E2E76BB7EE2E19309ADB9D3E2C90585/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            },
+            "2673": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/9361486784090826424/D6A55F88FC58235723078A4D3D60C2F181ECCE58/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13354291900378580144/BF2F7DCF7BCACA199561BD190AFFA684E2A74929/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            },
+            "2674": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12259401871517735572/EE5453749A773D1549F6620605F18EC305E22CEA/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/12625397818987911720/F15DAD6DC0535EA7D200978075437AFF99D7F6DC/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": "",
+          "ContainedObjects": [
+            {
+              "GUID": "955742",
+              "Name": "CardCustom",
+              "Transform": {
+                "posX": -2.941503,
+                "posY": 1.59659791,
+                "posZ": 0.3639996,
+                "rotX": 0.000100542573,
+                "rotY": 269.996582,
+                "rotZ": -0.000318422623,
+                "scaleX": 0.783099234,
+                "scaleY": 1.0,
+                "scaleZ": 0.783099234
+              },
+              "Nickname": "Lost Hope",
+              "Description": "",
+              "GMNotes": "{\n  \"id\": \"00000006\",\n  \"type\": \"Agenda\",\n  \"class\": \"Mythos\",\n  \"cycle\": \"Standalone\"\n}",
+              "AltLookAngle": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+              },
+              "ColorDiffuse": {
+                "r": 0.713235259,
+                "g": 0.713235259,
+                "b": 0.713235259
+              },
+              "Tags": [
+                "ScenarioCard"
+              ],
+              "LayoutGroupSortIndex": 0,
+              "Value": 0,
+              "Locked": false,
+              "Grid": true,
+              "Snap": true,
+              "IgnoreFoW": false,
+              "MeasureMovement": false,
+              "DragSelectable": true,
+              "Autoraise": true,
+              "Sticky": true,
+              "Tooltip": true,
+              "GridProjection": false,
+              "HideWhenFaceDown": true,
+              "Hands": true,
+              "CardID": 267200,
+              "SidewaysCard": false,
+              "CustomDeck": {
+                "2672": {
+                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/16458723108110252464/EAF9CCEE7F51FF883BF6B2E40DA4AAD2B26B00A4/",
+                  "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/12563685111925988110/78007928246BABF9A38EEE82E483647D139C06FF/",
+                  "NumWidth": 1,
+                  "NumHeight": 1,
+                  "BackIsHidden": true,
+                  "UniqueBack": false,
+                  "Type": 0
+                }
+              },
+              "LuaScript": "",
+              "LuaScriptState": "",
+              "XmlUI": ""
+            },
+            {
+              "GUID": "0ebb01",
+              "Name": "CardCustom",
+              "Transform": {
+                "posX": -2.94150019,
+                "posY": 1.64084792,
+                "posZ": 0.363999844,
+                "rotX": 0.000766687153,
+                "rotY": 270.0,
+                "rotZ": -0.00244671,
+                "scaleX": 0.782302439,
+                "scaleY": 1.0,
+                "scaleZ": 0.782302439
+              },
+              "Nickname": "A Forgotten Memory",
+              "Description": "",
+              "GMNotes": "{\n  \"id\": \"00000006\",\n  \"type\": \"Agenda\",\n  \"class\": \"Mythos\",\n  \"doomThreshold\": 3,\n  \"cycle\": \"Standalone\"\n}",
+              "AltLookAngle": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+              },
+              "ColorDiffuse": {
+                "r": 0.713235259,
+                "g": 0.713235259,
+                "b": 0.713235259
+              },
+              "LayoutGroupSortIndex": 0,
+              "Value": 0,
+              "Locked": false,
+              "Grid": true,
+              "Snap": true,
+              "IgnoreFoW": false,
+              "MeasureMovement": false,
+              "DragSelectable": true,
+              "Autoraise": true,
+              "Sticky": true,
+              "Tooltip": true,
+              "GridProjection": false,
+              "HideWhenFaceDown": true,
+              "Hands": true,
+              "CardID": 300100,
+              "SidewaysCard": false,
+              "CustomDeck": {
+                "3001": {
+                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15549400510898054366/3D73FDE3EF074E4559C72AC6AAAE711121D0AE63/",
+                  "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/10559891726888612870/3CF9479E4E2E76BB7EE2E19309ADB9D3E2C90585/",
+                  "NumWidth": 1,
+                  "NumHeight": 1,
+                  "BackIsHidden": true,
+                  "UniqueBack": false,
+                  "Type": 0
+                }
+              },
+              "LuaScript": "",
+              "LuaScriptState": "",
+              "XmlUI": ""
+            },
+            {
+              "GUID": "70bfc5",
+              "Name": "CardCustom",
+              "Transform": {
+                "posX": -2.94150019,
+                "posY": 1.67478168,
+                "posZ": 0.363999844,
+                "rotX": 0.000494550855,
+                "rotY": 269.9966,
+                "rotZ": 0.000279333239,
+                "scaleX": 0.783099234,
+                "scaleY": 1.0,
+                "scaleZ": 0.783099234
+              },
+              "Nickname": "A Sleeping Dream",
+              "Description": "",
+              "GMNotes": "{\n  \"id\": \"00000006\",\n  \"type\": \"Agenda\",\n  \"class\": \"Mythos\",\n  \"doomThreshold\": 10,\n  \"cycle\": \"Standalone\"\n}",
+              "AltLookAngle": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+              },
+              "ColorDiffuse": {
+                "r": 0.713235259,
+                "g": 0.713235259,
+                "b": 0.713235259
+              },
+              "Tags": [
+                "ScenarioCard"
+              ],
+              "LayoutGroupSortIndex": 0,
+              "Value": 0,
+              "Locked": false,
+              "Grid": true,
+              "Snap": true,
+              "IgnoreFoW": false,
+              "MeasureMovement": false,
+              "DragSelectable": true,
+              "Autoraise": true,
+              "Sticky": true,
+              "Tooltip": true,
+              "GridProjection": false,
+              "HideWhenFaceDown": true,
+              "Hands": true,
+              "CardID": 267300,
+              "SidewaysCard": false,
+              "CustomDeck": {
+                "2673": {
+                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/9361486784090826424/D6A55F88FC58235723078A4D3D60C2F181ECCE58/",
+                  "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13354291900378580144/BF2F7DCF7BCACA199561BD190AFFA684E2A74929/",
+                  "NumWidth": 1,
+                  "NumHeight": 1,
+                  "BackIsHidden": true,
+                  "UniqueBack": false,
+                  "Type": 0
+                }
+              },
+              "LuaScript": "",
+              "LuaScriptState": "",
+              "XmlUI": ""
+            },
+            {
+              "GUID": "abaa47",
+              "Name": "CardCustom",
+              "Transform": {
+                "posX": -2.94150019,
+                "posY": 1.68441248,
+                "posZ": 0.363999844,
+                "rotX": -0.000176809277,
+                "rotY": 269.9966,
+                "rotZ": 0.000269366661,
+                "scaleX": 0.783099234,
+                "scaleY": 1.0,
+                "scaleZ": 0.783099234
+              },
+              "Nickname": "An Eerie Feeling",
+              "Description": "",
+              "GMNotes": "{\n  \"id\": \"00000006\",\n  \"type\": \"Agenda\",\n  \"class\": \"Mythos\",\n  \"doomThreshold\": 4,\n  \"cycle\": \"Standalone\"\n}",
+              "AltLookAngle": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+              },
+              "ColorDiffuse": {
+                "r": 0.713235259,
+                "g": 0.713235259,
+                "b": 0.713235259
+              },
+              "Tags": [
+                "ScenarioCard"
+              ],
+              "LayoutGroupSortIndex": 0,
+              "Value": 0,
+              "Locked": false,
+              "Grid": true,
+              "Snap": true,
+              "IgnoreFoW": false,
+              "MeasureMovement": false,
+              "DragSelectable": true,
+              "Autoraise": true,
+              "Sticky": true,
+              "Tooltip": true,
+              "GridProjection": false,
+              "HideWhenFaceDown": true,
+              "Hands": true,
+              "CardID": 267400,
+              "SidewaysCard": false,
+              "CustomDeck": {
+                "2674": {
+                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12259401871517735572/EE5453749A773D1549F6620605F18EC305E22CEA/",
+                  "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/12625397818987911720/F15DAD6DC0535EA7D200978075437AFF99D7F6DC/",
+                  "NumWidth": 1,
+                  "NumHeight": 1,
+                  "BackIsHidden": true,
+                  "UniqueBack": false,
+                  "Type": 0
+                }
+              },
+              "LuaScript": "",
+              "LuaScriptState": "",
+              "XmlUI": ""
+            }
+          ]
         }
       ],
       "ChildObjects": [
@@ -35269,9 +35303,9 @@
         "posX": 13.1644011,
         "posY": 1.66188037,
         "posZ": -7.1502,
-        "rotX": 4.89427E-08,
+        "rotX": -3.99348181E-08,
         "rotY": 270.0089,
-        "rotZ": 6.432753E-08,
+        "rotZ": 5.751857E-08,
         "scaleX": 5.51074648,
         "scaleY": 0.3607629,
         "scaleZ": 8.266118
@@ -35329,9 +35363,9 @@
           "Transform": {
             "posX": -30.24,
             "posY": 1.53360486,
-            "posZ": 15.3000326,
-            "rotX": -1.53203956E-08,
-            "rotY": 269.9967,
+            "posZ": 15.3000107,
+            "rotX": 5.172409E-10,
+            "rotY": 269.996643,
             "rotZ": 180.0,
             "scaleX": 1.0,
             "scaleY": 1.0,
@@ -35389,12 +35423,12 @@
           "GUID": "19851b",
           "Name": "Custom_Model_Bag",
           "Transform": {
-            "posX": 1.69294679,
-            "posY": 1.55803633,
-            "posZ": 14.2417021,
-            "rotX": 3.06037464E-06,
-            "rotY": 224.995224,
-            "rotZ": -1.82818276E-08,
+            "posX": 1.69300187,
+            "posY": 1.55803657,
+            "posZ": 14.2415075,
+            "rotX": -2.737345E-06,
+            "rotY": 224.999573,
+            "rotZ": 5.19594E-07,
             "scaleX": 2.0,
             "scaleY": 2.0,
             "scaleZ": 2.0
@@ -36153,22 +36187,22 @@
               "XmlUI": ""
             },
             {
-              "GUID": "9d6505",
+              "GUID": "3af934",
               "Name": "CardCustom",
               "Transform": {
                 "posX": 1.69299865,
-                "posY": 3.66795087,
+                "posY": 3.66769171,
                 "posZ": 14.2415018,
-                "rotX": 4.71753956E-05,
+                "rotX": 6.10079733E-05,
                 "rotY": 224.999985,
-                "rotZ": 6.38275969E-06,
+                "rotZ": 6.01514648E-06,
                 "scaleX": 1.0,
                 "scaleY": 1.0,
                 "scaleZ": 1.0
               },
               "Nickname": "Sharon Manswell",
               "Description": "Freddie's Sister",
-              "GMNotes": "",
+              "GMNotes": "{\n  \"id\": \"ShnMnW1a\",\n  \"traits\": \"Bystander.\",\n  \"victory\": 2,\n  \"cycle\": \"Standalone\"\n}",
               "AltLookAngle": {
                 "x": 0.0,
                 "y": 0.0,
@@ -36221,12 +36255,12 @@
           "GUID": "23badb",
           "Name": "Deck",
           "Transform": {
-            "posX": -2.94150329,
+            "posX": -2.941501,
             "posY": 1.623187,
-            "posZ": 0.363999784,
-            "rotX": 4.07815861E-08,
+            "posZ": 0.3639999,
+            "rotX": -1.07807445E-07,
             "rotY": 269.996155,
-            "rotZ": 9.214767E-10,
+            "rotZ": 4.952564E-08,
             "scaleX": 0.783099234,
             "scaleY": 1.0,
             "scaleZ": 0.783099234
@@ -36560,11 +36594,11 @@
           "GUID": "296181",
           "Name": "Deck",
           "Transform": {
-            "posX": -3.8515048,
+            "posX": -3.85150146,
             "posY": 1.73390973,
-            "posZ": 5.72011328,
-            "rotX": 3.25390147E-07,
-            "rotY": 269.9314,
+            "posZ": 5.72010469,
+            "rotX": -1.29162828E-07,
+            "rotY": 269.931335,
             "rotZ": 180.0,
             "scaleX": 1.0,
             "scaleY": 1.0,
@@ -38478,10 +38512,10 @@
           "GUID": "58b8cb",
           "Name": "CardCustom",
           "Transform": {
-            "posX": -17.0399761,
+            "posX": -17.0399933,
             "posY": 1.53360486,
-            "posZ": 7.133923E-07,
-            "rotX": -2.64404765E-08,
+            "posZ": 4.610871E-07,
+            "rotX": -4.81533124E-09,
             "rotY": 269.9964,
             "rotZ": 180.0,
             "scaleX": 1.0,
@@ -38540,11 +38574,11 @@
           "GUID": "84a3f9",
           "Name": "Deck",
           "Transform": {
-            "posX": -6.06971025,
+            "posX": -6.069703,
             "posY": 1.637629,
-            "posZ": 15.9559364,
-            "rotX": 3.64640727E-08,
-            "rotY": 269.99707,
+            "posZ": 15.9559116,
+            "rotX": 9.678128E-09,
+            "rotY": 269.997,
             "rotZ": 180.0,
             "scaleX": 1.0,
             "scaleY": 1.0,
@@ -38663,12 +38697,12 @@
               "GUID": "09503d",
               "Name": "CardCustom",
               "Transform": {
-                "posX": 21.8205433,
-                "posY": 1.57213879,
-                "posZ": 73.99056,
-                "rotX": 0.000467864476,
-                "rotY": 180.0,
-                "rotZ": 180.000549,
+                "posX": -5.698978,
+                "posY": 1.7082504,
+                "posZ": 15.5397205,
+                "rotX": 0.000238978042,
+                "rotY": 270.0,
+                "rotZ": 179.994812,
                 "scaleX": 1.0,
                 "scaleY": 1.0,
                 "scaleZ": 1.0
@@ -39091,9 +39125,9 @@
           "Transform": {
             "posX": -30.2400017,
             "posY": 1.53360486,
-            "posZ": -15.3001318,
-            "rotX": 2.94298772E-08,
-            "rotY": 269.996765,
+            "posZ": -15.3001108,
+            "rotX": -1.89679028E-08,
+            "rotY": 269.9968,
             "rotZ": 180.0,
             "scaleX": 1.0,
             "scaleY": 1.0,
@@ -39151,11 +39185,11 @@
           "GUID": "98be26",
           "Name": "CardCustom",
           "Transform": {
-            "posX": -36.840004,
+            "posX": -36.84,
             "posY": 1.53360486,
-            "posZ": -7.65001726,
-            "rotX": -5.29293764E-09,
-            "rotY": 269.996521,
+            "posZ": -7.650006,
+            "rotX": 6.665075E-09,
+            "rotY": 269.996582,
             "rotZ": 180.0,
             "scaleX": 1.0,
             "scaleY": 1.0,
@@ -39213,12 +39247,12 @@
           "GUID": "b0970e",
           "Name": "CardCustom",
           "Transform": {
-            "posX": -3.71500325,
+            "posX": -3.71500087,
             "posY": 1.59660506,
-            "posZ": -10.4000273,
-            "rotX": 4.52862459E-08,
-            "rotY": 269.8817,
-            "rotZ": 1.07614655E-08,
+            "posZ": -10.40001,
+            "rotX": -3.63675912E-09,
+            "rotY": 269.881775,
+            "rotZ": -2.436045E-08,
             "scaleX": 1.0,
             "scaleY": 1.0,
             "scaleZ": 1.0
@@ -39274,12 +39308,12 @@
           "GUID": "b09976",
           "Name": "Custom_Tile",
           "Transform": {
-            "posX": -3.88250017,
+            "posX": -3.88250065,
             "posY": 1.58300042,
             "posZ": -14.6117039,
-            "rotX": 2.46485179E-08,
-            "rotY": 269.9977,
-            "rotZ": 4.079429E-09,
+            "rotX": 4.09113241E-08,
+            "rotY": 269.997681,
+            "rotZ": 1.04707794E-07,
             "scaleX": 2.2,
             "scaleY": 1.0,
             "scaleZ": 2.2
@@ -39333,9 +39367,9 @@
           "Transform": {
             "posX": -30.24,
             "posY": 1.53360486,
-            "posZ": 7.65001726,
-            "rotX": 1.07213322E-10,
-            "rotY": 269.996674,
+            "posZ": 7.650006,
+            "rotX": 2.57152077E-08,
+            "rotY": 269.9966,
             "rotZ": 180.0,
             "scaleX": 1.0,
             "scaleY": 1.0,
@@ -39393,12 +39427,12 @@
           "GUID": "c2eeab",
           "Name": "Bag",
           "Transform": {
-            "posX": -8.453414,
-            "posY": 1.3713696,
-            "posZ": -3.198301,
-            "rotX": 0.000180239309,
-            "rotY": 359.987,
-            "rotZ": 2.35421681,
+            "posX": -8.453416,
+            "posY": 1.37136209,
+            "posZ": -3.19830656,
+            "rotX": 0.0006134239,
+            "rotY": 359.9871,
+            "rotZ": 2.35419178,
             "scaleX": 1.0,
             "scaleY": 1.0,
             "scaleZ": 1.0
@@ -39855,11 +39889,11 @@
           "GUID": "d70ff1",
           "Name": "CardCustom",
           "Transform": {
-            "posX": -23.639986,
+            "posX": -23.6399956,
             "posY": 1.53360486,
-            "posZ": -7.650017,
-            "rotX": 3.92375128E-08,
-            "rotY": 269.997,
+            "posZ": -7.65000439,
+            "rotX": 4.31923546E-08,
+            "rotY": 269.9969,
             "rotZ": 180.0,
             "scaleX": 1.0,
             "scaleY": 1.0,
@@ -39917,12 +39951,12 @@
           "GUID": "d7de44",
           "Name": "Bag",
           "Transform": {
-            "posX": -8.345607,
-            "posY": 1.37411952,
-            "posZ": -6.58932,
-            "rotX": 0.00016446285,
-            "rotY": 359.984344,
-            "rotZ": 2.53146482,
+            "posX": -8.345611,
+            "posY": 1.37411046,
+            "posZ": -6.58932972,
+            "rotX": 0.000798674067,
+            "rotY": 359.9847,
+            "rotZ": 2.53145123,
             "scaleX": 1.0,
             "scaleY": 1.0,
             "scaleZ": 1.0
@@ -40381,9 +40415,9 @@
           "Transform": {
             "posX": -30.2400017,
             "posY": 1.53360486,
-            "posZ": 1.1834162E-06,
-            "rotX": 1.10338823E-08,
-            "rotY": 269.996643,
+            "posZ": 4.96059442E-07,
+            "rotX": -1.36400313E-09,
+            "rotY": 269.996552,
             "rotZ": 180.0,
             "scaleX": 1.0,
             "scaleY": 1.0,
@@ -40441,11 +40475,11 @@
           "GUID": "ffbc46",
           "Name": "CardCustom",
           "Transform": {
-            "posX": -17.0398788,
+            "posX": -17.0398922,
             "posY": 1.53360486,
-            "posZ": -7.65001631,
-            "rotX": -2.16641571E-09,
-            "rotY": 269.996948,
+            "posZ": -7.650005,
+            "rotX": 4.69128736E-09,
+            "rotY": 269.996826,
             "rotZ": 180.0,
             "scaleX": 1.0,
             "scaleY": 1.0,
@@ -40567,9 +40601,9 @@
         "posX": 13.1644,
         "posY": 1.581499,
         "posZ": 32.8498,
-        "rotX": 2.6736064E-08,
+        "rotX": 2.320123E-08,
         "rotY": 270.0125,
-        "rotZ": -5.12911278E-08,
+        "rotZ": -5.50648558E-08,
         "scaleX": 5.542862,
         "scaleY": 0.199999988,
         "scaleZ": 8.314293
@@ -40621,6 +40655,51 @@
       "LuaScriptState": "{\"ml\":{\"369225\":{\"lock\":false,\"pos\":{\"x\":6.206,\"y\":1.579,\"z\":65.975},\"rot\":{\"x\":0,\"y\":90,\"z\":0}},\"5b756b\":{\"lock\":false,\"pos\":{\"x\":1.693,\"y\":1.558,\"z\":14.242},\"rot\":{\"x\":0,\"y\":225,\"z\":0}},\"63fcc1\":{\"lock\":false,\"pos\":{\"x\":0.218,\"y\":1.579,\"z\":65.981},\"rot\":{\"x\":0,\"y\":90,\"z\":0}},\"fe0956\":{\"lock\":false,\"pos\":{\"x\":12.388,\"y\":1.579,\"z\":66.087},\"rot\":{\"x\":0,\"y\":90,\"z\":0}}},\"setupButton\":false}",
       "XmlUI": "",
       "ContainedObjects": [
+        {
+          "GUID": "369225",
+          "Name": "Notecard",
+          "Transform": {
+            "posX": 6.206,
+            "posY": 1.579499,
+            "posZ": 65.975,
+            "rotX": 7.771969E-07,
+            "rotY": 90.00001,
+            "rotZ": -2.19070756E-07,
+            "scaleX": 1.39999974,
+            "scaleY": 1.39999974,
+            "scaleZ": 1.39999974
+          },
+          "Nickname": "Adding Custom Campaign Cards to Your Deck Part 2",
+          "Description": "Place the campaign cards on the generator, click the generate button, then open your notebook (located on the top menu bar). Choose the \"deck instructions\" tab (under FAQ).\n\nUse Ctrl+A to select all the text in the tab, then Ctrl+C to copy all the text. In the description box of your decklist in Arkhamddb or Arkham.build paste this text (Ctrl+V).",
+          "GMNotes": "",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 1.0,
+            "g": 1.0,
+            "b": 1.0
+          },
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": false,
+          "Hands": false,
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
         {
           "GUID": "5b756b",
           "Name": "Custom_Model_Bag",
@@ -41113,96 +41192,6 @@
           ]
         },
         {
-          "GUID": "fe0956",
-          "Name": "Notecard",
-          "Transform": {
-            "posX": 12.388,
-            "posY": 1.579499,
-            "posZ": 66.087,
-            "rotX": 3.117427E-08,
-            "rotY": 90.00001,
-            "rotZ": 9.803362E-09,
-            "scaleX": 1.39999974,
-            "scaleY": 1.39999974,
-            "scaleZ": 1.39999974
-          },
-          "Nickname": "Adding Custom Campaign Cards to Your Deck Part 1",
-          "Description": "In this campaign you will need to add some cards to your deck that will remain across scenarios. \n\nIf using Arkhamdb or Arkham.build for your decks, you can use the Deck Instruction Generator (to the left of the Deck Importer) to automatically add these campaign specific cards that have been added when importing your deck.",
-          "GMNotes": "",
-          "AltLookAngle": {
-            "x": 0.0,
-            "y": 0.0,
-            "z": 0.0
-          },
-          "ColorDiffuse": {
-            "r": 1.0,
-            "g": 1.0,
-            "b": 1.0
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": false,
-          "Hands": false,
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
-        },
-        {
-          "GUID": "369225",
-          "Name": "Notecard",
-          "Transform": {
-            "posX": 6.206,
-            "posY": 1.579499,
-            "posZ": 65.975,
-            "rotX": 7.771969E-07,
-            "rotY": 90.00001,
-            "rotZ": -2.19070756E-07,
-            "scaleX": 1.39999974,
-            "scaleY": 1.39999974,
-            "scaleZ": 1.39999974
-          },
-          "Nickname": "Adding Custom Campaign Cards to Your Deck Part 2",
-          "Description": "Place the campaign cards on the generator, click the generate button, then open your notebook (located on the top menu bar). Choose the \"deck instructions\" tab (under FAQ).\n\nUse Ctrl+A to select all the text in the tab, then Ctrl+C to copy all the text. In the description box of your decklist in Arkhamddb or Arkham.build paste this text (Ctrl+V).",
-          "GMNotes": "",
-          "AltLookAngle": {
-            "x": 0.0,
-            "y": 0.0,
-            "z": 0.0
-          },
-          "ColorDiffuse": {
-            "r": 1.0,
-            "g": 1.0,
-            "b": 1.0
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": false,
-          "Hands": false,
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
-        },
-        {
           "GUID": "63fcc1",
           "Name": "Notecard",
           "Transform": {
@@ -41218,6 +41207,51 @@
           },
           "Nickname": "Adding Custom Campaign Cards to Your Deck Part 3",
           "Description": "Move the campaign cards from the Deck Instruction Generator and place them in the purple \"additional cards\" box next to the \"Search-a-card\" (located at the top of the table).\n\nIn your chosen deck builder the cards should show up as mini images. Import your deck as normal, and the cards will appear!",
+          "GMNotes": "",
+          "AltLookAngle": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "ColorDiffuse": {
+            "r": 1.0,
+            "g": 1.0,
+            "b": 1.0
+          },
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": false,
+          "Hands": false,
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "fe0956",
+          "Name": "Notecard",
+          "Transform": {
+            "posX": 12.388,
+            "posY": 1.579499,
+            "posZ": 66.087,
+            "rotX": 3.117427E-08,
+            "rotY": 90.00001,
+            "rotZ": 9.803362E-09,
+            "scaleX": 1.39999974,
+            "scaleY": 1.39999974,
+            "scaleZ": 1.39999974
+          },
+          "Nickname": "Adding Custom Campaign Cards to Your Deck Part 1",
+          "Description": "In this campaign you will need to add some cards to your deck that will remain across scenarios. \n\nIf using Arkhamdb or Arkham.build for your decks, you can use the Deck Instruction Generator (to the left of the Deck Importer) to automatically add these campaign specific cards that have been added when importing your deck.",
           "GMNotes": "",
           "AltLookAngle": {
             "x": 0.0,
@@ -41373,11 +41407,11 @@
           "GUID": "26e636",
           "Name": "CardCustom",
           "Transform": {
-            "posX": -17.0399456,
+            "posX": -17.0399342,
             "posY": 1.53360486,
-            "posZ": 15.3000679,
-            "rotX": 1.44291592E-08,
-            "rotY": 269.99646,
+            "posZ": 15.3000975,
+            "rotX": -2.628754E-08,
+            "rotY": 269.996918,
             "rotZ": 180.0,
             "scaleX": 1.0,
             "scaleY": 1.0,
@@ -41438,7 +41472,7 @@
             "posX": -11.3025,
             "posY": 1.56019807,
             "posZ": 21.8682,
-            "rotX": 1.06079581E-08,
+            "rotX": 2.34831759E-07,
             "rotY": 269.9966,
             "rotZ": 180.0,
             "scaleX": 1.0,
@@ -42368,11 +42402,11 @@
           "GUID": "4d1090",
           "Name": "Deck",
           "Transform": {
-            "posX": -3.9708097,
-            "posY": 1.64244318,
-            "posZ": 15.98717,
-            "rotX": -1.888196E-07,
-            "rotY": 269.9968,
+            "posX": -3.97081447,
+            "posY": 1.64244306,
+            "posZ": 15.987196,
+            "rotX": 7.402075E-08,
+            "rotY": 269.996826,
             "rotZ": 180.0,
             "scaleX": 1.0,
             "scaleY": 1.0,
@@ -42994,9 +43028,9 @@
             "posX": -3.87880015,
             "posY": 1.58300042,
             "posZ": -14.4221048,
-            "rotX": -3.18255253E-08,
+            "rotX": 4.76217954E-09,
             "rotY": 269.9977,
-            "rotZ": -1.953321E-08,
+            "rotZ": -4.16992343E-08,
             "scaleX": 2.2,
             "scaleY": 1.0,
             "scaleZ": 2.2
@@ -43048,12 +43082,12 @@
           "GUID": "61e355",
           "Name": "CardCustom",
           "Transform": {
-            "posX": -3.71500969,
+            "posX": -3.715013,
             "posY": 1.59660506,
-            "posZ": -10.4000463,
-            "rotX": 1.19206272E-08,
-            "rotY": 269.991119,
-            "rotZ": 1.59286078E-08,
+            "posZ": -10.4000692,
+            "rotX": -5.586658E-09,
+            "rotY": 269.99115,
+            "rotZ": 5.149181E-09,
             "scaleX": 1.0,
             "scaleY": 1.0,
             "scaleZ": 1.0
@@ -43112,7 +43146,7 @@
             "posX": -14.465,
             "posY": 1.56019807,
             "posZ": 21.8682,
-            "rotX": 3.02598728E-08,
+            "rotX": 2.34831759E-07,
             "rotY": 269.9966,
             "rotZ": 180.0,
             "scaleX": 1.0,
@@ -44042,11 +44076,11 @@
           "GUID": "7e25e6",
           "Name": "Deck",
           "Transform": {
-            "posX": -3.85150957,
+            "posX": -3.85151148,
             "posY": 1.71465361,
-            "posZ": 5.720028,
-            "rotX": -2.872378E-07,
-            "rotY": 269.952271,
+            "posZ": 5.72003746,
+            "rotX": 1.18095876E-07,
+            "rotY": 269.952332,
             "rotZ": 180.0,
             "scaleX": 1.0,
             "scaleY": 1.0,
@@ -45676,12 +45710,12 @@
           "GUID": "98d9f1",
           "Name": "Deck",
           "Transform": {
-            "posX": -2.94150758,
+            "posX": -2.94151068,
             "posY": 1.628001,
-            "posZ": -5.050524,
-            "rotX": 1.14871753E-07,
-            "rotY": 269.8949,
-            "rotZ": -2.28422543E-08,
+            "posZ": -5.05053473,
+            "rotX": -1.64264819E-07,
+            "rotY": 269.894867,
+            "rotZ": 4.680986E-08,
             "scaleX": 0.783099234,
             "scaleY": 1.0,
             "scaleZ": 0.783099234
@@ -46087,12 +46121,12 @@
           "GUID": "b61a4d",
           "Name": "Deck",
           "Transform": {
-            "posX": -2.94150734,
+            "posX": -2.94151139,
             "posY": 1.623187,
-            "posZ": 0.363999516,
-            "rotX": 4.55238656E-08,
-            "rotY": 269.99646,
-            "rotZ": -6.289901E-08,
+            "posZ": 0.3639998,
+            "rotX": -4.71638728E-08,
+            "rotY": 269.996429,
+            "rotZ": -1.30786E-10,
             "scaleX": 0.783099234,
             "scaleY": 1.0,
             "scaleZ": 0.783099234
@@ -46427,12 +46461,12 @@
           "GUID": "c5f4ca",
           "Name": "Custom_Model_Bag",
           "Transform": {
-            "posX": 1.693007,
+            "posX": 1.6930083,
             "posY": 1.55803609,
-            "posZ": 14.2413244,
-            "rotX": 3.38148629E-06,
-            "rotY": 224.99852,
-            "rotZ": 2.47016737E-06,
+            "posZ": 14.2413254,
+            "rotX": 4.073136E-06,
+            "rotY": 224.9985,
+            "rotZ": -1.8588922E-07,
             "scaleX": 2.0,
             "scaleY": 2.0,
             "scaleZ": 2.0
@@ -46501,11 +46535,11 @@
               "Name": "Deck",
               "Transform": {
                 "posX": 1.69299865,
-                "posY": 3.712768,
+                "posY": 3.71327758,
                 "posZ": 14.2415018,
-                "rotX": 5.051468E-05,
+                "rotX": 4.89834856E-05,
                 "rotY": 224.999985,
-                "rotZ": -2.886709E-05,
+                "rotZ": -3.00596112E-05,
                 "scaleX": 1.0,
                 "scaleY": 1.0,
                 "scaleZ": 1.0
@@ -47133,11 +47167,11 @@
               "Name": "CardCustom",
               "Transform": {
                 "posX": 1.69299865,
-                "posY": 3.66620231,
+                "posY": 3.6680038,
                 "posZ": 14.2415018,
-                "rotX": 6.40653961E-05,
+                "rotX": 5.532628E-05,
                 "rotY": 224.999985,
-                "rotZ": 8.047783E-06,
+                "rotZ": 3.59679484E-06,
                 "scaleX": 1.0,
                 "scaleY": 1.0,
                 "scaleZ": 1.0
@@ -47192,15 +47226,78 @@
               "XmlUI": ""
             },
             {
+              "GUID": "9d6505",
+              "Name": "CardCustom",
+              "Transform": {
+                "posX": 1.69299865,
+                "posY": 3.66787481,
+                "posZ": 14.2415018,
+                "rotX": 5.120209E-05,
+                "rotY": 224.999985,
+                "rotZ": 2.306266E-06,
+                "scaleX": 1.0,
+                "scaleY": 1.0,
+                "scaleZ": 1.0
+              },
+              "Nickname": "Sharon Manswell",
+              "Description": "Freddie's Sister",
+              "GMNotes": "{\n  \"id\": \"ShnMnW1a\",\n  \"traits\": \"Bystander.\",\n  \"victory\": 2,\n  \"cycle\": \"Standalone\"\n}",
+              "AltLookAngle": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+              },
+              "ColorDiffuse": {
+                "r": 0.713235259,
+                "g": 0.713235259,
+                "b": 0.713235259
+              },
+              "Tags": [
+                "Asset",
+                "PlayerCard",
+                "ScenarioCard"
+              ],
+              "LayoutGroupSortIndex": 0,
+              "Value": 0,
+              "Locked": false,
+              "Grid": true,
+              "Snap": true,
+              "IgnoreFoW": false,
+              "MeasureMovement": false,
+              "DragSelectable": true,
+              "Autoraise": true,
+              "Sticky": true,
+              "Tooltip": true,
+              "GridProjection": false,
+              "HideWhenFaceDown": true,
+              "Hands": true,
+              "CardID": 278600,
+              "SidewaysCard": false,
+              "CustomDeck": {
+                "2786": {
+                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15546598089637225496/0DD80BC30448510F19440B682F9BE9D2B8D53DE2/",
+                  "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/12603897530658093132/2572776B7C09E07E59AECF518E390CB3B46E8EA2/",
+                  "NumWidth": 1,
+                  "NumHeight": 1,
+                  "BackIsHidden": true,
+                  "UniqueBack": false,
+                  "Type": 0
+                }
+              },
+              "LuaScript": "",
+              "LuaScriptState": "",
+              "XmlUI": ""
+            },
+            {
               "GUID": "11ee9d",
               "Name": "CardCustom",
               "Transform": {
                 "posX": 1.69299865,
-                "posY": 3.66725469,
+                "posY": 3.66769528,
                 "posZ": 14.2415018,
-                "rotX": 5.38838249E-05,
+                "rotX": 5.58889151E-05,
                 "rotY": 224.999985,
-                "rotZ": 4.91755554E-06,
+                "rotZ": 3.4359843E-07,
                 "scaleX": 1.0,
                 "scaleY": 1.0,
                 "scaleZ": 1.0
@@ -47259,11 +47356,11 @@
               "Name": "CardCustom",
               "Transform": {
                 "posX": 1.69299865,
-                "posY": 3.66793466,
+                "posY": 3.66787457,
                 "posZ": 14.2415018,
-                "rotX": 5.93130753E-05,
+                "rotX": 6.652816E-05,
                 "rotY": 224.999985,
-                "rotZ": 5.965381E-06,
+                "rotZ": 7.965744E-06,
                 "scaleX": 1.0,
                 "scaleY": 1.0,
                 "scaleZ": 1.0
@@ -47321,10 +47418,10 @@
               "GUID": "e84a7c",
               "Name": "CardCustom",
               "Transform": {
-                "posX": 1.69299865,
-                "posY": 3.667995,
+                "posX": 1.69299912,
+                "posY": 3.66800356,
                 "posZ": 14.2415018,
-                "rotX": 5.2354786E-05,
+                "rotX": 5.10012E-05,
                 "rotY": 224.999985,
                 "rotZ": 180.0,
                 "scaleX": 1.0,
@@ -47385,11 +47482,11 @@
           "GUID": "eb7639",
           "Name": "Deck",
           "Transform": {
-            "posX": -3.97080851,
+            "posX": -3.970812,
             "posY": 1.64244318,
-            "posZ": 13.6995659,
-            "rotX": 6.406677E-08,
-            "rotY": 269.991974,
+            "posZ": 13.6995888,
+            "rotX": -1.67002181E-08,
+            "rotY": 269.992,
             "rotZ": 180.0,
             "scaleX": 1.0,
             "scaleY": 1.0,
@@ -48066,18 +48163,18 @@
       ]
     },
     {
-      "GUID": "ecc8ed",
+      "GUID": "9e9d86",
       "Name": "Custom_PDF",
       "Transform": {
-        "posX": 6.10199976,
+        "posX": 6.120999,
         "posY": 1.48149931,
-        "posZ": 53.366,
-        "rotX": 1.19931158E-07,
+        "posZ": 54.475,
+        "rotX": 2.66868447E-08,
         "rotY": 270.0,
-        "rotZ": 3.81228249E-09,
-        "scaleX": 3.97411633,
+        "rotZ": 1.05387814E-08,
+        "scaleX": 3.97424316,
         "scaleY": 1.0,
-        "scaleZ": 3.97411633
+        "scaleZ": 3.97424316
       },
       "Nickname": "",
       "Description": "",
@@ -48107,7 +48204,7 @@
       "HideWhenFaceDown": false,
       "Hands": false,
       "CustomPDF": {
-        "PDFUrl": "https://steamusercontent-a.akamaihd.net/ugc/13954282193969109744/C1BB96E420EFF611F3A866E6218B1DC9249D5591/",
+        "PDFUrl": "https://steamusercontent-a.akamaihd.net/ugc/17739162535940649172/0E08B778DBE531C24E02F54CD8DDDAAA8761B5D6/",
         "PDFPassword": "",
         "PDFPage": 0,
         "PDFPageOffset": 0
