@@ -12,7 +12,7 @@ local SET_ASIDE         = {
 }
 
 local RFG               = {
-  position = Vector(-6.01, 1.61, 14.90),
+  position = Vector(-6, 1.6, 14.9),
   rotation = Vector(0, 270, 0)
 }
 
@@ -53,10 +53,12 @@ local RFG_IDS           = {
   ["06109"] = true, -- "Zoog Burrow"
   ["06107"] = true, -- "Stealthy Zoog"
   ["06106"] = true, -- "Furtive Zoog"
-  ["06108"] = true  -- "Inconspicuous Zoog"
+  ["06086"] = true, -- "The Crawling Mist"
+  ["06146"] = true, -- "Stalking Manticore"
+  ["06147"] = true, -- "Horde of Night"
+  ["06148"] = true  -- "Beings of Ib"
 }
 
-local act1WasAdvanced   = false
 local visited           = {}
 
 local buttonParameters  = {
@@ -69,7 +71,6 @@ local buttonParameters  = {
 
 function updateSave()
   self.script_state = JSON.encode({
-    act1WasAdvanced  = act1WasAdvanced,
     locationDeckGuid = locationDeckGuid,
     visited          = visited
   })
@@ -78,7 +79,6 @@ end
 function onLoad(saveData)
   if saveData and saveData ~= "" then
     local loadedData = JSON.decode(saveData)
-    act1WasAdvanced  = loadedData.act1WasAdvanced or false
     locationDeckGuid = loadedData.locationDeckGuid
     visited          = loadedData.visited or {}
 
@@ -89,7 +89,6 @@ function onLoad(saveData)
 
   self.addContextMenuItem("Reset state",
     function()
-      act1WasAdvanced  = false
       locationDeckGuid = nil
       visited          = {}
       buttonCreation()
@@ -146,6 +145,9 @@ end
 
 function setup(region)
   function KadathCoroutine()
+    MythosAreaApi.reshuffleEncounterDeck(true)
+    CoroutineLib.yieldSeconds(0.5)
+
     -- remove clues from players
     local masterClueCounter = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "MasterClueCounter")
     if masterClueCounter ~= nil then
@@ -189,61 +191,57 @@ end
 
 function cleanZone()
   -- clean the encounter deck
-  if not act1WasAdvanced then
-    local encounterDeckObjects = MythosAreaApi.getEncounterDeckObjects()
-    if encounterDeckObjects.draw and encounterDeckObjects.topCard then
-      encounterDeckObjects.draw.putObject(encounterDeckObjects.topCard)
-    end
+  local encounterDeckObjects = MythosAreaApi.getEncounterDeckObjects()
+  if encounterDeckObjects.draw and encounterDeckObjects.topCard then
+    encounterDeckObjects.draw.putObject(encounterDeckObjects.topCard)
+  end
 
-    local cardsToRemove = {}
-    for i, card in ipairs(encounterDeckObjects.draw.getObjects()) do
-      local md = getMetadata(card)
-      if md.id and RFG_IDS[md.id] then
-        table.insert(cardsToRemove, card.index)
-      end
+  local cardsToRemove = {}
+  for i, card in ipairs(encounterDeckObjects.draw.getObjects()) do
+    local md = getMetadata(card)
+    if md.id and RFG_IDS[md.id] then
+      table.insert(cardsToRemove, card.index)
     end
+  end
 
-    for i = #cardsToRemove, 1, -1 do
-      encounterDeckObjects.draw.takeObject({
-        position = RFG.position,
-        rotation = RFG.rotation,
-        smooth   = false,
-        index    = cardsToRemove[i]
-      })
-    end
+  for i = #cardsToRemove, 1, -1 do
+    encounterDeckObjects.draw.takeObject({
+      position = RFG.position,
+      rotation = RFG.rotation,
+      smooth   = false,
+      index    = cardsToRemove[i]
+    })
   end
 
   -- clean the play area
   local zone = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "PlayAreaZone")
   for _, obj in ipairs(zone.getObjects()) do
     -- remove certain cards from game
-    if not act1WasAdvanced then
-      if obj.type == "Card" then
-        local md = getMetadata(obj)
-        if md.id and RFG_IDS[md.id] then
-          obj.setRotation(RFG.rotation)
-          obj.setPosition(RFG.position)
-          goto continue
-        end
-      elseif obj.type == "Deck" then
-        local cardsToRemove = {}
-        for _, card in ipairs(obj.getObjects()) do
-          local md = getMetadata(obj)
-          if md.id and RFG_IDS[md.id] then
-            table.insert(cardsToRemove, card.index)
-          end
-        end
-
-        for i = #cardsToRemove, 1, -1 do
-          obj.takeObject({
-            position = RFG.position,
-            rotation = RFG.rotation,
-            smooth   = false,
-            index    = cardsToRemove[i]
-          })
-        end
+    if obj.type == "Card" then
+      local md = getMetadata(obj)
+      if md.id and RFG_IDS[md.id] then
+        obj.setRotation(RFG.rotation)
+        obj.setPosition(RFG.position)
         goto continue
       end
+    elseif obj.type == "Deck" then
+      local cardsToRemove = {}
+      for _, card in ipairs(obj.getObjects()) do
+        local md = getMetadata(obj)
+        if md.id and RFG_IDS[md.id] then
+          table.insert(cardsToRemove, card.index)
+        end
+      end
+
+      for i = #cardsToRemove, 1, -1 do
+        obj.takeObject({
+          position = RFG.position,
+          rotation = RFG.rotation,
+          smooth   = false,
+          index    = cardsToRemove[i]
+        })
+      end
+      goto continue
     end
 
     -- move enemies and treacheries to the encounter deck
@@ -271,12 +269,11 @@ function cleanZone()
     ::continue::
   end
 
-  if not act1WasAdvanced then -- add in copies of Priest of A Thousand Masks
-    local card = chest.takeObject({ guid = "678204" })
+  -- add in copies of Priest of A Thousand Masks
+  local priests = chest.takeObject({ guid = "678204" })
+  if priests then
     DeckLib.placeOrMergeIntoDeck(card, ENCOUNTER_DECK_POS, ROTATION, nil, nil, true)
     CoroutineLib.yieldSeconds(0.5)
-    act1WasAdvanced = true
-    updateSave()
   end
 end
 
@@ -296,10 +293,6 @@ function placeLocations(region)
         end
       end
     end
-  end
-
-  if lastRegion == "Timeless Realm" then
-    placeEnemyFromEncounterDeck("06086", "The Crawling Mist", RFG.position)
   end
 
   if region == "Oriab" then
@@ -322,8 +315,6 @@ function placeLocations(region)
     end
     broadcastToAll("Place each investigator at Celephaïs.")
   end
-
-  lastRegion = region
 end
 
 function placeEnemyFromEncounterDeck(id, name, position, side)
