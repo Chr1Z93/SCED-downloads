@@ -74,6 +74,16 @@ do
     return lines
   end
 
+  local function rotateDirectionByCard(card, direction)
+    local cardRot = math.floor((card.getRotation().y + 45) / 90) % 4
+
+    local directions = { "north", "east", "south", "west" }
+    local index = ({ north = 4, east = 3, south = 2, west = 1 })[direction]
+
+    local rotatedIndex = (index - 1 + cardRot) % 4 + 1
+    return directions[rotatedIndex]
+  end
+
   -- returns the current grid position
   function LocationLib.getCurrentGrid(card)
     return PlayAreaApi.worldToGrid(card.getPosition())
@@ -198,47 +208,64 @@ do
   function LocationLib.createMovementArrows(card, directions)
     local buttonElements = {}
 
+    -- layout parameters
+    local buttonWidth  = 0.2
+    local buttonHeight = 0.15
+    local offsetX      = 0.4 -- distance from center in X for east/west
+    local offsetY      = 0.4 -- distance from center in Y for north/south
+
+    local symbols = {
+      north = "↑",
+      south = "↓",
+      east  = "→",
+      west  = "←"
+    }
+
     for _, dir in ipairs(directions) do
-      local anchorMin, anchorMax, symbol
+      local anchorCenterX, anchorCenterY
 
       if dir == "north" then
-        anchorMin, anchorMax = "0.4 0.8", "0.6 0.95"
-        symbol = "↑"
+        anchorCenterX, anchorCenterY = 0.5, 0.5 + offsetY
       elseif dir == "south" then
-        anchorMin, anchorMax = "0.4 0.05", "0.6 0.2"
-        symbol = "↓"
+        anchorCenterX, anchorCenterY = 0.5, 0.5 - offsetY
       elseif dir == "east" then
-        anchorMin, anchorMax = "0.05 0.4", "0.2 0.6"
-        symbol = "→"
+        anchorCenterX, anchorCenterY = 0.5 + offsetX, 0.5
       elseif dir == "west" then
-        anchorMin, anchorMax = "0.8 0.4", "0.95 0.6"
-        symbol = "←"
+        anchorCenterX, anchorCenterY = 0.5 - offsetX, 0.5
       end
+
+      local anchorMin = string.format("%.3f %.3f", anchorCenterX - buttonWidth / 2, anchorCenterY - buttonHeight / 2)
+      local anchorMax = string.format("%.3f %.3f", anchorCenterX + buttonWidth / 2, anchorCenterY + buttonHeight / 2)
 
       table.insert(buttonElements, {
         tag = "Button",
         attributes = {
           onClick       = "move_" .. dir,
-          text          = symbol,
-          fontSize      = "40",
+          text          = symbols[dir],
+          fontSize      = 225,
+          width         = 350,
+          height        = 350,
+          scale         = "0.2 0.2 1",
           color         = "#FFFFFFDD",
           outline       = "#000000FF",
           textColor     = "#000000FF",
           anchorMin     = anchorMin,
-          anchorMax     = anchorMax,
-          rectAlignment = "MiddleCenter"
+          anchorMax     = anchorMax
         }
       })
 
-      _G["move_" .. dir] = function() LocationLib.moveCardInDirection(self, dir) end
+      _G["move_" .. dir] = function()
+        local actualDir = rotateDirectionByCard(self, dir)
+        LocationLib.moveCardInDirection(self, actualDir)
+      end
     end
 
     local xmlTable = { {
       tag = "Panel",
       attributes = {
-        id = "arrowPanel",
-        width = "0",
-        height = "0",
+        id     = "arrowPanel",
+        width  = "500",
+        height = "700"
       },
       children = buttonElements
     } }
