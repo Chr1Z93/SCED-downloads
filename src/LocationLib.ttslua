@@ -7,42 +7,194 @@
 -- valid values are "north", "east", "south" and "west"
 
 do
-  local LocationLib = {}
+  local LocationLib      = {}
+  local GlobalApi        = require("Global/GlobalApi")
+  local GUIDReferenceApi = require("core/GUIDReferenceApi")
+  local PlayAreaApi      = require("playarea/PlayAreaApi")
+  local SearchLib        = require("util/SearchLib")
 
+  local CARD_SIZE        = Vector(2, 2, 3.2)
+  local GRID_OFFSET      = {
+    north = { x = 0, y = 1 },
+    east  = { x = -1, y = 0 },
+    south = { x = 0, y = -1 },
+    west  = { x = 1, y = 0 }
+  }
+  local previousLines
+
+  -- generates the lines data for a rectangular box
+  ---@param center tts__Vector Center of the box
+  ---@param size tts__Vector X and Z dimension of the box
+  ---@param rotation number Rotation around the Y-axis for the box
+  ---@param boxColor string Color for the box
+  ---@param thickness number Thickness for the box
+  ---@return table lines Vector line data for the box
+  local function generateBoxData(center, size, rotation, boxColor, thickness)
+    local halfWidth = size.x / 2
+    local halfDepth = size.z / 2
+
+    -- corners of the box in local coordinates
+    local corners = {
+      Vector(-halfWidth, 0, -halfDepth),
+      Vector(halfWidth, 0, -halfDepth),
+      Vector(halfWidth, 0, halfDepth),
+      Vector(-halfWidth, 0, halfDepth)
+    }
+
+    -- translate corners to global coordinates
+    for i, cornerVec in ipairs(corners) do
+      local rotatedCornerVec = cornerVec:rotateOver('y', rotation)
+      corners[i] = rotatedCornerVec + center
+    end
+
+    -- generate the lines data
+    local lines = {
+      {
+        points    = { corners[1], corners[2] },
+        color     = boxColor,
+        thickness = thickness
+      },
+      {
+        points    = { corners[2], corners[3] },
+        color     = boxColor,
+        thickness = thickness
+      },
+      {
+        points    = { corners[3], corners[4] },
+        color     = boxColor,
+        thickness = thickness
+      },
+      {
+        points    = { corners[4], corners[1] },
+        color     = boxColor,
+        thickness = thickness
+      }
+    }
+
+    return lines
+  end
+
+  -- returns the current grid position
   function LocationLib.getCurrentGrid(card)
-
+    return PlayAreaApi.worldToGrid(card.getPosition())
   end
 
   -- search a spot for objects
   function LocationLib.getObjectsAt(grid)
-
+    local position = PlayAreaApi.gridToWorld(grid)
+    local rotation = Vector(0, 270, 0)
+    local size = CARD_SIZE * 1.1
+    return SearchLib.inArea(position, rotation, size, "isInteractable", true)
   end
 
   -- gets the grid position of an adjacent spot
   function LocationLib.getAdjacentGrid(grid, direction)
-
+    local offset = GRID_OFFSET[direction]
+    return { x = grid.x + offset.x, y = grid.y + offset.y }
   end
 
   -- moves a card (and nearby cards) in a direction
   function LocationLib.moveCardInDirection(card, direction)
+    local canMove = LocationLib.canMoveInDirection(card, direction)
 
+    if not canMove then
+      printToAll("Adjacent position is already occupied.", "Orange")
+      return
+    end
+
+    local currentGrid  = LocationLib.getCurrentGrid(card)
+    local adjacentGrid = LocationLib.getAdjacentGrid(currentGrid, direction)
+    local currentPos   = PlayAreaApi.gridToWorld(currentGrid)
+    local adjacentPos  = PlayAreaApi.gridToWorld(adjacentGrid)
+    local moveVector   = adjacentPos - currentPos
+
+    for _, obj in ipairs(LocationLib.getObjectsAt(currentGrid)) do
+      obj.setPositionSmooth(obj.getPosition() + moveVector)
+    end
   end
 
   -- checks whether a card can move in a direction by searching for existing cards
   function LocationLib.canMoveInDirection(card, direction)
+    local currentGrid  = LocationLib.getCurrentGrid(card)
+    local adjacentGrid = LocationLib.getAdjacentGrid(currentGrid, direction)
 
+    for _, obj in ipairs(LocationLib.getObjectsAt(adjacentGrid)) do
+      if obj.type == "Card" then
+        return false
+      end
+    end
+    return true
   end
 
   -- displays a rectangular highlight on the play area for this position
-  function LocationLib.highlightGrid(gridPos, color)
+  function LocationLib.highlightGrid(grid, boxColor)
+    if not boxColor then
+      local optionPanel = GlobalApi.getOptionPanelState()
+      boxColor = optionPanel.playAreaConnectionColor
+    end
 
+    local center   = PlayAreaApi.gridToWorld(grid)
+    local rotation = Vector(0, 270, 0)
+    local lines    = generateBoxData(center, CARD_SIZE * 1.1, rotation, boxColor, 0.25)
+
+    -- keep previous lines if possible
+    previousLines  = previousLines or Global.getVectorLines()
+
+    local newLines = Global.getVectorLines()
+    for _, lineData in ipairs(lines) do
+      table.insert(newLines, lineData)
+    end
+
+    Global.setVectorLines(newLines)
+
+    if highlightWait then
+      Wait.stop(highlightWait)
+    end
+
+    highlightWait = Wait.time(function()
+      Global.setVectorLines(previousLines)
+      highlightWait = nil
+      previousLines = nil
+    end, 1)
   end
 
   -- labels all spots for debugging purposes
   function LocationLib.labelLocations()
+    local labeled = {} -- to avoid duplicate labels per grid
+    local zone = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "PlayAreaZone")
 
+    for _, obj in ipairs(zone.getObjects()) do
+      if obj.type == "Card" and obj.hasTag("Location") then
+        local grid = LocationLib.getCurrentGrid(obj)
+        local key = grid.x .. "," .. grid.y
+
+        if not labeled[key] then
+          labeled[key] = true
+          local worldPos = PlayAreaApi.gridToWorld(grid)
+          local textObj = spawnObject({
+            type         = "3DText",
+            position     = worldPos + Vector(0, 1.6, 0),
+            rotation     = Vector(90, 0, 0),
+            scale        = Vector(0.6, 0.6, 0.6),
+            sound        = false,
+            snap_to_grid = false
+          })
+
+          textObj.TextTool.setValue("(" .. grid.x .. "," .. grid.y .. ")")
+          textObj.TextTool.setFontSize(100)
+          textObj.interactable = false
+          textObj.addTag("LocationLabel")
+        end
+      end
+    end
+    Wait.time(LocationLib.clearLabels, 2)
   end
 
+  function LocationLib.clearLabels()
+    for _, obj in ipairs(getObjectsWithTag("LocationLabel")) do
+      obj.destruct()
+    end
+  end
 
   return LocationLib
 end
