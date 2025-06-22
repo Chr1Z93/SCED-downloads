@@ -14,6 +14,31 @@ local ALL_LOCATIONS        = {
   "Silver Twilight Lodge"
 }
 
+local ID_TO_ENGLISH_NAME = {
+  ["05292"] = "Rivertown",
+  ["05293"] = "Rivertown",
+  ["54051"] = "Rivertown",
+  ["05290"] = "French Hill",
+  ["05291"] = "French Hill",
+  ["54050"] = "French Hill",
+  ["05294"] = "Southside",
+  ["05295"] = "Southside",
+  ["54052"] = "Southside",
+  ["05296"] = "Uptown",
+  ["05297"] = "Uptown",
+  ["54053"] = "Uptown",
+  ["05298"] = "South Church",
+  ["05299"] = "South Church",
+  ["54054"] = "South Church",
+  ["05300"] = "Merchant District",
+  ["05301"] = "Merchant District",
+  ["54055"] = "Merchant District",
+  ["05302"] = "Hangman's Hill",
+  ["05304"] = "Hangman's Hill",
+  ["05303"] = "Silver Twilight Lodge",
+  ["05305"] = "Silver Twilight Lodge"
+}
+
 local RANDOMIZED_LOCATIONS = {
   { name = "Southside",         deck = "4730c6" },
   { name = "Rivertown",         deck = "3f6cb7" },
@@ -76,10 +101,13 @@ end
 function findBagLocations()
   -- find Hangman's Hill and Silver Twilight Lodge
   for i, obj in ipairs(searchLib.inArea(PLAYAREA.position, PLAYAREA.rotation, PLAYAREA.scale, "isCard")) do
-    if obj.getName() == "Hangman's Hill" then
-      locationData["Hangman's Hill"] = { guid = obj.getGUID(), breach = 0 }
-    elseif obj.getName() == "Silver Twilight Lodge" then
-      locationData["Silver Twilight Lodge"] = { guid = obj.getGUID(), breach = 0 }
+    local md = JSON.decode(obj.getGMNotes()) or {}
+    if md.id then
+      if ID_TO_ENGLISH_NAME[md.id] == "Hangman's Hill" then
+        locationData["Hangman's Hill"] = { guid = obj.getGUID(), breach = 0 }
+      elseif ID_TO_ENGLISH_NAME[md.id] == "Silver Twilight Lodge" then
+        locationData["Silver Twilight Lodge"] = { guid = obj.getGUID(), breach = 0 }
+      end
     end
   end
 end
@@ -123,7 +151,12 @@ function setup2(playerColor)
             rotation = SET_ASIDE.rotation
           })
         end
-        locationData[loc.name] = { guid = deck.remainder.guid, breach = 0 }
+        local locationCard = deck.remainder
+        local md = JSON.decode(locationCard.getGMNotes()) or {}
+        if md.id then
+          local englishName = ID_TO_ENGLISH_NAME[md.id]
+          locationData[englishName] = { guid = locationCard.guid, breach = 0 }
+        end
       end
 
       if text == "Yes" then
@@ -166,14 +199,14 @@ function broadCastRandomLocation()
   local location = locationData[name]
   local locationCard = getObjectFromGUID(location.guid)
   locationCard.highlightOn("Green", 3)
-  broadcastToAll(name)
+  broadcastToAll(locationCard.getName())
 end
 
 function placeClue()
   local name = getRandomLocationName()
   local location = locationData[name]
   local locationCard = getObjectFromGUID(location.guid)
-  broadcastToAll("Clue placed at: " .. name, "White")
+  broadcastToAll("Clue placed at: " .. locationCard.getName(), "White")
   tokenManagerApi.addUseToCard(locationCard, "clue")
 end
 
