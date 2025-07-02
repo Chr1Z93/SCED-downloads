@@ -42,7 +42,7 @@ local LOCATIONS         = {
   -- Timeless Realm
   { name = "Celephaïs",                      id = "06139", region = "Timeless Realm",  position = { -30.22, 1.6, -15.28 } },
   { name = "Serannian",                      id = "06140", region = "Timeless Realm",  position = { -23.68, 1.6, -15.28 } },
-  { name = "Hazuth-Kleg",                    id = "06141", region = "Timeless Realm",  position = { -36.77, 1.64, -15.28 } },
+  { name = "Hazuth-Kleg",                    id = "06141", region = "Timeless Realm",  position = { -36.77, 1.6, -15.28 } },
   { name = "Temple of Unattainable Desires", id = "06142", region = "Timeless Realm", },
   { name = "City-Which-Appears-On-No-Map",   id = "06143", region = "Timeless Realm", }
 }
@@ -100,7 +100,6 @@ function onLoad(saveData)
 
   -- delay to allow mythos area and chest to spawn
   Wait.time(function()
-    chest = MythosAreaApi.getSetAsideChest()
     ENCOUNTER_DECK_POS = MythosAreaApi.getEncounterDeckPosition()
     ENCOUNTER_DECK_DISCARD_POSITION = MythosAreaApi.getEncounterDiscardPosition()
     addDynamicPositions()
@@ -123,6 +122,7 @@ function buttonCreation()
 end
 
 function addDynamicPositions()
+  local chest = MythosAreaApi.getSetAsideChest()
   for i, loc in ipairs(LOCATIONS) do
     if (loc.name == "City-Which-Appears-On-No-Map" or loc.name == "Temple of Unattainable Desires") then
       loc.position = chest.getPosition() + Vector(0, i - 10, 0)
@@ -155,6 +155,7 @@ function setup(region)
     end
 
     -- spawn locationDeck if not yet done
+    local chest = MythosAreaApi.getSetAsideChest()
     if locationDeck == nil then
       locationDeck = chest.takeObject({
         guid     = "c5ed15", -- locations
@@ -163,18 +164,19 @@ function setup(region)
         rotation = SET_ASIDE.rotation
       })
       locationDeckGuid = locationDeck.getGUID()
+      CoroutineLib.yieldSeconds(0.5)
     end
 
     if region == "Timeless Realm" then
       local card = chest.takeObject({ guid = CRAWLING_MIST })
-      DeckLib.placeOrMergeIntoDeck(card, ENCOUNTER_DECK_POS, ROTATION, nil, nil, true)
-      CoroutineLib.yieldSeconds(0.5)
+      DeckLib.placeOrMergeIntoDeck(card, ENCOUNTER_DECK_POS, ROTATION)
+      CoroutineLib.yieldSeconds(1)
     end
 
     cleanZone()
-    CoroutineLib.yieldSeconds(1)
+    CoroutineLib.yieldSeconds(0.5)
     placeLocations(region)
-    CoroutineLib.yieldSeconds(1)
+    CoroutineLib.yieldSeconds(0.5)
 
     -- shuffle encounter deck
     local encounterDeckObjects = MythosAreaApi.getEncounterDeckObjects()
@@ -184,6 +186,7 @@ function setup(region)
     elseif encounterDeckObjects.draw then
       encounterDeckObjects.draw.shuffle()
     end
+    CoroutineLib.yieldSeconds(0.5)
   end
 
   CoroutineLib.start(KadathCoroutine)
@@ -246,8 +249,8 @@ function cleanZone()
 
     -- move enemies and treacheries to the encounter deck
     if obj.type == "Card" and obj.hasTag("ScenarioCard") and not obj.hasTag("Location") then
-      DeckLib.placeOrMergeIntoDeck(obj, ENCOUNTER_DECK_POS, ROTATION, nil, nil, true)
-      CoroutineLib.yieldSeconds(0.5)
+      DeckLib.placeOrMergeIntoDeck(obj, ENCOUNTER_DECK_POS, ROTATION)
+      CoroutineLib.yieldSeconds(1)
     end
 
     -- move locations to victory display or set aside
@@ -270,10 +273,11 @@ function cleanZone()
   end
 
   -- add in copies of Priest of A Thousand Masks
+  local chest   = MythosAreaApi.getSetAsideChest()
   local priests = chest.takeObject({ guid = "678204" })
   if priests then
-    DeckLib.placeOrMergeIntoDeck(card, ENCOUNTER_DECK_POS, ROTATION, nil, nil, true)
-    CoroutineLib.yieldSeconds(0.5)
+    DeckLib.placeOrMergeIntoDeck(priests, ENCOUNTER_DECK_POS, ROTATION)
+    CoroutineLib.yieldSeconds(1)
   end
 end
 
@@ -294,6 +298,8 @@ function placeLocations(region)
       end
     end
   end
+
+  local chest = MythosAreaApi.getSetAsideChest()
 
   if region == "Oriab" then
     placeEnemyFromEncounterDeck("06152", "Nightriders", getLocationPositionByName("Mt. Ngranek"), RIGHT)
