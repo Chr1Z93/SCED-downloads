@@ -1,0 +1,384 @@
+-- Library file for handling locations
+-- general remarks:
+-- "grid" refers to the 2D-Vector space that is local to the playarea (x -> right, y -> up)
+-- the center is (0, 0), the bottom left spot is (-2, -2) and the top right spot is (2, 2)
+--
+-- "direction" is a string that describes in which direction something should be moved
+-- valid values are "north", "east", "south" and "west"
+
+do
+  local LocationLib      = {}
+  local GlobalApi        = require("Global/GlobalApi")
+  local GUIDReferenceApi = require("core/GUIDReferenceApi")
+  local PlayAreaApi      = require("playarea/PlayAreaApi")
+  local SearchLib        = require("util/SearchLib")
+
+  local CARD_SIZE        = Vector(2.4, 2, 3.2)
+  local GRID_OFFSET      = {
+    north = { x = 0, y = 1 },
+    east  = { x = -1, y = 0 },
+    south = { x = 0, y = -1 },
+    west  = { x = 1, y = 0 }
+  }
+  local previousLines
+
+  -- generates the lines data for a rectangular box
+  ---@param center tts__Vector Center of the box
+  ---@param size tts__Vector X and Z dimension of the box
+  ---@param rotation number Rotation around the Y-axis for the box
+  ---@param boxColor string Color for the box
+  ---@param thickness number Thickness for the box
+  ---@return table lines Vector line data for the box
+  local function generateBoxData(center, size, rotation, boxColor, thickness)
+    local halfWidth = size.x / 2
+    local halfDepth = size.z / 2
+
+    -- corners of the box in local coordinates
+    local corners = {
+      Vector(-halfWidth, 0, -halfDepth),
+      Vector(halfWidth, 0, -halfDepth),
+      Vector(halfWidth, 0, halfDepth),
+      Vector(-halfWidth, 0, halfDepth)
+    }
+
+    -- translate corners to global coordinates
+    for i, cornerVec in ipairs(corners) do
+      local rotatedCornerVec = cornerVec:rotateOver('y', rotation)
+      corners[i] = rotatedCornerVec + center
+    end
+
+    -- generate the lines data
+    local lines = {
+      {
+        points    = { corners[1], corners[2] },
+        color     = boxColor,
+        thickness = thickness
+      },
+      {
+        points    = { corners[2], corners[3] },
+        color     = boxColor,
+        thickness = thickness
+      },
+      {
+        points    = { corners[3], corners[4] },
+        color     = boxColor,
+        thickness = thickness
+      },
+      {
+        points    = { corners[4], corners[1] },
+        color     = boxColor,
+        thickness = thickness
+      }
+    }
+
+    return lines
+  end
+
+  local function rotateDirectionByCard(card, direction)
+    local cardRot = math.floor((card.getRotation().y + 45) / 90) % 4
+
+    local directions = { "north", "east", "south", "west" }
+    local index = ({ north = 4, east = 3, south = 2, west = 1 })[direction]
+
+    local rotatedIndex = (index - 1 + cardRot) % 4 + 1
+    return directions[rotatedIndex]
+  end
+
+  local function moveObjectsByOffset(objects, offset)
+    for _, obj in ipairs(objects) do
+      if obj ~= nil then
+        local pos = obj.getPosition() + offset
+
+        obj.setLock(true)
+        obj.setPositionSmooth(pos)
+
+        Wait.time(function()
+          if obj ~= nil then
+            obj.setLock(false)
+            obj.setPosition(pos)
+            obj.resting = true
+          end
+        end, 1)
+      end
+    end
+  end
+
+  -- returns the current grid position
+  function LocationLib.getCurrentGrid(card)
+    return PlayAreaApi.worldToGrid(card.getPosition())
+  end
+
+  -- search a spot for objects
+  function LocationLib.getObjectsAt(grid)
+    local position = PlayAreaApi.gridToWorld(grid)
+    local rotation = Vector(0, 270, 0)
+    local size     = CARD_SIZE * 1.6
+    return SearchLib.inArea(position, rotation, size, "isInteractable")
+  end
+
+  -- gets the grid position of an adjacent spot
+  function LocationLib.getAdjacentGrid(grid, direction)
+    local offset = GRID_OFFSET[direction]
+    return { x = grid.x + offset.x, y = grid.y + offset.y }
+  end
+
+  function LocationLib.swapCardInDirection(card, direction)
+    if currentlyMoving then return end
+    currentlyMoving = true
+    Wait.time(function() currentlyMoving = false end, 2)
+
+    local canSwap = not LocationLib.isAdjacentGridEmpty(card, direction)
+
+    if not canSwap then
+      broadcastToAll("Adjacent position is empty.", "Orange")
+      return
+    end
+
+    local currentGrid      = LocationLib.getCurrentGrid(card)
+    local adjacentGrid     = LocationLib.getAdjacentGrid(currentGrid, direction)
+    local currentPos       = PlayAreaApi.gridToWorld(currentGrid)
+    local adjacentPos      = PlayAreaApi.gridToWorld(adjacentGrid)
+
+    local sourceObjects    = LocationLib.getObjectsAt(currentGrid)
+    local targetObjects    = LocationLib.getObjectsAt(adjacentGrid)
+
+    -- check target for invalid swap ID
+    local INVALID_SWAP_IDS = card.getTable("INVALID_SWAP_IDS")
+    if INVALID_SWAP_IDS then
+      for _, obj in ipairs(targetObjects) do
+        if obj.type == "Card" then
+          local md = JSON.decode(obj.getGMNotes()) or {}
+          if md.id and INVALID_SWAP_IDS[md.id] then
+            broadcastToAll("Can't swap with this location.", "Red")
+            return
+          end
+        end
+      end
+    end
+
+    -- remove duplicates based on proximity
+    local function removeDuplicates(source, target, pos1, pos2)
+      for i = #source, 1, -1 do
+        local obj = source[i]
+        for j = #target, 1, -1 do
+          if target[j] == obj then
+            local distToCurrent  = (obj.getPosition() - pos1).magnitude()
+            local distToAdjacent = (obj.getPosition() - pos2).magnitude()
+            if distToCurrent < distToAdjacent then
+              table.remove(target, j)
+            else
+              table.remove(source, i)
+            end
+            break
+          end
+        end
+      end
+    end
+
+    removeDuplicates(sourceObjects, targetObjects, currentPos, adjacentPos)
+
+    -- sort cards last
+    local function sortObjectsByType(objects)
+      table.sort(objects, function(a, b)
+        local typeA = a.type
+        local typeB = b.type
+
+        -- always place "Card" last
+        if typeA == "Card" and typeB ~= "Card" then
+          return false
+        elseif typeB == "Card" and typeA ~= "Card" then
+          return true
+        else
+          return typeA < typeB
+        end
+      end)
+    end
+
+    sortObjectsByType(sourceObjects)
+    sortObjectsByType(targetObjects)
+
+    -- lift cards from source location
+    local liftVector = Vector(0, 3, 0)
+    moveObjectsByOffset(sourceObjects, liftVector)
+
+    Wait.time(function()
+      -- move cards from target location
+      moveObjectsByOffset(targetObjects, currentPos - adjacentPos)
+
+      -- move cards from source location
+      moveObjectsByOffset(sourceObjects, adjacentPos - currentPos - liftVector)
+    end, 1)
+  end
+
+  -- moves a card (and nearby cards) in a direction
+  function LocationLib.moveCardInDirection(card, direction)
+    if currentlyMoving then return end
+    currentlyMoving = true
+    Wait.time(function() currentlyMoving = false end, 1)
+
+    local canMove = LocationLib.isAdjacentGridEmpty(card, direction)
+
+    if not canMove then
+      broadcastToAll("Adjacent position is already occupied.", "Orange")
+      return
+    end
+
+    local currentGrid  = LocationLib.getCurrentGrid(card)
+    local adjacentGrid = LocationLib.getAdjacentGrid(currentGrid, direction)
+    local currentPos   = PlayAreaApi.gridToWorld(currentGrid)
+    local adjacentPos  = PlayAreaApi.gridToWorld(adjacentGrid)
+    local moveVector   = adjacentPos - currentPos
+
+    -- check grid limitation
+    local gridLimitY   = card.getTable("GRID_LIMIT_Y")
+    if gridLimitY then
+      if adjacentGrid.y > gridLimitY.max or adjacentGrid.y < gridLimitY.min then
+        broadcastToAll("Adjacent position is outside of defined range.", "Orange")
+        return
+      end
+    end
+
+    moveObjectsByOffset(LocationLib.getObjectsAt(currentGrid), moveVector)
+  end
+
+  -- checks whether a card can move in a direction by searching for existing cards
+  function LocationLib.isAdjacentGridEmpty(card, direction)
+    local currentGrid  = LocationLib.getCurrentGrid(card)
+    local adjacentGrid = LocationLib.getAdjacentGrid(currentGrid, direction)
+
+    for _, obj in ipairs(LocationLib.getObjectsAt(adjacentGrid)) do
+      if obj.type == "Card" then
+        return false
+      end
+    end
+    return true
+  end
+
+  -- displays a rectangular highlight on the play area for this position
+  function LocationLib.highlightGrid(grid, boxColor)
+    if not boxColor then
+      local optionPanel = GlobalApi.getOptionPanelState()
+      boxColor = optionPanel.playAreaConnectionColor
+    end
+
+    local center   = PlayAreaApi.gridToWorld(grid)
+    local lines    = generateBoxData(center, CARD_SIZE * 1.25, 270, boxColor, 0.15)
+
+    -- keep previous lines if possible
+    previousLines  = previousLines or Global.getVectorLines() or {}
+
+    local newLines = Global.getVectorLines() or {}
+    for _, lineData in ipairs(lines) do
+      table.insert(newLines, lineData)
+    end
+
+    Global.setVectorLines(newLines)
+
+    if highlightWait then
+      Wait.stop(highlightWait)
+    end
+
+    highlightWait = Wait.time(function()
+      Global.setVectorLines(previousLines)
+      highlightWait = nil
+      previousLines = nil
+    end, 1)
+  end
+
+  -- labels all spots for debugging purposes
+  function LocationLib.labelLocations()
+    local labeled = {} -- to avoid duplicate labels per grid
+    local zone = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "PlayAreaZone")
+
+    for _, obj in ipairs(zone.getObjects()) do
+      if obj.type == "Card" and obj.hasTag("Location") then
+        local grid = LocationLib.getCurrentGrid(obj)
+        local key = grid.x .. "," .. grid.y
+
+        if not labeled[key] then
+          labeled[key] = true
+          local worldPos = PlayAreaApi.gridToWorld(grid)
+          local textObj = spawnObject({
+            type         = "3DText",
+            position     = worldPos + Vector(3, 0, 0),
+            rotation     = Vector(90, 90, 0),
+            scale        = Vector(0.6, 0.6, 0.6),
+            sound        = false,
+            snap_to_grid = false
+          })
+
+          textObj.TextTool.setValue("(" .. grid.x .. "," .. grid.y .. ")")
+          textObj.TextTool.setFontSize(75)
+          textObj.interactable = false
+          textObj.addTag("LocationLabel")
+        end
+      end
+    end
+    Wait.time(LocationLib.clearLabels, 3)
+  end
+
+  function LocationLib.clearLabels()
+    for _, obj in ipairs(getObjectsWithTag("LocationLabel")) do
+      obj.destruct()
+    end
+  end
+
+  function LocationLib.createMovementArrows(card, directions, active, swap, xmlRotation)
+    if active == nil then
+      active = true
+    end
+
+    local buttonElements = {}
+
+    local buttonData = {
+      north = { symbol = "↑", x = 0, y = 200 },
+      south = { symbol = "↓", x = 0, y = -200 },
+      east  = { symbol = "→", x = 150, y = 0 },
+      west  = { symbol = "←", x = -150, y = 0 }
+    }
+
+    for _, dir in ipairs(directions) do
+      table.insert(buttonElements, {
+        tag = "Button",
+        attributes = {
+          onClick       = "clicked_" .. dir,
+          text          = buttonData[dir].symbol,
+          fontStyle     = "Bold",
+          fontSize      = 250,
+          width         = 325,
+          height        = 325,
+          scale         = "0.2 0.2 1",
+          color         = "#EEEEEEAA",
+          outline       = "#000000FF",
+          textColor     = "#000000FF",
+          textAlignment = "MiddleCenter",
+          offsetXY      = buttonData[dir].x .. " " .. buttonData[dir].y
+        }
+      })
+
+      _G["clicked_" .. dir] = function()
+        if swap then
+          LocationLib.swapCardInDirection(self, rotateDirectionByCard(self, dir))
+        else
+          LocationLib.moveCardInDirection(self, rotateDirectionByCard(self, dir))
+        end
+      end
+    end
+
+    local xmlTable = { {
+      tag = "Panel",
+      attributes = {
+        id       = "arrowPanel",
+        width    = "400",
+        height   = "560",
+        rotation = "0 " .. (xmlRotation or 0) .. " 0",
+        active   = active
+      },
+      children = buttonElements
+    } }
+
+    card.UI.setXmlTable(xmlTable)
+  end
+
+  return LocationLib
+end

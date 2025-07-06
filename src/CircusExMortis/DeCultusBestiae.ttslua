@@ -1,0 +1,112 @@
+-- this is a modified version of the library file (2023-07-17) for moon tokens
+-- only [Moon] tokens will be eligible for sealing
+
+UPDATE_ON_HOVER = true
+KEEP_OPEN = true
+SHOW_SINGLE_RELEASE = true
+
+local tokenArrangerApi = require("tokens/TokenArrangerApi")
+local sealedTokens = {}
+local tokensInBag = 0
+
+function onSave() return JSON.encode(sealedTokens) end
+
+function onLoad(savedData)
+  sealedTokens = JSON.decode(savedData) or {}
+  generateContextMenu()
+  self.addTag("CardThatSeals")
+end
+
+-- builds the context menu
+function generateContextMenu()
+  -- conditional single or multi release options
+  if SHOW_SINGLE_RELEASE then
+    self.addContextMenuItem("Release single", releaseOneToken)
+  end
+
+  self.addContextMenuItem("Release all", releaseAllTokens)
+
+  -- main context menu options to seal [unnamed] tokens
+  self.addContextMenuItem("Seal Moon", function(playerColor)
+    sealToken(playerColor)
+  end, KEEP_OPEN)
+end
+
+-- generates a list of chaos tokens that is in the chaos bag
+function readBag()
+  local chaosbag = Global.call("findChaosBag")
+  tokensInBag = 0
+
+  for _, token in ipairs(chaosbag.getObjects()) do
+    if token.name == "Moon" then
+      tokensInBag = tokensInBag + 1
+    end
+  end
+end
+
+-- native event from TTS - used to update the context menu for cards like "Unrelenting"
+function onHover()
+  if UPDATE_ON_HOVER then
+    readBag()
+    self.clearContextMenu()
+    generateContextMenu()
+  end
+end
+
+-- seals the named token on this card
+function sealToken(playerColor)
+  if not Global.call("canTouchChaosTokens") then return end
+  local chaosbag = Global.call("findChaosBag")
+  for i, obj in ipairs(chaosbag.getObjects()) do
+    if obj.name == "Moon" then
+      chaosbag.takeObject({
+        position = self.getPosition() + Vector(0, 0.5 + 0.1 * #sealedTokens, 0),
+        rotation = self.getRotation(),
+        index = i - 1,
+        smooth = false,
+        callback_function = function(token)
+          local guid = token.getGUID()
+          table.insert(sealedTokens, guid)
+          tokenArrangerApi.layout()
+        end
+      })
+      return
+    end
+  end
+  printToColor("Moon token not found in chaos bag", playerColor)
+end
+
+-- release the last sealed token
+function releaseOneToken(playerColor)
+  if not Global.call("canTouchChaosTokens") then return end
+  if #sealedTokens == 0 then
+    printToColor("No sealed token(s) found", playerColor)
+  else
+    printToColor("Releasing token", playerColor)
+    putTokenAway(table.remove(sealedTokens))
+  end
+end
+
+-- releases all sealed tokens
+function releaseAllTokens(playerColor)
+  if not Global.call("canTouchChaosTokens") then return end
+  if #sealedTokens == 0 then
+    printToColor("No sealed token(s) found", playerColor)
+  else
+    printToColor("Releasing token(s)", playerColor)
+    for _, guid in ipairs(sealedTokens) do
+      putTokenAway(guid)
+    end
+    sealedTokens = {}
+  end
+end
+
+-- returns the token (referenced by GUID) to the chaos bag
+function putTokenAway(guid)
+  local token = getObjectFromGUID(guid)
+  if not token then return end
+
+  local chaosbag = Global.call("findChaosBag")
+  chaosbag.putObject(token)
+  tokenArrangerApi.layout()
+end
