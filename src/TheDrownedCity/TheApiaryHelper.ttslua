@@ -5,6 +5,7 @@ local MythosAreaApi         = require("mythos/MythosAreaApi")
 
 local ENCOUNTER_DECK_DISCARD_POSITION = MythosAreaApi.getEncounterDiscardPosition()
 local INESCAPABLE_SET_GUID       = "4a2ddd"
+local nextSetupStep        = 1
 local trash
 
 local APIARY_DATA = {
@@ -32,12 +33,25 @@ local APIARY_DATA = {
   }
 }
 
-function onLoad()
+function updateSave()
+  self.script_state = tostring(nextSetupStep)
+end
+
+function onLoad(savedData)
+  if savedData and savedData ~= "" then
+    nextSetupStep = tonumber(savedData)
+  end
+  
   trash = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
   if not trash then
     printToAll("Trash not found!", "Red")
   end
 
+  createButtons()
+end
+
+function createButtons()
+  self.clearButtons()
   self.createButton({
     label = "Western",
     click_function = "westernSetup",
@@ -61,6 +75,25 @@ function onLoad()
     font_color = { r = 0, g = 0, b = 0 },
     color = { r = 1, g = 1, b = 1 }
   })
+  if nextSetupStep == 2 or nextSetupStep == 3 then
+    self.removeButton(1)
+    self.editButton({
+      index = 0,
+      label = "Set Up\nNext Part\nWhen\nInstructed ",
+      click_function = "setup" .. nextSetupStep,
+      position = { 0, 0.1, 0 },
+      height = 450,
+      font_size = 90
+    })
+  elseif nextSetupStep > 3 then
+    trash.putObject(self)
+  end
+end
+
+function increaseSetupStep()
+  nextSetupStep = nextSetupStep + 1
+  updateSave()
+  createButtons()
 end
 
 function westernSetup()
@@ -93,7 +126,7 @@ function setup(color)
     local extraEncounter = getObjectFromGUID(APIARY_DATA[direction].extraEncounterSets)
     DeckLib.placeOrMergeIntoDeck(extraEncounter, MythosAreaApi.getEncounterDeckPosition(), nil, false, true)
     broadcastToAll("Shuffled '" .. APIARY_DATA[direction].extraEncounterSetsName .."' into the encounter deck.")
-    CoroutineLib.yieldSeconds(1.5)
+    CoroutineLib.yieldSeconds(2)
 
     local encounterDeck = MythosAreaApi.getEncounterDeckObjects()
     local newFirstLocation = getObjectFromGUID(APIARY_DATA[direction].locationCard1)
@@ -102,15 +135,8 @@ function setup(color)
     DeckLib.shuffleIntoTopOrBottomX(newFirstLocation, encounterDeck.draw, true, 10, true)
 
     broadcastToAll("Shuffled '" .. firstLocationName .."' into the bottom 10 cards of the encounter deck.")
-    self.removeButton(1)
-    self.editButton({
-      index = 0,
-      label = "Set Up\nNext Part\nWhen\nInstructed ",
-      click_function = "setup2",
-      position = { 0, 0.1, 0 },
-      height = 450,
-      font_size = 90
-    })
+    CoroutineLib.yieldSeconds(1)
+    increaseSetupStep()
 
     if direction == "east" then
       local chest = MythosAreaApi.getSetAsideChest()
@@ -141,7 +167,7 @@ function setup2()
     if direction == "west" then
       -- shuffle in Pilgrims
       chest.takeObject({ guid = "d7784d" , position = ENCOUNTER_DECK_DISCARD_POSITION, rotation = {0, 270, 0}, smooth = false})
-      CoroutineLib.yieldSeconds(0.5)
+      CoroutineLib.yieldSeconds(1)
       MythosAreaApi.reshuffleEncounterDeck(true)
       broadcastToAll("Shuffled 'Pilgrims' encounter set and discard pile into the encounter deck.")
     else
@@ -150,16 +176,17 @@ function setup2()
 
     -- take two locations out of set-aside box
     setAsideLocations = chest.takeObject({guid = APIARY_DATA[direction].apiaryLocations, position = {1.50, 1.60, 7}, rotation = {0, 270, 180}})
-    CoroutineLib.yieldSeconds(1)
+    CoroutineLib.yieldSeconds(1.5)
     card1 = setAsideLocations.takeObject({guid = APIARY_DATA[direction].locationCard2, position = {1.50, 1.60, 3}})
     card2 = setAsideLocations.takeObject({guid = APIARY_DATA[direction].locationCard3, position = {1.50, 1.60, 3.5}})
-    CoroutineLib.yieldSeconds(1)
+    CoroutineLib.yieldSeconds(1.5)
     local newLocations = group({card1, card2})
-    CoroutineLib.yieldSeconds(1)
+    CoroutineLib.yieldSeconds(1.5)
     DeckLib.shuffleIntoTopOrBottomX(newLocations, encounterDeck.draw, true, 10)
     broadcastToAll("Shuffled '" .. card1.getName() .. "' and 'Corrupted Vault' into the bottom 10 cards of the encounter deck.")
     chest.putObject(setAsideLocations)
-    self.editButton({ index = 0, click_function = "setup3" })
+    increaseSetupStep()
+
   end
 
   CoroutineLib.start(setup2Coroutine)
@@ -175,10 +202,10 @@ function setup3()
   
     -- take out final two locations from the set-aside box
     setAsideLocations = chest.takeObject({guid = APIARY_DATA[direction].apiaryLocations, position = {1.50, 1.60, 7}, rotation = {0, 270, 180}})
-    CoroutineLib.yieldSeconds(0.5)
+    CoroutineLib.yieldSeconds(1)
     DeckLib.shuffleIntoTopOrBottomX(setAsideLocations, encounterDeck.draw, true, 10)
     broadcastToAll("Shuffled '".. APIARY_DATA[direction].locationCard4Name .."' and 'Churning Chasm' into the bottom 10 cards of the encounter deck.")
-    trash.putObject(self)
+    increaseSetupStep()
   end
 
   CoroutineLib.start(setup3Coroutine)
