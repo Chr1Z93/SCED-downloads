@@ -1,9 +1,9 @@
-local deckLib                    = require("util/DeckLib")
-local guidReferenceApi           = require("core/GUIDReferenceApi")
-local mythosAreaApi              = require("mythos/MythosAreaApi")
-local playmatApi                 = require("playermat/PlayermatApi")
-local playAreaApi                = require("playarea/PlayAreaApi")
-local searchLib                  = require("util/SearchLib")
+local DeckLib                    = require("util/DeckLib")
+local GUIDReferenceApi           = require("core/GUIDReferenceApi")
+local MythosAreaApi              = require("mythos/MythosAreaApi")
+local PlayermatApi               = require("playermat/PlayermatApi")
+local PlayAreaApi                = require("playarea/PlayAreaApi")
+local SearchLib                  = require("util/SearchLib")
 
 local options                    = {}
 local exploreDeckOffset          = Vector(0.5887, 0.5, 0)
@@ -54,12 +54,14 @@ function onSave()
 end
 
 function onLoad(savedData)
-  if savedData ~= "" then
+  if savedData and savedData ~= "" then
     local loadedData = JSON.decode(savedData)
     if loadedData.loopId then
       loopId = Wait.time(getNumLocations, 2, -1)
     end
+
     options = loadedData.options
+
     -- update UI to match saved state
     for id, state in pairs(options) do
       self.UI.setAttribute(id, "image", state and "option_on" or "option_off")
@@ -84,7 +86,7 @@ end
 
 function getDeckOrCardAtLocalOffset(localOffset)
   local pos = self.positionToWorld(localOffset)
-  local searchResult = searchLib.atPosition(pos, "isCardOrDeck")
+  local searchResult = SearchLib.atPosition(pos, "isCardOrDeck")
 
   -- check if a deck was found
   for _, obj in ipairs(searchResult) do
@@ -132,15 +134,16 @@ function explore()
   if exploreDeck then
     local card
     if exploreDeck.type == "Deck" then
-      card = exploreDeck.takeObject()
+      card = exploreDeck.takeObject({ position = exploreDeck.getPosition() + Vector(0, 1, 0) })
     else
       card = exploreDeck
     end
-    local pos = self.positionToWorld(exploreDiscardOffset)
-    deckLib.placeOrMergeIntoDeck(card, pos, self.getRotation())
 
-    currentScenario = mythosAreaApi.returnTokenData().currentScenario
-    Wait.time(getTopRevealedCard, .5)
+    local pos = self.positionToWorld(exploreDiscardOffset)
+    DeckLib.placeOrMergeIntoDeck(card, pos, self.getRotation())
+
+    currentScenario = MythosAreaApi.returnTokenData().currentScenario
+    Wait.time(getTopRevealedCard, 0.5)
   else
     broadcastToAll("Exploration deck is already empty", "Red")
   end
@@ -165,7 +168,7 @@ function checkEmptyDiscard()
   end
 
   local md = JSON.decode(notes) or {}
-  
+
   -- check via metadata if a location is revealed
   if md.type == "Location" then
     return true
@@ -191,18 +194,19 @@ function shuffleBack(forceShuffle)
         rot = exploreDiscard.getRotation():setAt("z", 180)
       end
       local pos = self.positionToWorld(exploreDeckOffset)
-      deckLib.placeOrMergeIntoDeck(exploreDiscard, pos, rot)
+      DeckLib.placeOrMergeIntoDeck(exploreDiscard, pos, rot)
       broadcastToAll("Shuffled locations back into deck.", "White")
     end
-    -- wait until deck is in place .5 seconds, then shuffle
-    Wait.time(function() getExploreDeck().shuffle() end, .5)
+
+    -- wait until deck is in place, then shuffle
+    Wait.time(function() getExploreDeck().shuffle() end, 0.5)
   end
 end
 
 -- take top card of encounter deck and shuffle it in for return to TFA
 function takeEncounter()
   if checkEmptyDiscard() then
-    local encounterDeckObjects = mythosAreaApi.getEncounterDeckObjects()
+    local encounterDeckObjects = MythosAreaApi.getEncounterDeckObjects()
     if encounterDeckObjects.topCard or encounterDeckObjects.draw then
       local card
       if encounterDeckObjects.topCard then
@@ -212,9 +216,10 @@ function takeEncounter()
       else
         card = encounterDeckObjects.draw
       end
+
       local pos = self.positionToWorld(exploreDeckOffset)
-      deckLib.placeOrMergeIntoDeck(card, pos)
-      if encounterDeckObjects.topCard then mythosAreaApi.flipTopCardFromDeck() end
+      DeckLib.placeOrMergeIntoDeck(card, pos)
+      if encounterDeckObjects.topCard then MythosAreaApi.flipTopCardFromDeck() end
       shuffleBack(true)
     else
       broadcastToAll("Encounter deck is empty", "Red")
@@ -233,7 +238,7 @@ function getNumLocations()
     return
   end
 
-  currentScenario = mythosAreaApi.returnTokenData().currentScenario
+  currentScenario = MythosAreaApi.returnTokenData().currentScenario
   if currentScenario == "Relics of the Past" then
     self.UI.setValue("countingText", "in exploration deck are locations or assets")
     self.UI.setAttribute("countingPanel", "height", 500)
@@ -329,7 +334,7 @@ function getTopRevealedCard()
 
   local green, red = false, false
   allHighlightedCards = {}
-  for locGuid, metadata in pairs(playAreaApi.getTrackedLocations()) do
+  for locGuid, metadata in pairs(PlayAreaApi.getTrackedLocations()) do
     if string.find(metadata.connections, mdTopCard.locationFront.icons) then
       local obj = getObjectFromGUID(locGuid)
       if obj ~= nil then
@@ -362,19 +367,19 @@ function discardTopRevealed()
 
   local topCard
   if exploreDiscard.type == "Deck" then
-    topCard = exploreDiscard.takeObject()
+    topCard = exploreDiscard.takeObject({ position = exploreDiscard.getPosition() + Vector(0, 1, 0) })
   else
     topCard = exploreDiscard
   end
 
   Wait.time(
     function()
-      deckLib.placeOrMergeIntoDeck(topCard, ENCOUNTER_DISCARD_POSITION, { x = 0, y = -90, z = 0 })
+      DeckLib.placeOrMergeIntoDeck(topCard, ENCOUNTER_DISCARD_POSITION, { x = 0, y = -90, z = 0 })
     end, 0.1)
   self.UI.hide("sideButton")
   discardHidden = true
 
-  Wait.time(shuffleBack, 0.2)
+  Wait.time(shuffleBack, 0.5)
 end
 
 function drawTopRevealed(player)
@@ -386,20 +391,20 @@ function drawTopRevealed(player)
     return
   end
 
-  local matColor = playmatApi.getMatColor(player.color)
-  local mat = guidReferenceApi.getObjectByOwnerAndType(matColor, "Playermat")
+  local matColor = PlayermatApi.getMatColor(player.color)
+  local mat = GUIDReferenceApi.getObjectByOwnerAndType(matColor, "Playermat")
   local topCard
 
   if exploreDiscard.type == "Deck" then
-    topCard = exploreDiscard.takeObject()
+    topCard = exploreDiscard.takeObject({ position = exploreDiscard.getPosition() + Vector(0, 1, 0) })
   else
     topCard = exploreDiscard
   end
 
-  pos = playmatApi.getEncounterCardDrawPosition(matColor, false)
+  pos = PlayermatApi.getEncounterCardDrawPosition(matColor, false)
 
-  deckLib.placeOrMergeIntoDeck(topCard, pos, { 0, mat.getRotation().y, 0 })
-  Wait.frames(shuffleBack, 3)
+  DeckLib.placeOrMergeIntoDeck(topCard, pos, { 0, mat.getRotation().y, 0 })
+  Wait.time(shuffleBack, 0.5)
 end
 
 ---------------------------------------------------------
@@ -410,7 +415,7 @@ function useSupply()
   local numberOfRevealed
   -- figure out if using two or three cards
 
-  for locGuid, _ in pairs(playAreaApi.getTrackedLocations()) do
+  for locGuid, _ in pairs(PlayAreaApi.getTrackedLocations()) do
     local obj = getObjectFromGUID(locGuid)
     local metadata = JSON.decode(obj.getGMNotes()) or {}
     if metadata.id == "04206" then
@@ -482,7 +487,7 @@ function isSomethingRevealed()
   local exploreDeck = getExploreDeck()
 
   for _, pos in ipairs(revealCardPositions) do
-    for _, obj in ipairs(searchLib.atPosition(exploreDeck.positionToWorld(pos), "isCard")) do
+    for _, obj in ipairs(SearchLib.atPosition(exploreDeck.positionToWorld(pos), "isCard")) do
       return true
     end
   end
@@ -518,25 +523,25 @@ end
 function placeOnBottom(_, cardGUID)
   local card = getObjectFromGUID(cardGUID)
   card.UI.setXml("")
-  deckLib.placeOrMergeIntoDeck(card, self.positionToWorld(exploreDeckOffset), card.getRotation():setAt("z", 180), true)
+  DeckLib.placeOrMergeIntoDeck(card, self.positionToWorld(exploreDeckOffset), card.getRotation():setAt("z", 180), true)
 end
 
 function placeOnTop(_, cardGUID)
   local card = getObjectFromGUID(cardGUID)
   card.UI.setXml("")
-  deckLib.placeOrMergeIntoDeck(card, self.positionToWorld(exploreDeckOffset), card.getRotation():setAt("z", 180))
+  DeckLib.placeOrMergeIntoDeck(card, self.positionToWorld(exploreDeckOffset), card.getRotation():setAt("z", 180))
 end
 
 function discardSelf(_, cardGUID)
   local card = getObjectFromGUID(cardGUID)
   card.UI.setXml("")
-  deckLib.placeOrMergeIntoDeck(card, ENCOUNTER_DISCARD_POSITION, { x = 0, y = -90, z = 0 })
+  DeckLib.placeOrMergeIntoDeck(card, ENCOUNTER_DISCARD_POSITION, { x = 0, y = -90, z = 0 })
 end
 
 function shuffleRevealedBack(_, cardGUID)
   local card = getObjectFromGUID(cardGUID)
   card.UI.setXml("")
-  deckLib.placeOrMergeIntoDeck(card, self.positionToWorld(exploreDeckOffset), card.getRotation():setAt("z", 180))
+  DeckLib.placeOrMergeIntoDeck(card, self.positionToWorld(exploreDeckOffset), card.getRotation():setAt("z", 180))
   Wait.time(function() getExploreDeck().shuffle() end, 1) -- necessary for 3.9.2
 end
 
