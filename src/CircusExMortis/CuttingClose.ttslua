@@ -1,0 +1,85 @@
+local BlessCurseManagerApi = require("chaosbag/BlessCurseManagerApi")
+local ChaosBagApi          = require("chaosbag/ChaosBagApi")
+
+local sealedTokenGUIDs     = {}
+local sealAmount           = 4
+
+function onSave() return JSON.encode(sealedTokenGUIDs) end
+
+function onLoad(savedData)
+  if savedData and savedData ~= "" then
+    sealedTokenGUIDs = JSON.decode(savedData) or {}
+  end
+
+  -- work out the seal amount based on metadata
+  local md = JSON.decode(self.getGMNotes()) or {}
+  if md.TtsZoopGuid == "94ab09ad-33ba-403a-a481-1112f80b0fca" then
+    sealAmount = 4
+  else
+    sealAmount = 6
+  end
+
+  updateMenu()
+end
+
+function updateMenu()
+  self.clearContextMenu()
+  if #sealedTokenGUIDs > 0 then
+    self.addContextMenuItem("Release tokens", releaseTokens)
+  else
+    self.addContextMenuItem("Seal " .. sealAmount .. " tokens", sealTokens)
+  end
+end
+
+function sealTokens()
+  local nameTable = {}
+  local chaosbag  = ChaosBagApi.findChaosBag()
+  chaosbag.shuffle()
+
+  for i = 1, sealAmount do
+    for j, token in ipairs(chaosbag.getObjects()) do
+      if token.name ~= "Auto-fail" then
+        local obj = chaosbag.takeObject({
+          position = self.getPosition() + Vector(0, 0.15 * i, 0),
+          rotation = self.getRotation(),
+          index = token.index
+        })
+
+        local guid = obj.getGUID()
+        local name = obj.getName()
+
+        if name == "Bless" or name == "Curse" then
+          BlessCurseManagerApi.sealedToken(name, guid, true)
+        end
+
+        table.insert(sealedTokenGUIDs, guid)
+        table.insert(nameTable, name)
+        break
+      end
+    end
+  end
+
+  local combinedString = table.concat(nameTable, ", ")
+  printToAll("Sealed tokens: " .. combinedString)
+  Wait.time(function() updateMenu() end, 0.1)
+end
+
+function releaseTokens()
+  local chaosbag = ChaosBagApi.findChaosBag()
+
+  if sealedTokenGUIDs == nil then return end
+  for i = 1, #sealedTokenGUIDs do
+    local obj = getObjectFromGUID(sealedTokenGUIDs[i])
+    local guid = obj.getGUID()
+    local name = obj.getName()
+
+    chaosbag.putObject(obj)
+
+    if name == "Bless" or name == "Curse" then
+      BlessCurseManagerApi.releasedToken(name, guid, false, true)
+    end
+  end
+
+  sealedTokenGUIDs = {}
+  updateMenu()
+end
