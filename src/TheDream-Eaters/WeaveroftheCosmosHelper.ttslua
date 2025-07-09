@@ -93,14 +93,40 @@ end
 function setup_2()
   function setup2Coroutine()
     -- remove top 3 locations
+
+    local playAreaZone = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "PlayAreaZone")
+    webCard = {}
+
+    for _, obj in ipairs(playAreaZone.getObjects()) do
+      if obj.hasTag("Location") == true then
+        local md = JSON.decode(obj.getGMNotes()) or {}
+        if tonumber(md.id) ~= nil
+            and obj.locked == false
+            and obj.interactable == true then
+            table.insert(webCard, obj)
+        end
+      end
+    end
+
+    lowestX = 0
+    for i = 1, 4 do
+      local cardPos = webCard[i].getPosition()
+      if cardPos.x < lowestX then
+        lowestX = cardPos.x
+        lowestCardIndex = i
+      end
+    end
+    bottomCard = webCard[lowestCardIndex]
+    table.remove(webCard, lowestCardIndex)
+
     for i = 1, 3 do
-      for _, obj in ipairs(SearchLib.onObject(card[i])) do
+      for _, obj in ipairs(SearchLib.onObject(webCard[i])) do
         -- delete clues and doom tokens
         if obj.memo == "clueDoom" then
           obj.destruct()
         end
       end
-      trash.putObject(card[i])
+      trash.putObject(webCard[i])
     end
 
     -- move bottommost location up
@@ -111,8 +137,9 @@ function setup_2()
     end
 
     bottomCard.setPositionSmooth(TOP_LOCATION)
-    Wait.time(function() bottomCard.removeAttachments() end, 1)
-
+    CoroutineLib.yieldSeconds(1)
+    bottomCard.removeAttachments()
+    CoroutineLib.yieldSeconds(1)
 
     -- take remaining locations back out of the chest
     local chest = MythosAreaApi.getSetAsideChest()
@@ -126,11 +153,12 @@ function setup_2()
     CoroutineLib.yieldSeconds(1)
 
     -- place locations in a circle
+    trash.putObject(spiderBag)
     local spiderQueen = getObjectFromGUID("a2f955")
     local centerPos = spiderQueen.getPosition()
     topLocationPos = bottomCard.getPosition()
     local offset = Vector.between(centerPos, topLocationPos)
-
+    CoroutineLib.yieldSeconds(1.5)
     for i = 1, 8 do
       if i > 1 then
         local pos = centerPos + offset + Vector(0, 0.1, 0)
