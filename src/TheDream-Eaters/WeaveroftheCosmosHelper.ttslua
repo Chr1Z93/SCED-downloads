@@ -1,0 +1,219 @@
+local CoroutineLib     = require("util/CoroutineLib")
+local GUIDReferenceApi = require("core/GUIDReferenceApi")
+local MythosAreaApi    = require("mythos/MythosAreaApi")
+local PlayAreaApi      = require("playarea/PlayAreaApi")
+local TokenManagerApi  = require("tokens/TokenManagerApi")
+local SearchLib        = require("util/SearchLib")
+
+local THE_GREAT_WEB    = "387d55"
+local SPIDER_BAG_GUID  = "f0a43a"
+local TOP_LOCATION     = Vector(-22.40, 1.53, 0)
+local trash
+
+local tallyChoices     = {
+  "2 or fewer",
+  "3 to 5",
+  "6 to 8",
+  "9 to 11",
+  "12 or more"
+}
+
+local buttonParameters = {
+  function_owner = self,
+  position       = { 0, 0.1, 0 },
+  height         = 300,
+  width          = 450,
+  scale          = { x = 1.75, y = 1.75, z = 1.75 },
+  font_size      = 125
+}
+local nextSetupStep    = 1
+
+function updateSave()
+  self.script_state = tostring(nextSetupStep)
+end
+
+function onLoad(savedData)
+  if savedData and savedData ~= "" then
+    nextSetupStep = tonumber(savedData)
+  end
+
+  trash = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+  if not trash then
+    printToAll("Trash not found!", "Red")
+  end
+
+  createButtons()
+end
+
+function createButtons()
+  self.clearButtons()
+
+  if nextSetupStep == 1 or nextSetupStep == 2 then
+    buttonParameters.label = "Act " .. nextSetupStep .. "\nSet Up"
+    buttonParameters.click_function = "setup_" .. nextSetupStep
+    self.createButton(buttonParameters)
+  end
+end
+
+function increaseSetupStep()
+  nextSetupStep = nextSetupStep + 1
+  updateSave()
+  createButtons()
+end
+
+function setup_1(_, playerColor)
+  local locationDeck = getObjectFromGUID(THE_GREAT_WEB)
+  locationDeck.shuffle()
+  card = {}
+  for i = 1, 4 do
+    card[i] = locationDeck.takeObject({ position = PlayAreaApi.gridToWorld({ x = 0, y = 3 - i }) })
+  end
+  bottomCard = card[4]
+
+  -- ask for steps of the bridge
+  Player[playerColor].showOptionsDialog("How many tallies listed under 'Steps to the Bridge'?", tallyChoices, 1,
+    function(_, index)
+      if index > 1 then
+        bottomCard.resting = true
+        TokenManagerApi.spawnTokenGroup(bottomCard, "doom", index - 1)
+        broadcastToAll("Placed locations and " .. index - 1 .. " doom on bottommost location.", "White")
+      else
+        broadcastToAll("Placed locations and no starting doom.", "White")
+      end
+      Wait.frames(function()
+        local chest = MythosAreaApi.getSetAsideChest()
+        chest.putObject(locationDeck)
+        broadcastToAll("Remaining locations placed in set-aside chest.", "White")
+        increaseSetupStep()
+      end, 5)
+    end
+  )
+end
+
+function setup_2()
+  function setup2Coroutine()
+    -- remove top 3 locations
+
+    local playAreaZone = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "PlayAreaZone")
+    local webCard = {}
+
+    for _, obj in ipairs(playAreaZone.getObjects()) do
+      if obj.hasTag("Location") == true then
+        local md = JSON.decode(obj.getGMNotes()) or {}
+        if tonumber(md.id) ~= nil
+            and tonumber(md.id) >= 6340 and tonumber(md.id) <= 6345
+            and obj.locked == false
+            and obj.interactable == true then
+            table.insert(webCard, obj)
+        end
+      end
+    end
+
+    local lowestX = 0
+    for i = 1, 4 do
+      local cardPos = webCard[i].getPosition()
+      if cardPos.x < lowestX then
+        lowestX = cardPos.x
+        lowestCardIndex = i
+      end
+    end
+    local bottomCard = webCard[lowestCardIndex]
+    table.remove(webCard, lowestCardIndex)
+
+    for i = 1, 3 do
+      for _, obj in ipairs(SearchLib.onObject(webCard[i])) do
+        -- delete clues and doom tokens
+        if obj.memo == "clueDoom" then
+          obj.destruct()
+        end
+      end
+      trash.putObject(webCard[i])
+    end
+
+    -- move bottommost location up
+    for _, obj in ipairs(SearchLib.inArea(bottomCard.getPosition(), nil, { 8, 8, 8 })) do
+      if obj ~= bottomCard and obj.type == "Card" or obj.memo == "clueDoom" then
+        bottomCard.addAttachment(obj)
+      end
+    end
+
+    bottomCard.setPositionSmooth(TOP_LOCATION)
+    CoroutineLib.yieldSeconds(0.75)
+    bottomCard.removeAttachments()
+    CoroutineLib.yieldSeconds(0.75)
+
+    -- take remaining locations back out of the chest
+    local chest = MythosAreaApi.getSetAsideChest()
+    local locationDeck = chest.takeObject({ guid = THE_GREAT_WEB, position = { -17.04, 1.707, 3.83 }, rotation = { 0, 270, 0 } })
+    locationDeck.shuffle()
+
+    local spiderBag = chest.takeObject({ guid = SPIDER_BAG_GUID, position = { -11.03, 1.33, 13.04 }, rotation = { 0, 270, 0 } })
+    CoroutineLib.yieldSeconds(0.5)
+
+    spiderBag.call("buttonClick_place")
+    CoroutineLib.yieldSeconds(1)
+
+    -- place locations in a circle
+    trash.putObject(spiderBag)
+    local spiderQueen = getObjectFromGUID("a2f955")
+    local centerPos = spiderQueen.getPosition()
+    topLocationPos = bottomCard.getPosition()
+    local offset = Vector.between(centerPos, topLocationPos)
+    CoroutineLib.yieldSeconds(1.5)
+    for i = 1, 8 do
+      if i > 1 then
+        local pos = centerPos + offset + Vector(0, 0.1, 0)
+        local card = locationDeck.takeObject({ position = pos })
+        card.use_snap_points = false
+      end
+      offset:rotateOver('y', 45)
+    end
+    trash.putObject(locationDeck)
+    CoroutineLib.yieldSeconds(1) -- let cards come to rest before drawing a circle
+
+    -- draw a circle
+    local playarea = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "PlayArea")
+    local center = playarea.positionToLocal(centerPos)
+    local vectorLines = {}
+
+    local offset_2 = Vector.between(
+      playarea.positionToLocal(centerPos),
+      playarea.positionToLocal(topLocationPos)
+    )
+
+    drawCircle(center, offset_2:magnitude(), vectorLines)
+    playarea.setVectorLines(vectorLines)
+    CoroutineLib.yieldSeconds(1)
+
+    spinnersEncounterCards = chest.takeObject({
+      guid = "912fa4",
+      position = MythosAreaApi.getEncounterDiscardPosition(),
+      rotation = MythosAreaApi.getEncounterDiscardRotation()
+    })
+    CoroutineLib.yieldSeconds(0.75)
+    MythosAreaApi.reshuffleEncounterDeck(true)
+    broadcastToAll("Shuffled 'The Spinner in Darkness' cards into the encounter deck along with the discard pile.", "White")
+    CoroutineLib.yieldSeconds(1)
+    broadcastToAll("Read the campaign guide (p.17-18) for potential additional Act 2 changes.", "White")
+    trash.putObject(self)
+  end
+
+  CoroutineLib.start(setup2Coroutine)
+end
+
+function drawCircle(center, radius, vectorLines)
+  local points = {}
+  for i = 0, 60 do
+    local angle = math.rad(360 / 60 * i)
+    table.insert(points, {
+      center.x + math.cos(angle) * radius,
+      0.06,
+      center.z + math.sin(angle) * radius
+    })
+  end
+  table.insert(vectorLines, {
+    color = { 0.6, 0.6, 0.6 },
+    thickness = 0.01,
+    points = points
+  })
+end
