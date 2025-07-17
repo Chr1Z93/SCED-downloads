@@ -1,26 +1,30 @@
 local MythosAreaApi = require("mythos/MythosAreaApi")
-local searchLib    = require("util/SearchLib")
+local PlayAreaApi   = require("playarea/PlayAreaApi")
+local SearchLib     = require("util/SearchLib")
 
 START_POSITIONS = {
-  Vector(-30.24, 1.6, 7.65),
-  Vector(-30.24, 1.6, -7.65),
-  Vector(-36.84, 1.6, 0.00)
+  { x = -1, y = 0 },
+  { x = 1, y = 0 },
+  { x = 0, y = -1 }
 }
 
 ACT1_POSITIONS = {
-  TL = Vector(-30.24, 1.6, 15.30),
-  ML = Vector(-36.84, 1.6, 7.65),
-  B  = Vector(-43.44, 1.6, 0.00),
-  MR = Vector(-36.84, 1.6, -7.65),
-  TR = Vector(-30.24, 1.6, -15.30)
+  TL = { x = -2, y = 0 },
+  ML = { x = -1, y = -1 },
+  B  = { x = 0, y = -2 },
+  MR = { x = 1, y = -1 },
+  TR = { x = 2, y = 0 }
 }
+
+BLINDSENSE_GUID = "301453"
+FROM_THE_DEPTHS_GUID = "5abbad"
 
 function onLoad()
   self.createButton({
     label = "Set Up",
     click_function = "setup",
     function_owner = self,
-    position = { 0, 0.1, 0.4 },
+    position = { 0, 0.1, 0 },
     height = 120,
     width = 400,
     scale = { x = 1.75, y = 1.75, z = 1.75 },
@@ -28,22 +32,27 @@ function onLoad()
   })
 
   ttDeck = getObjectFromGUID("3c838d")
+  facedownKeys = getObjectFromGUID("d38aea")
 end
 
 function setup()
   if SETUP_DONE then return end
   SETUP_DONE = true
 
+  facedownKeys.shuffle()
+  broadcastToAll("Shuffled bag of facedown keys.", "White")
+
   ttDeck.shuffle()
-  for i, pos in ipairs(START_POSITIONS) do
-    ttDeck.takeObject({ position = pos, smooth = false })
+  for _, pos in ipairs(START_POSITIONS) do
+    ttDeck.takeObject({ position = PlayAreaApi.gridToWorld(pos) })
   end
+  broadcastToAll("Randomized and placed starting locations.", "White")
 
   self.editButton({
     index = 0,
     label = "Place New\nLocations",
     height = 240,
-    width = 550,
+    width = 530,
     position = { 0, 0.1, 0 },
     click_function = "setup_2"
   })
@@ -53,7 +62,7 @@ function setup_2()
   if SETUP2_DONE then return end
   SETUP2_DONE = true
 
-  local chest = MythosAreaApi.getSetAsideChest() 
+  local chest = MythosAreaApi.getSetAsideChest()
   local chestObjects = chest.getObjects()
   for i = #chestObjects, 1, -1 do
     local md = JSON.decode(chestObjects[i].gm_notes) or {}
@@ -61,6 +70,7 @@ function setup_2()
       chest.takeObject({
         index    = i - 1,
         position = ttDeck.getPosition() + Vector(0, 1, 0),
+        rotation = ttDeck.getRotation(),
         smooth   = false
       })
     end
@@ -89,13 +99,36 @@ function setup_3()
 
   for key, pos in pairs(ACT1_POSITIONS) do
     if play[key] == true then
-      ttDeck.takeObject({ position = pos, smooth = false })
+      ttDeck.takeObject({ position = PlayAreaApi.gridToWorld(pos) })
     end
+  end
+  broadcastToAll("Added new locations to the Tidal Tunnel deck and placed locations appropriately.", "White")
+  Wait.time(setup_4, 1)
+end
+
+function setup_4()
+  local chest = MythosAreaApi.getSetAsideChest()
+  -- look to see if these cards have already been taken out
+  for _, containedObject in ipairs(chest.getObjects()) do
+    if containedObject.guid == BLINDSENSE_GUID or containedObject.guid == FROM_THE_DEPTHS_GUID then
+      chest.takeObject({
+        index = containedObject.index,
+        position = MythosAreaApi.getEncounterDiscardPosition(),
+        rotation = MythosAreaApi.getEncounterDiscardRotation()
+      })
+      found = true
+    end
+  end
+  if found then
+    Wait.time(function()
+      MythosAreaApi.reshuffleEncounterDeck(true)
+      broadcastToAll("Shuffled 'Blindsense' and 'From the Depths' cards into the encounter deck along with the discard pile.", "White")
+    end, 1)
   end
 end
 
 function isRevealed(pos)
-  local result = searchLib.atPosition(pos, "isCard")
+  local result = SearchLib.atPosition(PlayAreaApi.gridToWorld(pos), "isCard")
   if #result > 0 then
     return result[1].is_face_down
   end
