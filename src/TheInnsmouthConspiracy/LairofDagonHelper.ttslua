@@ -1,21 +1,33 @@
+local CoroutineLib     = require("util/CoroutineLib")
+local GUIDReferenceApi     = require("core/GUIDReferenceApi")
 local MythosAreaApi        = require("mythos/MythosAreaApi")
-local tokenSpawnTrackerApi = require("tokens/TokenSpawnTrackerApi")
+local PlayAreaApi          = require("playarea/PlayAreaApi")
+local SearchLib            = require("util/SearchLib")
+local TokenSpawnTrackerApi = require("tokens/TokenSpawnTrackerApi")
+local VictoryDisplayApi    = require("mythos/VictoryDisplayApi")
+
+local floodTokenPoolGUID    = "0f9675"
+local trash                 = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
 
 FLOORS                     = {
-  { guid = "b7b094", pos = { -30.22, 1.65, -7.65 } },
-  { guid = "f92601", pos = { -23.68, 1.65, -7.65 } }
+  { guid = "b7b094", pos = { x = 1, y = 0 } },
+  { guid = "f92601", pos = { x = 1, y = 1 } }
 }
 
 TT_DECK_GUID               = "3d5b6e"
+TIDAL_ALIGNMENT_GUID       = "f40b1f"
+SYZYGY_GUID                = "6b40e7"
+GRAND_ENTRYWAY_GUID        = "0b3f66"
 
 TT_POSITIONS               = {
-  Vector(-23.68, 1.6, 7.65),
-  Vector(-23.68, 1.6, 0.00),
-  Vector(-23.68, 1.6, -7.65),
-  Vector(-30.24, 1.6, 7.65),
-  Vector(-30.24, 1.6, -7.65),
-  Vector(-36.77, 1.6, 7.65),
-  Vector(-36.77, 1.6, -7.65)
+  { x = -1 , y = -1 },
+  { x = -1, y = 0 },
+  { x = -1, y = 1 },
+  { x = 0, y = 1 },
+  { x = 1, y = 1 },
+  { x = 1, y = 0 },
+  { x = 1, y = -1},
+  { x = 0, y = 0 }   -- the central location is marked here for flooding in Act 2
 }
 
 ROTATION                   = { 0, 270, 0 }
@@ -38,7 +50,7 @@ function setup()
     local deck = getObjectFromGUID(floor.guid)
     deck.shuffle()
     deck.takeObject({
-      position = floor.pos,
+      position = PlayAreaApi.gridToWorld(floor.pos),
       rotation = ROTATION,
       smooth = false
     })
@@ -56,39 +68,134 @@ function setup()
   })
 end
 
-function setup_2(_, color, alt_click)
+function setup_2()
   if DISABLED then return end
-  if not alt_click and not WARNED then
-    broadcastToColor("Clean up first (see Act 1b), then click the Place " ..
-      "Tidal Tunnels button again. Right-click this button in the " ..
-      "future to skip this message.", color)
-    WARNED = true
-    return
-  end
-  DISABLED = true
+  function setup_2Coroutine()
+    CoroutineLib.yieldSeconds(0.5) -- slight delay after clicking
+    cleanZone()
+    CoroutineLib.yieldSeconds(1)
 
-  local chest = MythosAreaApi.getSetAsideChest()
-  chest.takeObject({
-    guid = TT_DECK_GUID,
-    position = TT_POSITIONS[1] + Vector(0, 1, 0),
-    rotation = ROTATION,
-    smooth = false,
-    callback_function = placeTidalTunnels
-  })
+    local chest = MythosAreaApi.getSetAsideChest()
+
+    chest.takeObject({
+      guid = TT_DECK_GUID,
+      position = PlayAreaApi.gridToWorld(TT_POSITIONS[1]) + Vector(0, 1, 0),
+      rotation = ROTATION,
+      smooth = false,
+      callback_function = placeTidalTunnels
+    })
+    CoroutineLib.yieldSeconds(1)
+    chest.takeObject({
+      guid = SYZYGY_GUID,
+      position = MythosAreaApi.getEncounterDiscardPosition(),
+      rotation = MythosAreaApi.getEncounterDiscardRotation()
+    })
+    chest.takeObject({
+      guid = TIDAL_ALIGNMENT_GUID,
+      position = MythosAreaApi.getEncounterDiscardPosition(),
+      rotation = MythosAreaApi.getEncounterDiscardRotation()
+    })
+
+    CoroutineLib.yieldSeconds(1)
+    MythosAreaApi.reshuffleEncounterDeck(true)
+    broadcastToAll("Shuffled 'Syzygy' and 'Tidal Alignment' cards into the encounter deck along with the discard pile.", "White")
+
+    CoroutineLib.yieldSeconds(1)
+    -- add flood tokens
+    local floodTokenPool = getObjectFromGUID(floodTokenPoolGUID)
+    for i = 1, 8 do
+      floodTokenPool.takeObject({
+        position = PlayAreaApi.gridToWorld(TT_POSITIONS[i]) + Vector(2, 0, -1.5)
+      })
+    end
+    broadcastToAll("Increased flood level of each location.", "White")
+    trash.putObject(self)
+  end
+  
+  CoroutineLib.start(setup_2Coroutine)
 end
 
 function placeTidalTunnels(deck)
   Wait.frames(function()
-    tokenSpawnTrackerApi.resetAllLocations()
+    TokenSpawnTrackerApi.resetAllLocations()
 
     deck.shuffle()
-    local objs = deck.getObjects()
-    for i = 2, #objs do
+    for i = 2, 7 do
       deck.takeObject({
-        position = TT_POSITIONS[i],
+        position = PlayAreaApi.gridToWorld(TT_POSITIONS[i]),
         rotation = ROTATION,
-        smooth = false
+        smooth = true
       })
     end
   end)
+end
+
+function cleanZone()
+  local grandEntryway = getObjectFromGUID(GRAND_ENTRYWAY_GUID)
+  local bounds = grandEntryway.getBounds()
+
+  -- define the area "near" the central location
+  local bufferAround = 2
+  areaNearCenter = {}
+  areaNearCenter.minX = bounds.center.x - bounds.size.x / 2 - bufferAround
+  areaNearCenter.maxX = bounds.center.x + bounds.size.x / 2 + bufferAround
+  areaNearCenter.minZ = bounds.center.z - bounds.size.z / 2 - bufferAround
+  areaNearCenter.maxZ = bounds.center.z + bounds.size.z / 2 + bufferAround
+
+  -- clean the play area
+  local zone = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "PlayAreaZone")
+  for _, obj in ipairs(zone.getObjects()) do
+    if not inArea(obj.getPosition(), areaNearCenter) then
+      if obj.type == "Card" and obj.hasTag("ScenarioCard") then
+        -- move enemies and treacheries to the encounter discard pile
+        if not obj.hasTag("Location") and not inArea(obj.getPosition(), areaNearCenter) then
+          obj.setPosition(MythosAreaApi.getEncounterDiscardPosition())
+        else
+          -- move locations to victory display or set aside
+          local md = getMetadata(obj)
+          if md.locationBack and md.locationBack.victory and obj.is_face_down and not cardHasClues(obj) then
+            PlayAreaApi.maybeUntrackLocation(obj)
+            VictoryDisplayApi.placeCard(obj)
+            CoroutineLib.yieldSeconds(0.5)
+          else
+            trash.putObject(obj)
+          end
+        end
+      end
+
+      -- delete clues and doom tokens
+      if obj.memo == "clueDoom" then
+        obj.destruct()
+      end
+    end
+  end
+end
+
+-- Checks if a card has clues on it
+---@param card tts__Object Card to check for clues
+---@return boolean hasClues True if card has clues on it
+function cardHasClues(card)
+  local searchResult = SearchLib.onObject(card, "isClue")
+  return #searchResult > 0
+end
+
+function getMetadata(objectOrNotes)
+  if objectOrNotes == nil then return {} end
+  if type(objectOrNotes) == "string" then
+    return JSON.decode(objectOrNotes) or {}
+  elseif type(objectOrNotes) == "table" then
+    return JSON.decode(objectOrNotes["GMNotes"] or objectOrNotes["gm_notes"]) or {}
+  else
+    return JSON.decode(objectOrNotes.getGMNotes()) or {}
+  end
+end
+
+-- Simple method to check if the given point is in a specified area
+---@param point tts__Vector Point to check, only x and z values are relevant
+---@param bounds table Defined area to see if the point is within
+function inArea(point, bounds)
+  return (point.x > bounds.minX
+    and point.x < bounds.maxX
+    and point.z > bounds.minZ
+    and point.z < bounds.maxZ)
 end
