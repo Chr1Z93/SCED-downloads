@@ -16,6 +16,9 @@ ACT1_POSITIONS = {
   TR = { x = 2, y = 0 }
 }
 
+BLINDSENSE_GUID = "301453"
+FROM_THE_DEPTHS_GUID = "5abbad"
+
 function onLoad()
   self.createButton({
     label = "Set Up",
@@ -29,12 +32,14 @@ function onLoad()
   })
 
   ttDeck = getObjectFromGUID("3c838d")
+  facedownKeys = getObjectFromGUID("d38aea")
 end
 
 function setup()
   if SETUP_DONE then return end
   SETUP_DONE = true
 
+  facedownKeys.shuffle()
   ttDeck.shuffle()
   for i, pos in ipairs(START_POSITIONS) do
     ttDeck.takeObject({ position = PlayAreaApi.gridToWorld(pos), smooth = false })
@@ -92,6 +97,29 @@ function setup_3()
     if play[key] == true then
       ttDeck.takeObject({ position = PlayAreaApi.gridToWorld(pos), smooth = false })
     end
+  end
+
+  Wait.time(setup_4, 1)
+end
+
+function setup_4()
+  local chest = MythosAreaApi.getSetAsideChest()
+  -- look to see if these cards have already been taken out
+  for _, containedObject in ipairs(chest.getObjects()) do
+    if containedObject.guid == BLINDSENSE_GUID or containedObject.guid == FROM_THE_DEPTHS_GUID then
+      chest.takeObject({
+        index = containedObject.index,
+        position = MythosAreaApi.getEncounterDiscardPosition(),
+        rotation = MythosAreaApi.getEncounterDiscardRotation()
+      })
+      found = true
+    end
+  end
+  if found then
+    Wait.time(function()
+      MythosAreaApi.reshuffleEncounterDeck(true)
+      broadcastToAll("Shuffled 'Blindsense' and 'From the Depths' cards into the encounter deck along with the discard pile.", "White")
+    end, 1)
   end
 end
 
