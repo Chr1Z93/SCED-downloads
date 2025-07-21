@@ -1,26 +1,27 @@
-local playAreaApi     = require("playarea/PlayAreaApi")
-local tokenManagerApi = require("tokens/TokenManagerApi")
+local GUIDReferenceApi    = require("core/GUIDReferenceApi")
+local PlayAreaApi         = require("playarea/PlayAreaApi")
+local TokenManagerApi     = require("tokens/TokenManagerApi")
 
 LOCATIONS = {
   {
     name = "Heretics' Graves",
     guids = { "34b9e9", "5bcc5d" },
-    position = Vector(-30.22, 1.64, 15.20)
+    mapPosition = { x = -2, y = 0 }
   },
   {
     name = "The Gallows",
     guids = { "62d69d", "1042cb" },
-    position = Vector(-23.68, 1.63, 7.57)
+    mapPosition =  { x = -1, y = 1 }
   },
   {
     name = "Chapel Attic",
     guids = { "55d8f1", "e2b8fc" },
-    position = Vector(-23.68, 1.63, -7.70)
+    mapPosition =  { x = 1, y = 1 }
   },
   {
     name = "Chapel Crypt",
     guids = { "06bdb3", "e2ad21" },
-    position = Vector(-30.22, 1.63, -15.28)
+    mapPosition =  { x = 2, y = 0 }
   }
 }
 
@@ -36,6 +37,11 @@ SET_ASIDE = {
 }
 
 function onLoad()
+  trash = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+  if not trash then
+    printToAll("Trash not found!", "Red")
+  end
+
   self.createButton({
     label = "Set Up",
     click_function = "setup",
@@ -61,14 +67,15 @@ end
 
 function setup()
   if SETUP_DONE then return end
+  usedLocations = {}
   for i, loc in ipairs(LOCATIONS) do
     local chosen = math.random(2)
     local guid = loc.guids[chosen]
+    table.insert(usedLocations, guid)
     local card = getObjectFromGUID(loc.guids[3 - chosen])
-    card.setPosition(SET_ASIDE.position)
-    card.setRotation({ 0, 270, 180 })
+    trash.putObject(card)
     card = getObjectFromGUID(guid)
-    card.setPosition(loc.position)
+    card.setPosition(PlayAreaApi.gridToWorld(loc.mapPosition))
     card.setRotation({ 0, 270, 180 })
   end
   SETUP_DONE = true
@@ -89,27 +96,24 @@ function spawnHeretics()
   heretics.shuffle()
   for i = 1, 4 do
     heretics.takeObject({
-      position = LOCATIONS[i].position + HERETIC_OFFSET,
+      position = PlayAreaApi.gridToWorld(LOCATIONS[i].mapPosition) + HERETIC_OFFSET,
       rotation = { 0, 270, 0 },
       smooth   = false
     })
   end
 
-  local count = playAreaApi.getInvestigatorCount()
-  for i, loc in ipairs(LOCATIONS) do
-    local pos = loc.position
-    for j = 0, (count * 2) - 1 do
-      tokenManagerApi.spawnToken(pos + Vector(0.3 + 0.55 * (math.floor(j / 4)), 0.2, 0.55 * (j % 4) - 0.8), "clue")
+  local count = PlayAreaApi.getInvestigatorCount()
+  for i, guid in ipairs(usedLocations) do
+    local card = getObjectFromGUID(guid)
+    if card ~= nil then
+      TokenManagerApi.addUseToCard(card, "clue", 2 * count)
     end
   end
 
   for i, guid in ipairs(OTHER_LOCATION_GUIDS) do
     local card = getObjectFromGUID(guid)
     if card ~= nil then
-      local pos = card.getPosition()
-      for j = 0, count - 1 do
-        tokenManagerApi.spawnToken(pos + Vector(-0.25, 0.2, 0.55 * (j % 4) - 0.8), "clue")
-      end
+      TokenManagerApi.addUseToCard(card, "clue", count)
     end
   end
   HERETIC_DONE = true

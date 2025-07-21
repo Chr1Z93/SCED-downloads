@@ -1,14 +1,13 @@
-local CoroutineLib                    = require("util/CoroutineLib")
-local DeckLib                         = require("util/DeckLib")
-local GUIDReferenceApi                = require("core/GUIDReferenceApi")
-local MythosAreaApi                   = require("mythos/MythosAreaApi")
+local CoroutineLib         = require("util/CoroutineLib")
+local DeckLib              = require("util/DeckLib")
+local GUIDReferenceApi     = require("core/GUIDReferenceApi")
+local MythosAreaApi        = require("mythos/MythosAreaApi")
 
-local ENCOUNTER_DECK_DISCARD_POSITION = MythosAreaApi.getEncounterDiscardPosition()
-local INESCAPABLE_SET_GUID            = "4a2ddd"
-local nextSetupStep                   = 1
+local INESCAPABLE_SET_GUID = "4a2ddd"
+local nextSetupStep        = 1
 local trash
 
-local APIARY_DATA                     = {
+local APIARY_DATA          = {
   west = {
     bag                    = "d54b36",
     apiaryLocations        = "88bb86",
@@ -59,40 +58,40 @@ function createButtons()
 
   if nextSetupStep == 1 then
     self.createButton({
-      label = "Western",
+      label          = "Western",
       click_function = "westernSetup",
       function_owner = self,
-      position = { 0, 0.1, -0.5 },
-      height = 150,
-      width = 460,
-      scale = { x = 2, y = 2, z = 2 },
-      font_color = { r = 0, g = 0, b = 0 },
-      color = { r = 1, g = 1, b = 1 }
+      position       = { 0, 0.1, -0.5 },
+      height         = 150,
+      width          = 460,
+      scale          = { x = 2, y = 2, z = 2 },
+      font_color     = { r = 0, g = 0, b = 0 },
+      color          = { r = 1, g = 1, b = 1 }
     })
 
     self.createButton({
-      label = "Eastern",
+      label          = "Eastern",
       click_function = "easternSetup",
       function_owner = self,
-      position = { 0, 0.1, 0.5 },
-      height = 150,
-      width = 460,
-      scale = { x = 2, y = 2, z = 2 },
-      font_color = { r = 0, g = 0, b = 0 },
-      color = { r = 1, g = 1, b = 1 }
+      position       = { 0, 0.1, 0.5 },
+      height         = 150,
+      width          = 460,
+      scale          = { x = 2, y = 2, z = 2 },
+      font_color     = { r = 0, g = 0, b = 0 },
+      color          = { r = 1, g = 1, b = 1 }
     })
   else
     self.createButton({
-      label = "Set Up\nNext Part\nWhen\nInstructed ",
+      label          = "Set Up\nNext Part\nWhen\nInstructed ",
       click_function = "setup" .. nextSetupStep,
       function_owner = self,
-      position = { 0, 0.1, 0 },
-      height = 450,
-      width = 460,
-      font_size = 90,
-      scale = { x = 2, y = 2, z = 2 },
-      font_color = { r = 0, g = 0, b = 0 },
-      color = { r = 1, g = 1, b = 1 }
+      position       = { 0, 0.1, 0 },
+      height         = 450,
+      width          = 460,
+      font_size      = 90,
+      scale          = { x = 2, y = 2, z = 2 },
+      font_color     = { r = 0, g = 0, b = 0 },
+      color          = { r = 1, g = 1, b = 1 }
     })
   end
 end
@@ -105,21 +104,23 @@ end
 
 function westernSetup()
   direction = "west"
+
   local otherBag = getObjectFromGUID(APIARY_DATA["east"].bag)
   trash.putObject(otherBag)
 
   setup()
 end
 
-function easternSetup(_, color)
+function easternSetup(_, playerColor)
   direction = "east"
+
   local otherBag = getObjectFromGUID(APIARY_DATA["west"].bag)
   trash.putObject(otherBag)
 
-  setup(color)
+  setup(playerColor)
 end
 
-function setup(color)
+function setup(playerColor)
   local bag = getObjectFromGUID(APIARY_DATA[direction].bag)
   if #bag.getObjects() > 0 then
     bag.call("buttonClick_place")
@@ -149,7 +150,7 @@ function setup(color)
     if direction == "east" then
       local chest = MythosAreaApi.getSetAsideChest()
       -- prompt user to report on the Inescapable
-      Player[color].showOptionsDialog("Was the creature defeated?", { "Yes", "No" }, 1, function(text)
+      Player[playerColor].showOptionsDialog("Was the creature defeated?", { "Yes", "No" }, 1, function(text)
         local inescapableSet = getObjectFromGUID(INESCAPABLE_SET_GUID)
         if text == "No" then
           -- add the entire Inescapable Encounter set to the set-aside chest
@@ -170,31 +171,50 @@ function setup2()
   function setup2Coroutine()
     local chest = MythosAreaApi.getSetAsideChest()
     local encounterDeck = MythosAreaApi.getEncounterDeckObjects()
-    if direction == "west" then
-      -- shuffle in Pilgrims
-      chest.takeObject({ guid = "d7784d", position = ENCOUNTER_DECK_DISCARD_POSITION, rotation = { 0, 270, 0 }, smooth = false })
-      CoroutineLib.yieldSeconds(1)
+    local mythosArea = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "MythosArea")
 
-      MythosAreaApi.reshuffleEncounterDeck(true)
+    MythosAreaApi.reshuffleEncounterDeck(true)
+
+    if direction == "west" then
+      CoroutineLib.yieldSeconds(0.5)
+
       broadcastToAll("Shuffled 'Pilgrims' encounter set and discard pile into the encounter deck.")
-    else
-      MythosAreaApi.reshuffleEncounterDeck(false)
+      local pilgrims = chest.takeObject({
+        guid = "d7784d",
+        rotation = MythosAreaApi.getEncounterDiscardRotation():setAt("z", 180)
+      })
+      DeckLib.placeOrMergeIntoDeck(pilgrims, MythosAreaApi.getEncounterDeckPosition(), nil, false, true)
+
+      CoroutineLib.yieldSeconds(1)
     end
 
     -- take two locations out of set-aside box
-    setAsideLocations = chest.takeObject({ guid = APIARY_DATA[direction].apiaryLocations, position = { 1.50, 1.60, 7 }, rotation = { 0, 270, 180 } })
+    local setAsideLocations = chest.takeObject({
+      guid = APIARY_DATA[direction].apiaryLocations,
+      position = mythosArea.positionToWorld(Vector(1.07, 0.117, -0.43)),
+      rotation = mythosArea.getRotation():setAt("z", 180)
+    })
     CoroutineLib.yieldSeconds(1.5)
 
-    card1 = setAsideLocations.takeObject({ guid = APIARY_DATA[direction].locationCard2, position = { 1.50, 1.60, 3 } })
-    card2 = setAsideLocations.takeObject({ guid = APIARY_DATA[direction].locationCard3, position = { 1.50, 1.60, 3.5 } })
+    local card2 = setAsideLocations.takeObject({
+      guid = APIARY_DATA[direction].locationCard2,
+      position = mythosArea.positionToWorld(Vector(0.461, 0.117, -0.43))
+    })
+    local card3 = setAsideLocations.takeObject({
+      guid = APIARY_DATA[direction].locationCard3,
+      position = mythosArea.positionToWorld(Vector(0.538, 0.117, -0.43))
+    })
     CoroutineLib.yieldSeconds(1.5)
 
-    local newLocations = group({ card1, card2 })
+    local name2 = card2.getName()
+    local name3 = card3.getName()
+
+    local newLocations = group({ card2, card3 })[1]
     CoroutineLib.yieldSeconds(1.5)
 
     DeckLib.shuffleIntoTopOrBottomX(newLocations, encounterDeck.draw, true, 10)
-    broadcastToAll("Shuffled '" ..
-      card1.getName() .. "' and 'Corrupted Vault' into the bottom 10 cards of the encounter deck.")
+
+    broadcastToAll("Shuffled '" .. name2 .. "' and '" .. name3 .. "' into the bottom 10 cards of the encounter deck.")
     chest.putObject(setAsideLocations)
     increaseSetupStep()
   end
@@ -207,10 +227,15 @@ function setup3()
     local chest = MythosAreaApi.getSetAsideChest()
     -- shuffle encounter deck
     local encounterDeck = MythosAreaApi.getEncounterDeckObjects()
-    MythosAreaApi.reshuffleEncounterDeck(false)
+    MythosAreaApi.reshuffleEncounterDeck(true)
 
     -- take out final two locations from the set-aside box
-    setAsideLocations = chest.takeObject({ guid = APIARY_DATA[direction].apiaryLocations, position = { 1.50, 1.60, 7 }, rotation = { 0, 270, 180 } })
+    local mythosArea = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "MythosArea")
+    local setAsideLocations = chest.takeObject({
+      guid = APIARY_DATA[direction].apiaryLocations,
+      position = mythosArea.positionToWorld(Vector(1.07, 0.117, -0.43)),
+      rotation = mythosArea.getRotation():setAt("z", 180)
+    })
     CoroutineLib.yieldSeconds(1)
 
     DeckLib.shuffleIntoTopOrBottomX(setAsideLocations, encounterDeck.draw, true, 10)
