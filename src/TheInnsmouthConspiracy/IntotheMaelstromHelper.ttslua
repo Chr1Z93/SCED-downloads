@@ -2,21 +2,22 @@ local MythosAreaApi        = require("mythos/MythosAreaApi")
 local PlayAreaApi          = require("playarea/PlayAreaApi")
 local TokenSpawnTrackerApi = require("tokens/TokenSpawnTrackerApi")
 
-FLOOD_BAG_GUID = "fe6f38"
-FLOOD_OFFSET = Vector(2, 0.2, -0.6)
-TT_DECK_GUID = "3d5b6e"
-TT_POSITIONS = {
-  { x = -1 , y = 0 },
+FLOOD_BAG_GUID             = "fe6f38"
+FLOOD_OFFSET               = Vector(2, 0.2, -0.6)
+TT_DECK_GUID               = "3d5b6e"
+TT_POSITIONS               = {
+  { x = -1, y = 0 },
   { x = -1, y = 1 },
   { x = -1, y = 2 },
-  { x = 1, y = 2 },
-  { x = 1, y = 1 },
-  { x = 1, y = 0 },
-  { x = 0, y = 0 }
+  { x = 1,  y = 2 },
+  { x = 1,  y = 1 },
+  { x = 1,  y = 0 },
+  { x = 0,  y = 0 }
 }
-GATEWAY_GUID = "e0573a"
+GATEWAY_GUID               = "e0573a"
+
 -- play area positions
-YP = {
+YP                         = {
   gateway = PlayAreaApi.gridToWorld({ x = 0, y = 1 }),
   A1 = PlayAreaApi.gridToWorld({ x = -2, y = 0 }),
   B1 = PlayAreaApi.gridToWorld({ x = -1.5, y = 0 }),
@@ -26,7 +27,7 @@ YP = {
   F1 = PlayAreaApi.gridToWorld({ x = 0.5, y = 0 }),
   G1 = PlayAreaApi.gridToWorld({ x = 1, y = 0 }),
   H1 = PlayAreaApi.gridToWorld({ x = 1.5, y = 0 }),
-  I1 = PlayAreaApi.gridToWorld({ x = 2, y = 0 }) ,
+  I1 = PlayAreaApi.gridToWorld({ x = 2, y = 0 }),
   A2 = PlayAreaApi.gridToWorld({ x = -2, y = -1 }),
   C2 = PlayAreaApi.gridToWorld({ x = -1, y = -1 }),
   D2 = PlayAreaApi.gridToWorld({ x = -0.5, y = -1 }),
@@ -40,23 +41,55 @@ YP = {
   F3 = PlayAreaApi.gridToWorld({ x = 0.5, y = -2 }),
   G3 = PlayAreaApi.gridToWorld({ x = 1, y = -2 })
 }
-DAGON_GUID = "819894"
-HYDRA_GUID = "ee2f20"
-SANCTUM_DECK_GUID = "e6b7fd"
-YHANTHLEI_DECK_GUID = "94c00b"
-ROTATION = { 0, 270, 0 }
 
-function onLoad()
-  self.createButton({
-    label = "Set Up",
-    click_function = "setup",
-    function_owner = self,
-    position = { 0, 0.1, 0 },
-    height = 120,
-    width = 400,
-    scale = { x = 1.75, y = 1.75, z = 1.75 },
-    font_size = 100
-  })
+DAGON_GUID                 = "819894"
+HYDRA_GUID                 = "ee2f20"
+SANCTUM_DECK_GUID          = "e6b7fd"
+YHANTHLEI_DECK_GUID        = "94c00b"
+ROTATION                   = Vector(0, 270, 0)
+
+completedSetup1            = false
+
+function onLoad(savedData)
+  if savedData and savedData ~= "" then
+    completedSetup1 = JSON.decode(savedData)
+  end
+
+  buttonCreation()
+end
+
+function buttonCreation()
+  self.clearButtons()
+
+  if not completedSetup1 then
+    self.createButton({
+      label          = "Set Up",
+      click_function = "setup",
+      function_owner = self,
+      position       = { 0, 0.1, 0 },
+      height         = 120,
+      width          = 400,
+      scale          = { x = 1.75, y = 1.75, z = 1.75 },
+      font_size      = 100
+    })
+  else
+    self.createButton({
+      label          = "Act 2\nSet Up ",
+      click_function = "setup_2",
+      function_owner = self,
+      position       = { 0, 0.1, 0 },
+      height         = 240,
+      width          = 400,
+      scale          = { x = 1.75, y = 1.75, z = 1.75 },
+      font_size      = 100
+    })
+  end
+end
+
+function completeSetup()
+  completedSetup1 = true
+  self.script_state = JSON.encode(completedSetup1)
+  buttonCreation()
 end
 
 function setup()
@@ -67,6 +100,7 @@ function setup()
 
   local deck = getObjectFromGUID(TT_DECK_GUID)
   deck.shuffle()
+
   local cards = deck.getObjects()
   for i = #cards - 1, 1, -1 do
     deck.takeObject({
@@ -76,16 +110,7 @@ function setup()
     })
   end
 
-  self.editButton({
-    label = "Act 2\nSet Up ",
-    click_function = "setup_2",
-    function_owner = self,
-    position = { 0, 0.1, 0 },
-    height = 240,
-    width = 400,
-    scale = { x = 1.75, y = 1.75, z = 1.75 },
-    font_size = 100
-  })
+  completeSetup()
 end
 
 function setup_2(_, color, alt_click)
@@ -153,38 +178,34 @@ function setup_2(_, color, alt_click)
   local chest = MythosAreaApi.getSetAsideChest()
 
   chest.takeObject({
-    guid = DAGON_GUID,
+    guid     = DAGON_GUID,
     position = YP[dagonPosition],
     rotation = ROTATION,
-    smooth = false
+    smooth   = false
   })
 
   chest.takeObject({
-    guid = HYDRA_GUID,
+    guid     = HYDRA_GUID,
     position = YP[hydraPosition],
     rotation = ROTATION,
-    smooth = false
+    smooth   = false
   })
 
-  chest.takeObject({
-    guid = SANCTUM_DECK_GUID,
+  local sanctums = chest.takeObject({
+    guid     = SANCTUM_DECK_GUID,
     position = { -10.70, 1.64, 4.63 },
     rotation = ROTATION,
-    smooth = false,
-    callback_function = function(obj)
-      Wait.frames(function() placeSanctumLocations(obj) end, 1)
-    end
+    smooth   = false
   })
+  Wait.frames(function() placeSanctumLocations(sanctums) end, 10)
 
-  chest.takeObject({
-    guid = YHANTHLEI_DECK_GUID,
+  local yhanthlei = chest.takeObject({
+    guid     = YHANTHLEI_DECK_GUID,
     position = { -10.70, 1.65, 7.99 },
     rotation = ROTATION,
-    smooth = false,
-    callback_function = function(obj)
-      Wait.frames(function() placeYhanthleiLocations(obj) end)
-    end
+    smooth   = false
   })
+  Wait.frames(function() placeYhanthleiLocations(yhanthlei) end, 10)
 
   Global.setVectorLines(lines)
 end
@@ -198,7 +219,7 @@ function placeSanctumLocations(deck)
       deck.takeObject({
         position = YP[coord],
         rotation = ROTATION,
-        smooth = false
+        smooth   = false
       })
     end
     addFloodToken(YP[coord], "full")
@@ -214,7 +235,7 @@ function placeYhanthleiLocations(deck)
       deck.takeObject({
         position = YP[coord],
         rotation = ROTATION,
-        smooth = false
+        smooth   = false
       })
     end
     addFloodToken(YP[coord], "partial")
@@ -227,10 +248,12 @@ function addFloodToken(position, level)
   bag.takeObject({
     position = position,
     rotation = { 0, 270, (level == "partial") and 0 or 180 },
-    smooth = false
+    smooth   = false
   })
 end
 
 function drawConnection(origin, target, lines)
-  table.insert(lines, { points = { YP[origin], YP[target] } })
+  -- make sure lines are below cards
+  offset = offset or Vector(0, 0.035, 0)
+  table.insert(lines, { points = { YP[origin] - offset, YP[target] - offset } })
 end
