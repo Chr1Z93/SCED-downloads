@@ -3,13 +3,13 @@ VALID_TOKENS = {
 }
 
 MAX_SEALED = 99
-RESOLVE_TOKEN = true
 hasXML = true
-isHelperEnabled = false
+isHelperEnabled = true
 
 require("playercards/CardsThatSealTokens")
 require("playercards/CardsWithHelper")
 local ChaosBagApi = require("chaosbag/ChaosBagApi")
+local helpVisibleToPlayers = {}
 
 function getSaveData()
   return {
@@ -20,7 +20,7 @@ end
 
 function onLoad2(loadedData)
   if loadedData then
-    isHelperEnabled = loadedData.isHelperEnabled or false
+    isHelperEnabled = loadedData.isHelperEnabled or true
     loopId = loadedData.loopId
   end
 
@@ -44,7 +44,8 @@ function generateDefaults(buttonCount)
       {
         tag = "TableLayout",
         attributes = {
-          position            = "180 -10 -10",
+          class = "button",
+          position            = "180 -3 -10",
           rotation            = "0 0 180",
           height              = buttonCount * 500,
           width               = "1550",
@@ -72,7 +73,7 @@ function createHelperXML()
     -- create the table layout
     local tableLayoutXml = {
       tag = "TableLayout",
-      attributes = { id = "Helper", active = "false" },
+      attributes = { class = "button", id = "Helper", active = "false" },
       children = {}
     }
 
@@ -104,6 +105,110 @@ function createHelperXML()
   -- add to the XmlTable
   table.insert(xmlTable, tableLayoutXml)
 
+  addMoonRules(xmlTable)
+end
+
+function addMoonRules(xmlTable)
+
+  local moonRulesXml = {
+    tag = "Panel",
+    attributes = {
+      id = "rulesPanel",
+      width = "2100",
+      height = "1500",
+      rotation = "0 0 180",
+      color = "#404040",
+      textColor = "White",
+      position ="-210 0 -5",
+      active="false",
+      scale = "0.1 0.1 1"
+    },
+    children = {
+      {
+        tag = "Tablelayout",
+        attributes = {
+          width = 1950,
+          height = 1350,
+          position = "0 0 0",
+          rowBackgroundColor = "#D4B889",
+          cellPadding = "10 10 10 10"
+        },
+        children = {
+          {
+          tag = "Row",
+          attributes = {
+            preferredheight = 210
+          },
+          children = {
+            tag = "Cell",
+            children = {
+              tag = "Text",
+              attributes = {
+                fontsize=180,
+                font="font_teutonic-arkham"
+              },
+              value = "Moon Token Rules Reminder"
+              }
+            }
+          },
+          {
+          tag = "Row",
+          attributes = {
+            color="#cfcfcf"
+          },
+          children = {
+            tag = "Cell",
+            children = {
+              tag = "Text",
+              attributes = {
+                fontsize=100,
+              },
+              value = "Moon Tokens revealed during a skill test have the following effect: \"0. Seal this token on your investigator card <i>(immediately)</i> and reveal another token.\""
+            }
+          }
+          },
+          {
+          tag = "Row",
+          attributes = {
+            color="#cfcfcf"
+          },
+          children = {
+            tag = "Cell",
+            attributes = {color = "#D4B889"},
+            children = {
+              tag = "Text",
+              attributes = {
+                fontsize=100,
+              },
+              value = "At the end of the round, for each sealed token, you may take 1 damage or 1 horror to release it <i>(if you don't, leave it sealed)</i>."
+            }
+          }
+          }
+        }
+      }
+    }
+  }
+
+  table.insert(xmlTable, moonRulesXml)
+
+-- add help button
+local helpButtonXml = {
+  tag = "Panel",
+    attributes = {
+      width = "86",
+      height = "86",
+      rotation = "0 0 180",
+      position ="0 82 -15",
+      active = "true",
+      scale = "0.25 0.25 1"
+    },
+    children = {
+      tag = "Button",
+      attributes = { fontSize = "80", onClick="toggleRules" },
+      value = "?"
+    }
+  }
+  table.insert(xmlTable, helpButtonXml)
   self.UI.setXmlTable(xmlTable)
 end
 
@@ -124,4 +229,27 @@ end
 function releaseMoon(player)
   local playerColor = player.color
   releaseOneToken(playerColor)
+end
+
+function toggleRules(player)
+  if helpVisibleToPlayers[player.color] then
+    helpVisibleToPlayers[player.color] = nil
+  else
+    helpVisibleToPlayers[player.color] = true
+  end
+  updateRulesVisibility()
+end
+
+-- updates the visibility of the rules text
+function updateRulesVisibility()
+  local visibility = ""
+  for playerColor, _ in pairs(helpVisibleToPlayers) do
+    if string.len(visibility) > 0 then
+      visibility = visibility .. "|" .. playerColor
+    else
+      visibility = playerColor
+    end
+  end
+  self.UI.setAttribute("rulesPanel", "visibility", visibility)
+  self.UI.setAttribute("rulesPanel", "active", string.len(visibility) > 0)
 end
