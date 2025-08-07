@@ -1,135 +1,255 @@
--- this is a modified version of the library file (2023-07-17) for moon tokens
--- only [Moon] tokens will be eligible for sealing
+VALID_TOKENS = {
+  ["Moon"] = true
+}
 
-UPDATE_ON_HOVER = true
-KEEP_OPEN = true
-SHOW_SINGLE_RELEASE = true
+MAX_SEALED = 99
+hasXML = true
+isHelperEnabled = true
 
-local TokenArrangerApi = require("tokens/TokenArrangerApi")
-local sealedTokens = {}
-local tokensInBag = 0
+require("playercards/CardsThatSealTokens")
+require("playercards/CardsWithHelper")
+local ChaosBagApi = require("chaosbag/ChaosBagApi")
+local helpVisibleToPlayers = {}
 
-local buttonParameters = {}
-buttonParameters.label = 0
-buttonParameters.width = 0
-buttonParameters.height = 0
-buttonParameters.scale = { 0.3, 0.3, 0.3 }
-buttonParameters.position = { x = 0, y = 0.06, z = -0.05 }
-buttonParameters.function_owner = self
-buttonParameters.click_function = "updateCountLabel"
-buttonParameters.font_size = 3000
-
-function onSave() return JSON.encode(sealedTokens) end
-
-function onLoad(savedData)
-  sealedTokens = JSON.decode(savedData) or {}
-  generateContextMenu()
-  self.addTag("CardThatSeals")
-  updateCountLabel()
+function getSaveData()
+  return {
+    isHelperEnabled = isHelperEnabled,
+    loopId = loopId
+  }
 end
 
-function updateCountLabel()
-  self.clearButtons()
-  if sealedTokens ~= {} and #sealedTokens > 0 then
-    buttonParameters.position.y = #sealedTokens * 0.1 + 0.1
-    buttonParameters.label = #sealedTokens
-    self.createButton(buttonParameters)
-  end
-end
-
--- builds the context menu
-function generateContextMenu()
-  -- conditional single or multi release options
-  if SHOW_SINGLE_RELEASE then
-    self.addContextMenuItem("Release single", releaseOneToken)
+function onLoad2(loadedData)
+  if loadedData then
+    isHelperEnabled = loadedData.isHelperEnabled or true
+    loopId = loadedData.loopId
   end
 
-  self.addContextMenuItem("Release all", releaseAllTokens)
-
-  -- main context menu options to seal [unnamed] tokens
-  self.addContextMenuItem("Seal Moon", function(playerColor)
-    sealToken(playerColor)
-  end, KEEP_OPEN)
+  createHelperXML()
+  updateDisplay()
 end
 
--- generates a list of chaos tokens that is in the chaos bag
-function readBag()
-  local chaosbag = Global.call("findChaosBag")
-  tokensInBag = 0
+function generateDefaults(buttonCount)
+  local defaults = {
+    tag = "Defaults",
+    children = {
+      {
+        tag = "Button",
+        attributes = {
+          font          = "font_teutonic-arkham",
+          fontSize      = "275",
+          color         = "#77674DE6",
+          textColor     = "White",
+        }
+      },
+      {
+        tag = "TableLayout",
+        attributes = {
+          class = "button",
+          position            = "180 -3 -10",
+          rotation            = "0 0 180",
+          height              = buttonCount * 500,
+          width               = "1550",
+          scale               = "0.1 0.1 1",
+          cellSpacing         = "65",
+          cellPadding         = "0 6 6 6",
+          cellBackgroundColor = "rgba(1,1,1,0)",
+          rowBackgroundColor  = "rgba(0,0,0,0.666)"
+        }
+      }
+    }
+  }
+  return defaults
+end
 
-  for _, token in ipairs(chaosbag.getObjects()) do
-    if token.name == "Moon" then
-      tokensInBag = tokensInBag + 1
+function createHelperXML()
+    -- create the XML table
+    local buttonLabels = {"Seal From Bag", "Seal From Play", "Release Token"}
+    local onClickFunctions = {"sealMoon", "triggerXMLTokenLabelCreation", "releaseMoon"}
+    local xmlTable      = {}
+
+    -- get the defaults
+    table.insert(xmlTable, generateDefaults(3))
+
+    -- create the table layout
+    local tableLayoutXml = {
+      tag = "TableLayout",
+      attributes = { class = "button", id = "Helper", active = "false" },
+      children = {}
+    }
+
+    -- add the buttons to it
+    for i = 1, 3 do
+      local buttonXml = {
+        tag = "Row",
+        attributes = { id = "Row" .. i },
+        children = {
+          {
+            tag = "Cell",
+            children = {
+              {
+                tag = "Button",
+                attributes = {
+                  id          = ("Button" .. i),
+                  text        = buttonLabels[i],
+                  onClick     = onClickFunctions[i]
+                }
+              }
+            }
+          }
+        }
+      }
+
+      table.insert(tableLayoutXml.children, buttonXml)
     end
-  end
+
+  -- add to the XmlTable
+  table.insert(xmlTable, tableLayoutXml)
+
+  addMoonRules(xmlTable)
 end
 
--- native event from TTS - used to update the context menu for cards like "Unrelenting"
-function onHover()
-  if UPDATE_ON_HOVER then
-    readBag()
-    self.clearContextMenu()
-    generateContextMenu()
-  end
+function addMoonRules(xmlTable)
+
+  local moonRulesXml = {
+    tag = "Panel",
+    attributes = {
+      id = "rulesPanel",
+      width = "2100",
+      height = "1500",
+      rotation = "0 0 180",
+      color = "#404040",
+      textColor = "White",
+      position ="-210 0 -5",
+      active="false",
+      scale = "0.1 0.1 1"
+    },
+    children = {
+      {
+        tag = "Tablelayout",
+        attributes = {
+          width = 1950,
+          height = 1350,
+          position = "0 0 0",
+          rowBackgroundColor = "#D4B889",
+          cellPadding = "10 10 10 10"
+        },
+        children = {
+          {
+          tag = "Row",
+          attributes = {
+            preferredheight = 210
+          },
+          children = {
+            tag = "Cell",
+            children = {
+              tag = "Text",
+              attributes = {
+                fontsize=180,
+                font="font_teutonic-arkham"
+              },
+              value = "Moon Token Rules Reminder"
+              }
+            }
+          },
+          {
+          tag = "Row",
+          attributes = {
+            color="#cfcfcf"
+          },
+          children = {
+            tag = "Cell",
+            children = {
+              tag = "Text",
+              attributes = {
+                fontsize=100,
+              },
+              value = "Moon Tokens revealed during a skill test have the following effect: \"0. Seal this token on your investigator card <i>(immediately)</i> and reveal another token.\""
+            }
+          }
+          },
+          {
+          tag = "Row",
+          attributes = {
+            color="#cfcfcf"
+          },
+          children = {
+            tag = "Cell",
+            attributes = {color = "#D4B889"},
+            children = {
+              tag = "Text",
+              attributes = {
+                fontsize=100,
+              },
+              value = "At the end of the round, for each sealed token, you may take 1 damage or 1 horror to release it <i>(if you don't, leave it sealed)</i>."
+            }
+          }
+          }
+        }
+      }
+    }
+  }
+
+  table.insert(xmlTable, moonRulesXml)
+
+-- add help button
+local helpButtonXml = {
+  tag = "Panel",
+    attributes = {
+      width = "86",
+      height = "86",
+      rotation = "0 0 180",
+      position ="0 82 -15",
+      active = "true",
+      scale = "0.25 0.25 1"
+    },
+    children = {
+      tag = "Button",
+      attributes = { fontSize = "80", onClick="toggleRules" },
+      value = "?"
+    }
+  }
+  table.insert(xmlTable, helpButtonXml)
+  self.UI.setXmlTable(xmlTable)
 end
 
--- seals the named token on this card
-function sealToken(playerColor)
-  if not Global.call("canTouchChaosTokens") then return end
-  local chaosbag = Global.call("findChaosBag")
-  for i, obj in ipairs(chaosbag.getObjects()) do
-    if obj.name == "Moon" then
-      chaosbag.takeObject({
-        position = self.getPosition() + Vector(0, 0.5 + 0.1 * #sealedTokens, 0),
-        rotation = self.getRotation(),
-        index = i - 1,
-        smooth = false,
-        callback_function = function(token)
-          local guid = token.getGUID()
-          table.insert(sealedTokens, guid)
-          TokenArrangerApi.layout()
-          updateCountLabel()
-        end
-      })
-      return
-    end
-  end
-  printToColor("Moon token not found in chaos bag", playerColor)
+function triggerXMLTokenLabelCreation(player)
+  local playerColor = player.color
+  ChaosBagApi.removeTokenFromPlay("seal", VALID_TOKENS, _, _, _, self.getGUID(), playerColor)
 end
 
--- release the last sealed token
-function releaseOneToken(playerColor)
-  if not Global.call("canTouchChaosTokens") then return end
-  if #sealedTokens == 0 then
-    printToColor("No sealed token(s) found", playerColor)
+function sealTokenWrapper(params)
+  sealToken("Moon", params.playerColor)
+end
+
+function sealMoon(player)
+  local playerColor = player.color
+  sealToken("Moon", playerColor)
+end
+
+function releaseMoon(player)
+  local playerColor = player.color
+  releaseOneToken(playerColor)
+end
+
+function toggleRules(player)
+  if helpVisibleToPlayers[player.color] then
+    helpVisibleToPlayers[player.color] = nil
   else
-    printToColor("Releasing token", playerColor)
-    putTokenAway(table.remove(sealedTokens))
+    helpVisibleToPlayers[player.color] = true
   end
+  updateRulesVisibility()
 end
 
--- releases all sealed tokens
-function releaseAllTokens(playerColor)
-  if not Global.call("canTouchChaosTokens") then return end
-  if #sealedTokens == 0 then
-    printToColor("No sealed token(s) found", playerColor)
-  else
-    printToColor("Releasing token(s)", playerColor)
-    for _, guid in ipairs(sealedTokens) do
-      putTokenAway(guid)
+-- updates the visibility of the rules text
+function updateRulesVisibility()
+  local visibility = ""
+  for playerColor, _ in pairs(helpVisibleToPlayers) do
+    if string.len(visibility) > 0 then
+      visibility = visibility .. "|" .. playerColor
+    else
+      visibility = playerColor
     end
-    sealedTokens = {}
-    updateCountLabel()
   end
-end
-
--- returns the token (referenced by GUID) to the chaos bag
-function putTokenAway(guid)
-  local token = getObjectFromGUID(guid)
-  if not token then return end
-
-  local chaosbag = Global.call("findChaosBag")
-  chaosbag.putObject(token)
-  TokenArrangerApi.layout()
-  updateCountLabel()
+  self.UI.setAttribute("rulesPanel", "visibility", visibility)
+  self.UI.setAttribute("rulesPanel", "active", string.len(visibility) > 0)
 end
