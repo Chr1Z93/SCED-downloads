@@ -1,3 +1,4 @@
+local CoroutineLib          = require("util/CoroutineLib")
 local DeckLib               = require("util/DeckLib")
 local GUIDReferenceApi      = require("core/GUIDReferenceApi")
 local MythosAreaApi         = require("mythos/MythosAreaApi")
@@ -80,17 +81,17 @@ function setup(direction)
     bag.call("buttonClick_place")
   end
 
-  function coinside()
+  function courtOfAncientSetupCoroutine()
     -- remove one random locations
     local crumblingDeck = getObjectFromGUID(crumblingArchivesGUID)
     crumblingDeck.shuffle()
 
-    coWaitSeconds(0.5)
+    CoroutineLib.yieldSeconds(0.5)
 
     local card = crumblingDeck.takeObject()
     trash.putObject(card)
 
-    coWaitSeconds(0.5)
+    CoroutineLib.yieldSeconds(0.5)
 
     for i = 1, 5 do
       crumblingDeck.takeObject({ position = PlayAreaApi.gridToWorld(locationPositions[i]) })
@@ -102,8 +103,9 @@ function setup(direction)
 
     local greatLift = getObjectFromGUID(greatLiftGUID)
     greatLift.setPosition(PlayAreaApi.gridToWorld(greatLiftLocations[direction]))
+    greatLift.setRotation(Vector(0, 270, 0))
 
-    coWaitSeconds(1)
+    CoroutineLib.yieldSeconds(1)
 
     if direction == "east" then
       -- add flood tokens
@@ -114,7 +116,8 @@ function setup(direction)
           callback_function = function(spawnedObject) if i > 5 then spawnedObject.flip() end end
         })
       end
-
+      
+      CoroutineLib.yieldSeconds(0.5)
       setAsideInescapable()
 
       -- remove bag from unused direction
@@ -124,7 +127,7 @@ function setup(direction)
       local starSpawnDeck = getObjectFromGUID(starSpawnGUID)
       starSpawnDeck.shuffle()
 
-      coWaitSeconds(0.5)
+      CoroutineLib.yieldSeconds(0.5)
 
       starSpawnCard = starSpawnDeck.takeObject()
       DeckLib.placeOrMergeIntoDeck(starSpawnCard, MythosAreaApi.getEncounterDeckPosition(), nil, false, true)
@@ -145,11 +148,9 @@ function setup(direction)
     end
 
     trash.putObject(bag)
-
-    return 1
   end
 
-  startLuaCoroutine(self, "coinside")
+  CoroutineLib.start(courtOfAncientSetupCoroutine)
   self.destroy()
 end
 
@@ -162,12 +163,4 @@ function setAsideInescapable()
   setAsideChest.putObject(getObjectFromGUID(inescapableGUID))
 
   broadcastToAll("Added 'The Inescapable' Encounter Set to the game.", "White")
-end
-
--- pauses the current coroutine for 'seconds' seconds
-function coWaitSeconds(seconds)
-  local startTime = os.clock()
-  while os.clock() - startTime < seconds do
-    coroutine.yield(0)
-  end
 end
