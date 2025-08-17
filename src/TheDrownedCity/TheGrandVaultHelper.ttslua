@@ -1,3 +1,4 @@
+local CoroutineLib        = require("util/CoroutineLib")
 local DeckLib             = require("util/DeckLib")
 local GUIDReferenceApi    = require("core/GUIDReferenceApi")
 local MythosAreaApi       = require("mythos/MythosAreaApi")
@@ -47,13 +48,13 @@ function onLoad()
 end
 
 function setup(diverted)
-  function coinside()
+  function grandVaultSetupCoroutine()
     -- set up Star Spawns
     local starSpawns = getObjectFromGUID(starSpawnGUID)
     local setAsideChest = MythosAreaApi.getSetAsideChest()
     starSpawns.shuffle()
 
-    coWaitSeconds(1)
+    CoroutineLib.yieldSeconds(1)
 
     for i = 1, 2 do
       card = starSpawns.takeObject()
@@ -75,13 +76,13 @@ function setup(diverted)
 
     local mechanisms = getObjectFromGUID(mechanismsGUID)
     mechanisms.shuffle()
-    coWaitSeconds(1)
+    CoroutineLib.yieldSeconds(1)
     card = mechanisms.takeObject()
     trash.putObject(card)
 
     local chambersDeck = getObjectFromGUID(chambersGUID)
     DeckLib.placeOrMergeIntoDeck(mechanisms, chambersDeck.getPosition(), chambersDeck.getRotation(), false, true)
-    coWaitSeconds(1)
+    CoroutineLib.yieldSeconds(1)
 
     activatedLocations = {}
     for i = 1, 7 do
@@ -97,7 +98,7 @@ function setup(diverted)
     end
 
     -- add resource tokens to activated locations
-    coWaitSeconds(1)
+    CoroutineLib.yieldSeconds(1)
     if diverted == "no" then numActivatedLocations = 3 else numActivatedLocations = 1 end
     for i = 1, numActivatedLocations do
       TokenManagerApi.spawnToken(activatedLocations[i].getPosition() + Vector(0, 7, 0), "resource")
@@ -110,10 +111,11 @@ function setup(diverted)
       floodTokenPool.takeObject({ position = PlayAreaApi.gridToWorld(grandVaultPositions[i]) + Vector(2, 0, -1.5) })
     end
 
-    return 1
+    -- this setup has no encounter sets to shuffle in, so shuffle the deck here just in case
+    MythosAreaApi.getEncounterDeckObjects().draw.shuffle()
   end
 
-  startLuaCoroutine(self, "coinside")
+  CoroutineLib.start(grandVaultSetupCoroutine)
   self.destroy()
 end
 
@@ -123,12 +125,4 @@ end
 
 function notDiverted()
   setup("no")
-end
-
--- pauses the current coroutine for 'seconds' seconds
-function coWaitSeconds(seconds)
-  local startTime = os.clock()
-  while os.clock() - startTime < seconds do
-    coroutine.yield(0)
-  end
 end

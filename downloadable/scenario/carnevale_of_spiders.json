@@ -14,28 +14,13 @@
   },
   "Nickname": "Carnevale of Spiders",
   "Description": "A Farkham-con Original. Requires 3 XP",
-  "GMNotes": "",
   "ColorDiffuse": {
     "r": 1.0,
     "g": 1.0,
     "b": 1.0
   },
-  "LayoutGroupSortIndex": 0,
-  "Value": 0,
-  "Locked": false,
-  "Grid": true,
-  "Snap": true,
-  "IgnoreFoW": false,
-  "MeasureMovement": false,
-  "DragSelectable": true,
-  "Autoraise": true,
-  "Sticky": true,
-  "Tooltip": true,
-  "GridProjection": false,
   "HideWhenFaceDown": false,
   "Hands": false,
-  "MaterialIndex": -1,
-  "MeshIndex": -1,
   "CustomMesh": {
     "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/62583916778515333/9F0BE0C211BE3BD1725B4B855F5D3C9C0D020394/",
     "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/1474319121422110285/8BA9D8C5CFA6D4E35DFC2077002CB2256DCFB2D7/",
@@ -56,12 +41,8 @@
     },
     "CastShadows": true
   },
-  "Bag": {
-    "Order": 0
-  },
   "LuaScript": "function updateSave()\n    local data_to_save = {[\"ml\"]=memoryList}\n    saved_data = JSON.encode(data_to_save)\n    self.script_state = saved_data\nend\n\nfunction onload(saved_data)\n    if saved_data ~= \"\" then\n        local loaded_data = JSON.decode(saved_data)\n        --Set up information off of loaded_data\n        memoryList = loaded_data.ml\n    else\n        --Set up information for if there is no saved saved data\n        memoryList = {}\n    end\n\n    if next(memoryList) == nil then\n        createSetupButton()\n    else\n        createMemoryActionButtons()\n    end\nend\n\n\n--Beginning Setup\n\n\n--Make setup button\nfunction createSetupButton()\n    self.createButton({\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\n        position={0,0.3,-2}, rotation={0,180,0}, height=350, width=800,\n        font_size=250, color={0,0,0}, font_color={1,1,1}\n    })\nend\n\n--Triggered by setup button,\nfunction buttonClick_setup()\n    memoryListBackup = duplicateTable(memoryList)\n    memoryList = {}\n    self.clearButtons()\n    createButtonsOnAllObjects()\n    createSetupActionButtons()\nend\n\n--Creates selection buttons on objects\nfunction createButtonsOnAllObjects()\n    local howManyButtons = 0\n    for _, obj in ipairs(getAllObjects()) do\n        if obj ~= self then\n            local dummyIndex = howManyButtons\n            --On a normal bag, the button positions aren't the same size as the bag.\n            globalScaleFactor = 1.25 * 1/self.getScale().x\n            --Super sweet math to set button positions\n            local selfPos = self.getPosition()\n            local objPos = obj.getPosition()\n            local deltaPos = findOffsetDistance(selfPos, objPos, obj)\n            local objPos = rotateLocalCoordinates(deltaPos, self)\n            objPos.x = -objPos.x * globalScaleFactor\n            objPos.y = objPos.y * globalScaleFactor\n            objPos.z = objPos.z * globalScaleFactor\n            --Offset rotation of bag\n            local rot = self.getRotation()\n            rot.y = -rot.y + 180\n            --Create function\n            local funcName = \"selectButton_\" .. howManyButtons\n            local func = function() buttonClick_selection(dummyIndex, obj) end\n            self.setVar(funcName, func)\n            self.createButton({\n                click_function=funcName, function_owner=self,\n                position=objPos, rotation=rot, height=1000, width=1000,\n                color={0.75,0.25,0.25,0.6},\n            })\n            howManyButtons = howManyButtons + 1\n        end\n    end\nend\n\n--Creates submit and cancel buttons\nfunction createSetupActionButtons()\n    self.createButton({\n        label=\"Cancel\", click_function=\"buttonClick_cancel\", function_owner=self,\n        position={0,0.3,-2}, rotation={0,180,0}, height=350, width=1100,\n        font_size=250, color={0,0,0}, font_color={1,1,1}\n    })\n    self.createButton({\n        label=\"Submit\", click_function=\"buttonClick_submit\", function_owner=self,\n        position={0,0.3,-2.8}, rotation={0,180,0}, height=350, width=1100,\n        font_size=250, color={0,0,0}, font_color={1,1,1}\n    })\n    self.createButton({\n        label=\"Reset\", click_function=\"buttonClick_reset\", function_owner=self,\n        position={-2,0.3,0}, rotation={0,270,0}, height=350, width=800,\n        font_size=250, color={0,0,0}, font_color={1,1,1}\n    })\nend\n\n\n--During Setup\n\n\n--Checks or unchecks buttons\nfunction buttonClick_selection(index, obj)\n    local color = {0,1,0,0.6}\n    if memoryList[obj.getGUID()] == nil then\n        self.editButton({index=index, color=color})\n        --Adding pos/rot to memory table\n        local pos, rot = obj.getPosition(), obj.getRotation()\n        --I need to add it like this or it won't save due to indexing issue\n        memoryList[obj.getGUID()] = {\n            pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\n            rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\n            lock=obj.getLock()\n        }\n        obj.highlightOn({0,1,0})\n    else\n        color = {0.75,0.25,0.25,0.6}\n        self.editButton({index=index, color=color})\n        memoryList[obj.getGUID()] = nil\n        obj.highlightOff()\n    end\nend\n\n--Cancels selection process\nfunction buttonClick_cancel()\n    memoryList = memoryListBackup\n    self.clearButtons()\n    if next(memoryList) == nil then\n        createSetupButton()\n    else\n        createMemoryActionButtons()\n    end\n    removeAllHighlights()\n    broadcastToAll(\"Selection Canceled\", {1,1,1})\nend\n\n--Saves selections\nfunction buttonClick_submit()\n    if next(memoryList) == nil then\n        broadcastToAll(\"You cannot submit without any selections.\", {0.75, 0.25, 0.25})\n    else\n        self.clearButtons()\n        createMemoryActionButtons()\n        local count = 0\n        for guid in pairs(memoryList) do\n            count = count + 1\n            local obj = getObjectFromGUID(guid)\n            if obj ~= nil then obj.highlightOff() end\n        end\n        broadcastToAll(count..\" Objects Saved\", {1,1,1})\n        updateSave()\n    end\nend\n\n--Resets bag to starting status\nfunction buttonClick_reset()\n    memoryList = {}\n    self.clearButtons()\n    createSetupButton()\n    removeAllHighlights()\n    broadcastToAll(\"Tool Reset\", {1,1,1})\n    updateSave()\nend\n\n\n--After Setup\n\n\n--Creates recall and place buttons\nfunction createMemoryActionButtons()\n    self.createButton({\n        label=\"Place\", click_function=\"buttonClick_place\", function_owner=self,\n        position={0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n    self.createButton({\n        label=\"Recall\", click_function=\"buttonClick_recall\", function_owner=self,\n        position={-0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n--    self.createButton({\n--        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\n--        position={2,0.3,0}, rotation={0,90,0}, height=350, width=800,\n--        font_size=250, color={0,0,0}, font_color={1,1,1}\n--    })\nend\n\n--Sends objects from bag/table to their saved position/rotation\nfunction buttonClick_place()\n    local bagObjList = self.getObjects()\n    for guid, entry in pairs(memoryList) do\n        local obj = getObjectFromGUID(guid)\n        --If obj is out on the table, move it to the saved pos/rot\n        if obj ~= nil then\n            obj.setPositionSmooth(entry.pos)\n            obj.setRotationSmooth(entry.rot)\n            obj.setLock(entry.lock)\n        else\n            --If obj is inside of the bag\n            for _, bagObj in ipairs(bagObjList) do\n                if bagObj.guid == guid then\n                    local item = self.takeObject({\n                        guid=guid, position=entry.pos, rotation=entry.rot,\n                    })\n                    item.setLock(entry.lock)\n                    break\n                end\n            end\n        end\n    end\n    broadcastToAll(\"Objects Placed\", {1,1,1})\nend\n\n--Recalls objects to bag from table\nfunction buttonClick_recall()\n    for guid, entry in pairs(memoryList) do\n        local obj = getObjectFromGUID(guid)\n        if obj ~= nil then self.putObject(obj) end\n    end\n    broadcastToAll(\"Objects Recalled\", {1,1,1})\nend\n\n\n--Utility functions\n\n\n--Find delta (difference) between 2 x/y/z coordinates\nfunction findOffsetDistance(p1, p2, obj)\n    local deltaPos = {}\n    local bounds = obj.getBounds()\n    deltaPos.x = (p2.x-p1.x)\n    deltaPos.y = (p2.y-p1.y) + (bounds.size.y - bounds.offset.y)\n    deltaPos.z = (p2.z-p1.z)\n    return deltaPos\nend\n\n--Used to rotate a set of coordinates by an angle\nfunction rotateLocalCoordinates(desiredPos, obj)\n\tlocal objPos, objRot = obj.getPosition(), obj.getRotation()\n    local angle = math.rad(objRot.y)\n\tlocal x = desiredPos.x * math.cos(angle) - desiredPos.z * math.sin(angle)\n\tlocal z = desiredPos.x * math.sin(angle) + desiredPos.z * math.cos(angle)\n\t--return {x=objPos.x+x, y=objPos.y+desiredPos.y, z=objPos.z+z}\n    return {x=x, y=desiredPos.y, z=z}\nend\n\n--Coroutine delay, in seconds\nfunction wait(time)\n    local start = os.time()\n    repeat coroutine.yield(0) until os.time() > start + time\nend\n\n--Duplicates a table (needed to prevent it making reference to the same objects)\nfunction duplicateTable(oldTable)\n    local newTable = {}\n    for k, v in pairs(oldTable) do\n        newTable[k] = v\n    end\n    return newTable\nend\n\n--Moves scripted highlight from all objects\nfunction removeAllHighlights()\n    for _, obj in ipairs(getAllObjects()) do\n        obj.highlightOff()\n    end\nend\n\n--Round number (num) to the Nth decimal (dec)\nfunction round(num, dec)\n  local mult = 10^(dec or 0)\n  return math.floor(num * mult + 0.5) / mult\nend\n",
   "LuaScriptState": "{\"ml\":{\"0368c1\":{\"lock\":false,\"pos\":{\"x\":-17.1201,\"y\":1.619,\"z\":-0.03},\"rot\":{\"x\":359.9202,\"y\":270.0046,\"z\":0.0167}},\"12d492\":{\"lock\":false,\"pos\":{\"x\":-30.2242,\"y\":1.6225,\"z\":-3.83},\"rot\":{\"x\":0.0169,\"y\":179.9998,\"z\":0.0799}},\"1e7f1b\":{\"lock\":false,\"pos\":{\"x\":-14.3835,\"y\":1.6303,\"z\":-0.2141},\"rot\":{\"x\":359.3509,\"y\":269.9973,\"z\":0.0169}},\"2e4956\":{\"lock\":false,\"pos\":{\"x\":-11.6656,\"y\":1.6551,\"z\":9.0735},\"rot\":{\"x\":359.9201,\"y\":269.9792,\"z\":0.0169}},\"3c6d68\":{\"lock\":false,\"pos\":{\"x\":-11.7638,\"y\":1.6337,\"z\":-14.9715},\"rot\":{\"x\":359.9201,\"y\":270.0002,\"z\":0.0169}},\"44b0c5\":{\"lock\":false,\"pos\":{\"x\":-17.12,\"y\":1.6042,\"z\":-3.83},\"rot\":{\"x\":359.9831,\"y\":0.0002,\"z\":359.9201}},\"4cc43d\":{\"lock\":false,\"pos\":{\"x\":-3.9274,\"y\":1.7925,\"z\":5.7571},\"rot\":{\"x\":359.9197,\"y\":269.9698,\"z\":180.0169}},\"4d3553\":{\"lock\":false,\"pos\":{\"x\":-17.12,\"y\":1.6065,\"z\":3.86},\"rot\":{\"x\":359.9831,\"y\":359.9847,\"z\":359.9201}},\"4d5e5f\":{\"lock\":false,\"pos\":{\"x\":-2.6885,\"y\":1.6143,\"z\":-5.0485},\"rot\":{\"x\":359.9197,\"y\":269.9982,\"z\":0.0168}},\"50caf4\":{\"lock\":false,\"pos\":{\"x\":-3.9559,\"y\":1.5975,\"z\":-10.4412},\"rot\":{\"x\":359.9197,\"y\":269.9998,\"z\":0.0168}},\"81a6f5\":{\"lock\":false,\"pos\":{\"x\":-26.8136,\"y\":1.6167,\"z\":-7.5513},\"rot\":{\"x\":0.0799,\"y\":90.0001,\"z\":359.9831}},\"949c7d\":{\"lock\":false,\"pos\":{\"x\":-30.2242,\"y\":1.6248,\"z\":3.86},\"rot\":{\"x\":0.0169,\"y\":179.9995,\"z\":0.0799}},\"a45247\":{\"lock\":false,\"pos\":{\"x\":1.696,\"y\":1.56,\"z\":14.24},\"rot\":{\"x\":0,\"y\":45,\"z\":0}},\"a5891b\":{\"lock\":false,\"pos\":{\"x\":-3.5539,\"y\":1.5821,\"z\":-14.78},\"rot\":{\"x\":359.9197,\"y\":270.0027,\"z\":0.0168}},\"ab0576\":{\"lock\":false,\"pos\":{\"x\":-20.6238,\"y\":1.6124,\"z\":7.2554},\"rot\":{\"x\":359.9201,\"y\":270,\"z\":0.0169}},\"b676d8\":{\"lock\":false,\"pos\":{\"x\":-20.6237,\"y\":1.608,\"z\":-7.5965},\"rot\":{\"x\":0.0799,\"y\":89.9992,\"z\":359.9831}},\"bb43b8\":{\"lock\":false,\"pos\":{\"x\":-11.5593,\"y\":1.6557,\"z\":11.8573},\"rot\":{\"x\":359.9201,\"y\":269.9891,\"z\":0.0169}},\"c3031b\":{\"lock\":false,\"pos\":{\"x\":-2.7228,\"y\":1.6208,\"z\":0.3589},\"rot\":{\"x\":359.9197,\"y\":269.9689,\"z\":0.0169}},\"fde05d\":{\"lock\":false,\"pos\":{\"x\":-27.0646,\"y\":1.6215,\"z\":7.5852},\"rot\":{\"x\":359.9201,\"y\":269.9991,\"z\":0.0169}}}}",
-  "XmlUI": "",
   "ContainedObjects": [
     {
       "GUID": "0368c1",
@@ -79,28 +60,8 @@
       },
       "Nickname": "San Marco Basilica",
       "Description": "Venice.",
-      "GMNotes": "",
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
       "HideWhenFaceDown": false,
-      "Hands": true,
       "CardID": 234507,
-      "SidewaysCard": false,
       "CustomDeck": {
         "2345": {
           "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642364764/EBA4638B8847E97B3C153A928955F0A536677F8F/",
@@ -111,10 +72,7 @@
           "UniqueBack": true,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "12d492",
@@ -131,25 +89,11 @@
         "scaleZ": 1.0
       },
       "Nickname": "",
-      "Description": "",
-      "GMNotes": "",
       "ColorDiffuse": {
         "r": 0.6045295,
         "g": 0.6045295,
         "b": 0.6045295
       },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
       "HideWhenFaceDown": false,
       "Hands": false,
       "CustomImage": {
@@ -164,9 +108,6 @@
           "Stretch": true
         }
       },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": "",
       "States": {
         "3": {
           "GUID": "5b38c6",
@@ -183,25 +124,11 @@
             "scaleZ": 0.8
           },
           "Nickname": "",
-          "Description": "",
-          "GMNotes": "",
           "ColorDiffuse": {
             "r": 0.6045295,
             "g": 0.6045295,
             "b": 0.6045295
           },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "HideWhenFaceDown": false,
           "Hands": false,
           "CustomImage": {
@@ -215,10 +142,7 @@
               "Stackable": false,
               "Stretch": true
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         "1": {
           "GUID": "7234af",
@@ -235,25 +159,11 @@
             "scaleZ": 1.0
           },
           "Nickname": "",
-          "Description": "",
-          "GMNotes": "",
           "ColorDiffuse": {
             "r": 0.6045295,
             "g": 0.6045295,
             "b": 0.6045295
           },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "HideWhenFaceDown": false,
           "Hands": false,
           "CustomImage": {
@@ -267,10 +177,7 @@
               "Stackable": false,
               "Stretch": true
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         }
       }
     },
@@ -290,28 +197,7 @@
       },
       "Nickname": "Abbess Allegria Di Biase",
       "Description": "Ally. Believer.",
-      "GMNotes": "",
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 4000,
-      "SidewaysCard": false,
       "CustomDeck": {
         "40": {
           "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642329861/9768E9FE9C71E74721340D0D81607F534E54A3DE/",
@@ -322,10 +208,7 @@
           "UniqueBack": false,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "2e4956",
@@ -342,28 +225,7 @@
         "scaleZ": 1.0
       },
       "Nickname": "",
-      "Description": "",
-      "GMNotes": "",
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": false,
       "Hands": false,
-      "SidewaysCard": false,
       "DeckIDs": [
         234509,
         234513,
@@ -384,9 +246,6 @@
           "Type": 0
         }
       },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": "",
       "ContainedObjects": [
         {
           "GUID": "f2d9d3",
@@ -404,28 +263,8 @@
           },
           "Nickname": "Streets of Venice",
           "Description": "Venice.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "HideWhenFaceDown": false,
-          "Hands": true,
           "CardID": 234509,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2345": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642364764/EBA4638B8847E97B3C153A928955F0A536677F8F/",
@@ -436,10 +275,7 @@
               "UniqueBack": true,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "8d6af5",
@@ -457,28 +293,8 @@
           },
           "Nickname": "Flooded Square",
           "Description": "Venice.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "HideWhenFaceDown": false,
-          "Hands": true,
           "CardID": 234513,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2345": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642364764/EBA4638B8847E97B3C153A928955F0A536677F8F/",
@@ -489,10 +305,7 @@
               "UniqueBack": true,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "2f2498",
@@ -510,28 +323,8 @@
           },
           "Nickname": "Rialto Bridge",
           "Description": "Venice. Bridge.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "HideWhenFaceDown": false,
-          "Hands": true,
           "CardID": 234510,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2345": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642364764/EBA4638B8847E97B3C153A928955F0A536677F8F/",
@@ -542,10 +335,7 @@
               "UniqueBack": true,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "124288",
@@ -563,28 +353,8 @@
           },
           "Nickname": "The Guardian",
           "Description": "Venice.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "HideWhenFaceDown": false,
-          "Hands": true,
           "CardID": 234515,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2345": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642364764/EBA4638B8847E97B3C153A928955F0A536677F8F/",
@@ -595,10 +365,7 @@
               "UniqueBack": true,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "48d3db",
@@ -616,28 +383,8 @@
           },
           "Nickname": "Accademia Bridge",
           "Description": "Venice. Bridge.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "HideWhenFaceDown": false,
-          "Hands": true,
           "CardID": 234514,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2345": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642364764/EBA4638B8847E97B3C153A928955F0A536677F8F/",
@@ -648,10 +395,7 @@
               "UniqueBack": true,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "4260f0",
@@ -669,28 +413,8 @@
           },
           "Nickname": "Venetian Garden",
           "Description": "Venice.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "HideWhenFaceDown": false,
-          "Hands": true,
           "CardID": 234511,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2345": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642364764/EBA4638B8847E97B3C153A928955F0A536677F8F/",
@@ -701,10 +425,7 @@
               "UniqueBack": true,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "eb8aad",
@@ -722,28 +443,8 @@
           },
           "Nickname": "Canal-side",
           "Description": "Venice.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "HideWhenFaceDown": false,
-          "Hands": true,
           "CardID": 234508,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2345": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642364764/EBA4638B8847E97B3C153A928955F0A536677F8F/",
@@ -754,10 +455,7 @@
               "UniqueBack": true,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         }
       ]
     },
@@ -776,28 +474,7 @@
         "scaleZ": 1.0
       },
       "Nickname": "",
-      "Description": "",
-      "GMNotes": "",
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
       "Hands": false,
-      "SidewaysCard": false,
       "DeckIDs": [
         267700,
         267600,
@@ -842,9 +519,6 @@
           "Type": 0
         }
       },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": "",
       "ContainedObjects": [
         {
           "GUID": "cdbbef",
@@ -861,29 +535,7 @@
             "scaleZ": 1.0
           },
           "Nickname": "",
-          "Description": "",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 267700,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2677": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1464184778779192761/1EF8D4F2E9D86B9BAD3197FA423D2774A3355995/",
@@ -894,10 +546,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "f5eefa",
@@ -914,29 +563,7 @@
             "scaleZ": 1.0
           },
           "Nickname": "",
-          "Description": "",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 267600,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2676": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1464184778779191324/4FFEA4CF42638E8CB6A7046CCFEA9EB4FA4266D9/",
@@ -947,10 +574,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "93fc0c",
@@ -967,29 +591,7 @@
             "scaleZ": 1.0
           },
           "Nickname": "",
-          "Description": "",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 267500,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2675": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1464184778779175458/A8B70419202643224684E3FC5A70AF7D73F8D29B/",
@@ -1000,10 +602,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "a3edc2",
@@ -1020,29 +619,7 @@
             "scaleZ": 1.0
           },
           "Nickname": "",
-          "Description": "",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 275300,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2753": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1464184778779240250/01DAE8327C3D5FFA646F9B47FB726425FD1FC571/",
@@ -1053,10 +630,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         }
       ]
     },
@@ -1075,25 +649,11 @@
         "scaleZ": 1.0
       },
       "Nickname": "",
-      "Description": "",
-      "GMNotes": "",
       "ColorDiffuse": {
         "r": 0.6045295,
         "g": 0.6045295,
         "b": 0.6045295
       },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
       "HideWhenFaceDown": false,
       "Hands": false,
       "CustomImage": {
@@ -1108,9 +668,6 @@
           "Stretch": true
         }
       },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": "",
       "States": {
         "3": {
           "GUID": "5b38c6",
@@ -1127,25 +684,11 @@
             "scaleZ": 0.8
           },
           "Nickname": "",
-          "Description": "",
-          "GMNotes": "",
           "ColorDiffuse": {
             "r": 0.6045295,
             "g": 0.6045295,
             "b": 0.6045295
           },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "HideWhenFaceDown": false,
           "Hands": false,
           "CustomImage": {
@@ -1159,10 +702,7 @@
               "Stackable": false,
               "Stretch": true
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         "1": {
           "GUID": "7234af",
@@ -1179,25 +719,11 @@
             "scaleZ": 1.0
           },
           "Nickname": "",
-          "Description": "",
-          "GMNotes": "",
           "ColorDiffuse": {
             "r": 0.6045295,
             "g": 0.6045295,
             "b": 0.6045295
           },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "HideWhenFaceDown": false,
           "Hands": false,
           "CustomImage": {
@@ -1211,10 +737,7 @@
               "Stackable": false,
               "Stretch": true
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         }
       }
     },
@@ -1233,28 +756,7 @@
         "scaleZ": 1.0
       },
       "Nickname": "Encounter Deck",
-      "Description": "",
-      "GMNotes": "",
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
       "Hands": false,
-      "SidewaysCard": false,
       "DeckIDs": [
         274127,
         3717,
@@ -1333,9 +835,6 @@
           "Type": 0
         }
       },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": "",
       "ContainedObjects": [
         {
           "GUID": "127543",
@@ -1353,28 +852,7 @@
           },
           "Nickname": "Swarm of Spiders",
           "Description": "Creature. Spider.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 274127,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2741": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/778493383646802545/EF89145CA7EEC1746A59CCBDDEE52526997C5DED/",
@@ -1385,10 +863,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "fe04b3",
@@ -1406,26 +881,7 @@
           },
           "Nickname": "Watchers' Gaze",
           "Description": "Terror.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "CardID": 3717,
-          "SidewaysCard": false,
           "CustomDeck": {
             "37": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642320624/6D56E471941AB4D0DEEDAA5DE4780DFDF303016C/",
@@ -1436,10 +892,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "32a6e2",
@@ -1448,7 +901,7 @@
             "posX": -15.7603874,
             "posY": 1.47872412,
             "posZ": -2.28992748,
-            "rotX": -4.03408048E-05,
+            "rotX": -4.03408048e-05,
             "rotY": 269.9999,
             "rotZ": 180.811646,
             "scaleX": 1.0,
@@ -1457,26 +910,7 @@
           },
           "Nickname": "Mesmerize",
           "Description": "Hex.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "CardID": 3721,
-          "SidewaysCard": false,
           "CustomDeck": {
             "37": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642320624/6D56E471941AB4D0DEEDAA5DE4780DFDF303016C/",
@@ -1487,10 +921,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "eb88d3",
@@ -1508,28 +939,7 @@
           },
           "Nickname": "Swarm of Spiders",
           "Description": "Creature. Spider.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 274127,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2741": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/778493383646802545/EF89145CA7EEC1746A59CCBDDEE52526997C5DED/",
@@ -1540,10 +950,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "f119dc",
@@ -1561,26 +968,7 @@
           },
           "Nickname": "Carnevale Sentinel",
           "Description": "Humanoid. Cultist.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "CardID": 3705,
-          "SidewaysCard": false,
           "CustomDeck": {
             "37": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642320624/6D56E471941AB4D0DEEDAA5DE4780DFDF303016C/",
@@ -1591,10 +979,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "16d6d6",
@@ -1612,28 +997,7 @@
           },
           "Nickname": "Crypt Chill",
           "Description": "Hazard.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 231720,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2317": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/775106514377430057/E4E5A51434CEF23EF5D04A104F352520304AA550/",
@@ -1644,10 +1008,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "399d65",
@@ -1665,26 +1026,7 @@
           },
           "Nickname": "Chaos in the Water",
           "Description": "Hazard.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "CardID": 3719,
-          "SidewaysCard": false,
           "CustomDeck": {
             "37": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642320624/6D56E471941AB4D0DEEDAA5DE4780DFDF303016C/",
@@ -1695,10 +1037,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "785613",
@@ -1716,28 +1055,7 @@
           },
           "Nickname": "Endless Weaving",
           "Description": "Scheme.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 540344,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2346": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1016065725025770470/7C77423FFA657FB6B5937C80D6813C24E2D0E88C/",
@@ -1748,10 +1066,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "c4ce76",
@@ -1769,28 +1084,7 @@
           },
           "Nickname": "Obscuring Fog",
           "Description": "Hazard.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 231721,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2317": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/775106514377430057/E4E5A51434CEF23EF5D04A104F352520304AA550/",
@@ -1801,10 +1095,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "ea2b60",
@@ -1822,28 +1113,7 @@
           },
           "Nickname": "Caught in a Web",
           "Description": "Hazard.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 540343,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2346": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1016065725025770470/7C77423FFA657FB6B5937C80D6813C24E2D0E88C/",
@@ -1854,10 +1124,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "97cc02",
@@ -1875,26 +1142,7 @@
           },
           "Nickname": "Watchers' Gaze",
           "Description": "Terror.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "CardID": 3715,
-          "SidewaysCard": false,
           "CustomDeck": {
             "37": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642320624/6D56E471941AB4D0DEEDAA5DE4780DFDF303016C/",
@@ -1905,10 +1153,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "10d41c",
@@ -1926,26 +1171,7 @@
           },
           "Nickname": "Watchers' Gaze",
           "Description": "Terror.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "CardID": 3716,
-          "SidewaysCard": false,
           "CustomDeck": {
             "37": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642320624/6D56E471941AB4D0DEEDAA5DE4780DFDF303016C/",
@@ -1956,10 +1182,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "8f3ad2",
@@ -1977,26 +1200,7 @@
           },
           "Nickname": "Lost in Venice",
           "Description": "Blunder.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "CardID": 3713,
-          "SidewaysCard": false,
           "CustomDeck": {
             "37": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642320624/6D56E471941AB4D0DEEDAA5DE4780DFDF303016C/",
@@ -2007,10 +1211,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "09c755",
@@ -2028,28 +1229,7 @@
           },
           "Nickname": "Sickening Webs",
           "Description": "Obstacle.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 274128,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2741": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/778493383646802545/EF89145CA7EEC1746A59CCBDDEE52526997C5DED/",
@@ -2060,10 +1240,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "febff1",
@@ -2081,26 +1258,7 @@
           },
           "Nickname": "Mass Hysteria",
           "Description": "Hazard.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "CardID": 3711,
-          "SidewaysCard": false,
           "CustomDeck": {
             "37": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642320624/6D56E471941AB4D0DEEDAA5DE4780DFDF303016C/",
@@ -2111,10 +1269,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "e634db",
@@ -2132,28 +1287,7 @@
           },
           "Nickname": "Web-Spinner",
           "Description": "Monster. Spider.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 540341,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2346": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1016065725025770470/7C77423FFA657FB6B5937C80D6813C24E2D0E88C/",
@@ -2164,10 +1298,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "f39f35",
@@ -2185,26 +1316,7 @@
           },
           "Nickname": "Lost in Venice",
           "Description": "Blunder.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "CardID": 3712,
-          "SidewaysCard": false,
           "CustomDeck": {
             "37": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642320624/6D56E471941AB4D0DEEDAA5DE4780DFDF303016C/",
@@ -2215,10 +1327,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "785613",
@@ -2236,28 +1345,7 @@
           },
           "Nickname": "Endless Weaving",
           "Description": "Scheme.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 540344,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2346": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1016065725025770470/7C77423FFA657FB6B5937C80D6813C24E2D0E88C/",
@@ -2268,10 +1356,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "785613",
@@ -2289,28 +1374,7 @@
           },
           "Nickname": "Endless Weaving",
           "Description": "Scheme.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 540344,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2346": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1016065725025770470/7C77423FFA657FB6B5937C80D6813C24E2D0E88C/",
@@ -2321,10 +1385,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "27fab1",
@@ -2333,7 +1394,7 @@
             "posX": -15.6075039,
             "posY": 1.45183182,
             "posZ": -2.42943883,
-            "rotX": 1.29666878E-05,
+            "rotX": 1.29666878e-05,
             "rotY": 270.0,
             "rotZ": 180.466324,
             "scaleX": 1.0,
@@ -2342,26 +1403,7 @@
           },
           "Nickname": "Carnevale Sentinel",
           "Description": "Humanoid. Cultist.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "CardID": 3703,
-          "SidewaysCard": false,
           "CustomDeck": {
             "37": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642320624/6D56E471941AB4D0DEEDAA5DE4780DFDF303016C/",
@@ -2372,10 +1414,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "83c3ec",
@@ -2393,26 +1432,7 @@
           },
           "Nickname": "Acrid Miasma",
           "Description": "Hazard.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "CardID": 3725,
-          "SidewaysCard": false,
           "CustomDeck": {
             "37": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642320624/6D56E471941AB4D0DEEDAA5DE4780DFDF303016C/",
@@ -2423,10 +1443,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "133060",
@@ -2444,28 +1461,7 @@
           },
           "Nickname": "Swarm of Spiders",
           "Description": "Creature. Spider.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 274127,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2741": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/778493383646802545/EF89145CA7EEC1746A59CCBDDEE52526997C5DED/",
@@ -2476,10 +1472,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "dbec9d",
@@ -2497,26 +1490,7 @@
           },
           "Nickname": "Carnevale Sentinel",
           "Description": "Humanoid. Cultist.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "CardID": 3704,
-          "SidewaysCard": false,
           "CustomDeck": {
             "37": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642320624/6D56E471941AB4D0DEEDAA5DE4780DFDF303016C/",
@@ -2527,10 +1501,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "ab3719",
@@ -2548,28 +1519,7 @@
           },
           "Nickname": "Crypt Chill",
           "Description": "Hazard.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 231720,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2317": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/775106514377430057/E4E5A51434CEF23EF5D04A104F352520304AA550/",
@@ -2580,10 +1530,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "4448e3",
@@ -2601,26 +1548,7 @@
           },
           "Nickname": "Chaos in the Water",
           "Description": "Hazard.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "CardID": 3720,
-          "SidewaysCard": false,
           "CustomDeck": {
             "37": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642320624/6D56E471941AB4D0DEEDAA5DE4780DFDF303016C/",
@@ -2631,10 +1559,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "ef8a41",
@@ -2652,28 +1577,7 @@
           },
           "Nickname": "Web-Spinner",
           "Description": "Monster. Spider.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 540341,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2346": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1016065725025770470/7C77423FFA657FB6B5937C80D6813C24E2D0E88C/",
@@ -2684,10 +1588,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "0f9c1e",
@@ -2705,28 +1606,7 @@
           },
           "Nickname": "Spider of Leng",
           "Description": "Monster. Spider.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 274126,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2741": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/778493383646802545/EF89145CA7EEC1746A59CCBDDEE52526997C5DED/",
@@ -2737,10 +1617,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "23fc06",
@@ -2758,28 +1635,7 @@
           },
           "Nickname": "Sickening Webs",
           "Description": "Obstacle.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 274128,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2741": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/778493383646802545/EF89145CA7EEC1746A59CCBDDEE52526997C5DED/",
@@ -2790,10 +1646,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "ac4b72",
@@ -2811,26 +1664,7 @@
           },
           "Nickname": "Lost in Venice",
           "Description": "Blunder.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "CardID": 3714,
-          "SidewaysCard": false,
           "CustomDeck": {
             "37": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642320624/6D56E471941AB4D0DEEDAA5DE4780DFDF303016C/",
@@ -2841,10 +1675,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "027b2f",
@@ -2862,26 +1693,7 @@
           },
           "Nickname": "Chaos in the Water",
           "Description": "Hazard.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "CardID": 3718,
-          "SidewaysCard": false,
           "CustomDeck": {
             "37": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642320624/6D56E471941AB4D0DEEDAA5DE4780DFDF303016C/",
@@ -2892,10 +1704,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "50e716",
@@ -2913,28 +1722,7 @@
           },
           "Nickname": "Obscuring Fog",
           "Description": "Hazard.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 231721,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2317": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/775106514377430057/E4E5A51434CEF23EF5D04A104F352520304AA550/",
@@ -2945,10 +1733,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "ea2b60",
@@ -2966,28 +1751,7 @@
           },
           "Nickname": "Caught in a Web",
           "Description": "Hazard.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 540343,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2346": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1016065725025770470/7C77423FFA657FB6B5937C80D6813C24E2D0E88C/",
@@ -2998,10 +1762,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "95047c",
@@ -3010,7 +1771,7 @@
             "posX": -18.7957268,
             "posY": 1.38304126,
             "posZ": -7.53972626,
-            "rotX": -8.77786E-05,
+            "rotX": -8.77786e-05,
             "rotY": 269.999634,
             "rotZ": 180.367828,
             "scaleX": 1.0,
@@ -3019,26 +1780,7 @@
           },
           "Nickname": "Mass Hysteria",
           "Description": "Hazard.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "CardID": 3709,
-          "SidewaysCard": false,
           "CustomDeck": {
             "37": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642320624/6D56E471941AB4D0DEEDAA5DE4780DFDF303016C/",
@@ -3049,10 +1791,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "916af7",
@@ -3070,26 +1809,7 @@
           },
           "Nickname": "Acrid Miasma",
           "Description": "Hazard.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "CardID": 3726,
-          "SidewaysCard": false,
           "CustomDeck": {
             "37": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642320624/6D56E471941AB4D0DEEDAA5DE4780DFDF303016C/",
@@ -3100,10 +1820,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "ef8a41",
@@ -3121,28 +1838,7 @@
           },
           "Nickname": "Web-Spinner",
           "Description": "Monster. Spider.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 540341,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2346": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1016065725025770470/7C77423FFA657FB6B5937C80D6813C24E2D0E88C/",
@@ -3153,10 +1849,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "27c1bf",
@@ -3174,26 +1867,7 @@
           },
           "Nickname": "Mass Hysteria",
           "Description": "Hazard.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "CardID": 3710,
-          "SidewaysCard": false,
           "CustomDeck": {
             "37": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642320624/6D56E471941AB4D0DEEDAA5DE4780DFDF303016C/",
@@ -3204,10 +1878,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "d9386a",
@@ -3225,28 +1896,7 @@
           },
           "Nickname": "Caught in a Web",
           "Description": "Hazard.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 540343,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2346": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1016065725025770470/7C77423FFA657FB6B5937C80D6813C24E2D0E88C/",
@@ -3257,10 +1907,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "79e1a4",
@@ -3278,26 +1925,7 @@
           },
           "Nickname": "Mesmerize",
           "Description": "Hex.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "CardID": 3722,
-          "SidewaysCard": false,
           "CustomDeck": {
             "37": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642320624/6D56E471941AB4D0DEEDAA5DE4780DFDF303016C/",
@@ -3308,10 +1936,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         }
       ]
     },
@@ -3330,25 +1955,11 @@
         "scaleZ": 1.0
       },
       "Nickname": "",
-      "Description": "",
-      "GMNotes": "",
       "ColorDiffuse": {
         "r": 0.6045295,
         "g": 0.6045295,
         "b": 0.6045295
       },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
       "HideWhenFaceDown": false,
       "Hands": false,
       "CustomImage": {
@@ -3363,9 +1974,6 @@
           "Stretch": true
         }
       },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": "",
       "States": {
         "3": {
           "GUID": "5b38c6",
@@ -3382,25 +1990,11 @@
             "scaleZ": 0.8
           },
           "Nickname": "",
-          "Description": "",
-          "GMNotes": "",
           "ColorDiffuse": {
             "r": 0.6045295,
             "g": 0.6045295,
             "b": 0.6045295
           },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "HideWhenFaceDown": false,
           "Hands": false,
           "CustomImage": {
@@ -3414,10 +2008,7 @@
               "Stackable": false,
               "Stretch": true
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         "1": {
           "GUID": "7234af",
@@ -3434,25 +2025,11 @@
             "scaleZ": 1.0
           },
           "Nickname": "",
-          "Description": "",
-          "GMNotes": "",
           "ColorDiffuse": {
             "r": 0.6045295,
             "g": 0.6045295,
             "b": 0.6045295
           },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "HideWhenFaceDown": false,
           "Hands": false,
           "CustomImage": {
@@ -3466,10 +2043,7 @@
               "Stackable": false,
               "Stretch": true
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         }
       }
     },
@@ -3488,28 +2062,7 @@
         "scaleZ": 0.82
       },
       "Nickname": "Act Deck",
-      "Description": "",
-      "GMNotes": "",
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
       "Hands": false,
-      "SidewaysCard": false,
       "DeckIDs": [
         266500,
         266300
@@ -3534,9 +2087,6 @@
           "Type": 0
         }
       },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": "",
       "ContainedObjects": [
         {
           "GUID": "ca0fb8",
@@ -3553,29 +2103,7 @@
             "scaleZ": 0.901293039
           },
           "Nickname": "",
-          "Description": "",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 266500,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2665": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1464184778779157993/10C441E733A12426DF9427F1FFBEFC784F7C78D7/",
@@ -3586,10 +2114,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "fb8600",
@@ -3606,29 +2131,7 @@
             "scaleZ": 0.901293039
           },
           "Nickname": "",
-          "Description": "",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 266300,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2663": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1464184778779155336/0364E4E880917FEDD74B9E7118C78B0F2D2A4F63/",
@@ -3639,10 +2142,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         }
       ]
     },
@@ -3662,28 +2162,7 @@
       },
       "Nickname": "Scenario",
       "Description": "Carnevale of Spiders",
-      "GMNotes": "",
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 267200,
-      "SidewaysCard": false,
       "CustomDeck": {
         "2672": {
           "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1464184778779168985/C3DFAE6FC88641DB409E9B72EAF13F7D2B76D307/",
@@ -3694,10 +2173,7 @@
           "UniqueBack": false,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "81a6f5",
@@ -3714,25 +2190,11 @@
         "scaleZ": 1.0
       },
       "Nickname": "",
-      "Description": "",
-      "GMNotes": "",
       "ColorDiffuse": {
         "r": 0.6045295,
         "g": 0.6045295,
         "b": 0.6045295
       },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
       "HideWhenFaceDown": false,
       "Hands": false,
       "CustomImage": {
@@ -3747,9 +2209,6 @@
           "Stretch": true
         }
       },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": "",
       "States": {
         "3": {
           "GUID": "5b38c6",
@@ -3766,25 +2225,11 @@
             "scaleZ": 0.8
           },
           "Nickname": "",
-          "Description": "",
-          "GMNotes": "",
           "ColorDiffuse": {
             "r": 0.6045295,
             "g": 0.6045295,
             "b": 0.6045295
           },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "HideWhenFaceDown": false,
           "Hands": false,
           "CustomImage": {
@@ -3798,10 +2243,7 @@
               "Stackable": false,
               "Stretch": true
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         "1": {
           "GUID": "7234af",
@@ -3818,25 +2260,11 @@
             "scaleZ": 1.0
           },
           "Nickname": "",
-          "Description": "",
-          "GMNotes": "",
           "ColorDiffuse": {
             "r": 0.6045295,
             "g": 0.6045295,
             "b": 0.6045295
           },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "HideWhenFaceDown": false,
           "Hands": false,
           "CustomImage": {
@@ -3850,10 +2278,7 @@
               "Stackable": false,
               "Stretch": true
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         }
       }
     },
@@ -3872,25 +2297,11 @@
         "scaleZ": 1.0
       },
       "Nickname": "",
-      "Description": "",
-      "GMNotes": "",
       "ColorDiffuse": {
         "r": 0.6045295,
         "g": 0.6045295,
         "b": 0.6045295
       },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
       "HideWhenFaceDown": false,
       "Hands": false,
       "CustomImage": {
@@ -3905,9 +2316,6 @@
           "Stretch": true
         }
       },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": "",
       "States": {
         "3": {
           "GUID": "5b38c6",
@@ -3924,25 +2332,11 @@
             "scaleZ": 0.8
           },
           "Nickname": "",
-          "Description": "",
-          "GMNotes": "",
           "ColorDiffuse": {
             "r": 0.6045295,
             "g": 0.6045295,
             "b": 0.6045295
           },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "HideWhenFaceDown": false,
           "Hands": false,
           "CustomImage": {
@@ -3956,10 +2350,7 @@
               "Stackable": false,
               "Stretch": true
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         "1": {
           "GUID": "7234af",
@@ -3976,25 +2367,11 @@
             "scaleZ": 1.0
           },
           "Nickname": "",
-          "Description": "",
-          "GMNotes": "",
           "ColorDiffuse": {
             "r": 0.6045295,
             "g": 0.6045295,
             "b": 0.6045295
           },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "HideWhenFaceDown": false,
           "Hands": false,
           "CustomImage": {
@@ -4008,10 +2385,7 @@
               "Stackable": false,
               "Stretch": true
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         }
       }
     },
@@ -4030,29 +2404,13 @@
         "scaleZ": 2.0
       },
       "Nickname": "Set-aside",
-      "Description": "",
-      "GMNotes": "",
       "ColorDiffuse": {
         "r": 0.02148666,
         "g": 0.00100758043,
         "b": 0.02148666
       },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
       "HideWhenFaceDown": false,
       "Hands": false,
-      "MaterialIndex": -1,
-      "MeshIndex": -1,
       "CustomMesh": {
         "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334964971/3078F312706FC974833ECD2A359B87FD4F283509/",
         "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960553/C518D80E31E27DB23EEAC8CF9253E59798865790/",
@@ -4063,9 +2421,6 @@
         "TypeIndex": 6,
         "CastShadows": true
       },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": "",
       "PhysicsMaterial": {
         "StaticFriction": 0.6,
         "DynamicFriction": 0.6,
@@ -4095,29 +2450,7 @@
             "scaleZ": 1.0
           },
           "Nickname": "Daughter of Atlach-Nacha",
-          "Description": "",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 540200,
-          "SidewaysCard": false,
           "CustomDeck": {
             "5402": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1464184778779170622/67E3D3804F3D7663C59D3DCB4BE42207B783CE39/",
@@ -4128,10 +2461,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "6fb734",
@@ -4149,27 +2479,7 @@
           },
           "Nickname": "Masks",
           "Description": "Carnevale of Horrors",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
           "Hands": false,
-          "SidewaysCard": false,
           "DeckIDs": [
             295504,
             295503,
@@ -4187,9 +2497,6 @@
               "Type": 0
             }
           },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": "",
           "ContainedObjects": [
             {
               "GUID": "da4a26",
@@ -4206,29 +2513,7 @@
                 "scaleZ": 1.0
               },
               "Nickname": "Gilded Volto",
-              "Description": "",
-              "GMNotes": "",
-              "ColorDiffuse": {
-                "r": 0.713235259,
-                "g": 0.713235259,
-                "b": 0.713235259
-              },
-              "LayoutGroupSortIndex": 0,
-              "Value": 0,
-              "Locked": false,
-              "Grid": true,
-              "Snap": true,
-              "IgnoreFoW": false,
-              "MeasureMovement": false,
-              "DragSelectable": true,
-              "Autoraise": true,
-              "Sticky": true,
-              "Tooltip": true,
-              "GridProjection": false,
-              "HideWhenFaceDown": true,
-              "Hands": true,
               "CardID": 295504,
-              "SidewaysCard": false,
               "CustomDeck": {
                 "2955": {
                   "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642329861/9768E9FE9C71E74721340D0D81607F534E54A3DE/",
@@ -4239,10 +2524,7 @@
                   "UniqueBack": false,
                   "Type": 0
                 }
-              },
-              "LuaScript": "",
-              "LuaScriptState": "",
-              "XmlUI": ""
+              }
             },
             {
               "GUID": "080d4a",
@@ -4259,29 +2541,7 @@
                 "scaleZ": 1.0
               },
               "Nickname": "Pantalone",
-              "Description": "",
-              "GMNotes": "",
-              "ColorDiffuse": {
-                "r": 0.713235259,
-                "g": 0.713235259,
-                "b": 0.713235259
-              },
-              "LayoutGroupSortIndex": 0,
-              "Value": 0,
-              "Locked": false,
-              "Grid": true,
-              "Snap": true,
-              "IgnoreFoW": false,
-              "MeasureMovement": false,
-              "DragSelectable": true,
-              "Autoraise": true,
-              "Sticky": true,
-              "Tooltip": true,
-              "GridProjection": false,
-              "HideWhenFaceDown": true,
-              "Hands": true,
               "CardID": 295503,
-              "SidewaysCard": false,
               "CustomDeck": {
                 "2955": {
                   "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642329861/9768E9FE9C71E74721340D0D81607F534E54A3DE/",
@@ -4292,10 +2552,7 @@
                   "UniqueBack": false,
                   "Type": 0
                 }
-              },
-              "LuaScript": "",
-              "LuaScriptState": "",
-              "XmlUI": ""
+              }
             },
             {
               "GUID": "0f54e7",
@@ -4312,29 +2569,7 @@
                 "scaleZ": 1.0
               },
               "Nickname": "Medico Della Peste",
-              "Description": "",
-              "GMNotes": "",
-              "ColorDiffuse": {
-                "r": 0.713235259,
-                "g": 0.713235259,
-                "b": 0.713235259
-              },
-              "LayoutGroupSortIndex": 0,
-              "Value": 0,
-              "Locked": false,
-              "Grid": true,
-              "Snap": true,
-              "IgnoreFoW": false,
-              "MeasureMovement": false,
-              "DragSelectable": true,
-              "Autoraise": true,
-              "Sticky": true,
-              "Tooltip": true,
-              "GridProjection": false,
-              "HideWhenFaceDown": true,
-              "Hands": true,
               "CardID": 295502,
-              "SidewaysCard": false,
               "CustomDeck": {
                 "2955": {
                   "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642329861/9768E9FE9C71E74721340D0D81607F534E54A3DE/",
@@ -4345,10 +2580,7 @@
                   "UniqueBack": false,
                   "Type": 0
                 }
-              },
-              "LuaScript": "",
-              "LuaScriptState": "",
-              "XmlUI": ""
+              }
             },
             {
               "GUID": "25000a",
@@ -4365,29 +2597,7 @@
                 "scaleZ": 1.0
               },
               "Nickname": "Bauta",
-              "Description": "",
-              "GMNotes": "",
-              "ColorDiffuse": {
-                "r": 0.713235259,
-                "g": 0.713235259,
-                "b": 0.713235259
-              },
-              "LayoutGroupSortIndex": 0,
-              "Value": 0,
-              "Locked": false,
-              "Grid": true,
-              "Snap": true,
-              "IgnoreFoW": false,
-              "MeasureMovement": false,
-              "DragSelectable": true,
-              "Autoraise": true,
-              "Sticky": true,
-              "Tooltip": true,
-              "GridProjection": false,
-              "HideWhenFaceDown": true,
-              "Hands": true,
               "CardID": 295501,
-              "SidewaysCard": false,
               "CustomDeck": {
                 "2955": {
                   "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642329861/9768E9FE9C71E74721340D0D81607F534E54A3DE/",
@@ -4398,10 +2608,7 @@
                   "UniqueBack": false,
                   "Type": 0
                 }
-              },
-              "LuaScript": "",
-              "LuaScriptState": "",
-              "XmlUI": ""
+              }
             }
           ]
         },
@@ -4420,28 +2627,7 @@
             "scaleZ": 1.0
           },
           "Nickname": "Spinners in Darkness",
-          "Description": "",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
           "Hands": false,
-          "SidewaysCard": false,
           "DeckIDs": [
             234642,
             234642
@@ -4457,9 +2643,6 @@
               "Type": 0
             }
           },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": "",
           "ContainedObjects": [
             {
               "GUID": "f44cc4",
@@ -4477,28 +2660,7 @@
               },
               "Nickname": "The Spinner in Darkness",
               "Description": "Power.",
-              "GMNotes": "",
-              "ColorDiffuse": {
-                "r": 0.713235259,
-                "g": 0.713235259,
-                "b": 0.713235259
-              },
-              "LayoutGroupSortIndex": 0,
-              "Value": 0,
-              "Locked": false,
-              "Grid": true,
-              "Snap": true,
-              "IgnoreFoW": false,
-              "MeasureMovement": false,
-              "DragSelectable": true,
-              "Autoraise": true,
-              "Sticky": true,
-              "Tooltip": true,
-              "GridProjection": false,
-              "HideWhenFaceDown": true,
-              "Hands": true,
               "CardID": 234642,
-              "SidewaysCard": false,
               "CustomDeck": {
                 "2346": {
                   "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1016065725025770470/7C77423FFA657FB6B5937C80D6813C24E2D0E88C/",
@@ -4509,10 +2671,7 @@
                   "UniqueBack": false,
                   "Type": 0
                 }
-              },
-              "LuaScript": "",
-              "LuaScriptState": "",
-              "XmlUI": ""
+              }
             },
             {
               "GUID": "4f27bf",
@@ -4530,28 +2689,7 @@
               },
               "Nickname": "The Spinner in Darkness",
               "Description": "Power.",
-              "GMNotes": "",
-              "ColorDiffuse": {
-                "r": 0.713235259,
-                "g": 0.713235259,
-                "b": 0.713235259
-              },
-              "LayoutGroupSortIndex": 0,
-              "Value": 0,
-              "Locked": false,
-              "Grid": true,
-              "Snap": true,
-              "IgnoreFoW": false,
-              "MeasureMovement": false,
-              "DragSelectable": true,
-              "Autoraise": true,
-              "Sticky": true,
-              "Tooltip": true,
-              "GridProjection": false,
-              "HideWhenFaceDown": true,
-              "Hands": true,
               "CardID": 234642,
-              "SidewaysCard": false,
               "CustomDeck": {
                 "2346": {
                   "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1016065725025770470/7C77423FFA657FB6B5937C80D6813C24E2D0E88C/",
@@ -4562,10 +2700,7 @@
                   "UniqueBack": false,
                   "Type": 0
                 }
-              },
-              "LuaScript": "",
-              "LuaScriptState": "",
-              "XmlUI": ""
+              }
             }
           ]
         },
@@ -4576,7 +2711,7 @@
             "posX": 21.18549,
             "posY": 4.12502,
             "posZ": -28.4248714,
-            "rotX": -1.36814442E-05,
+            "rotX": -1.36814442e-05,
             "rotY": 90.0005646,
             "rotZ": 0.000300848274,
             "scaleX": 1.0,
@@ -4585,31 +2720,15 @@
           },
           "Nickname": "Atlach-Nacha",
           "Description": "Clear the map and click place when instructed to engage Atlach-Nacha",
-          "GMNotes": "",
           "ColorDiffuse": {
             "r": 0.0,
             "g": 0.0,
             "b": 0.0
           },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "HideWhenFaceDown": false,
           "Hands": false,
-          "MaterialIndex": -1,
-          "MeshIndex": -1,
           "LuaScript": "function updateSave()\n    local data_to_save = {[\"ml\"]=memoryList}\n    saved_data = JSON.encode(data_to_save)\n    self.script_state = saved_data\nend\n\nfunction onload(saved_data)\n    if saved_data ~= \"\" then\n        local loaded_data = JSON.decode(saved_data)\n        --Set up information off of loaded_data\n        memoryList = loaded_data.ml\n    else\n        --Set up information for if there is no saved saved data\n        memoryList = {}\n    end\n\n    if next(memoryList) == nil then\n        createSetupButton()\n    else\n        createMemoryActionButtons()\n    end\nend\n\n\n--Beginning Setup\n\n\n--Make setup button\nfunction createSetupButton()\n    self.createButton({\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\n        position={0,0.3,-2}, rotation={0,180,0}, height=350, width=800,\n        font_size=250, color={0,0,0}, font_color={1,1,1}\n    })\nend\n\n--Triggered by setup button,\nfunction buttonClick_setup()\n    memoryListBackup = duplicateTable(memoryList)\n    memoryList = {}\n    self.clearButtons()\n    createButtonsOnAllObjects()\n    createSetupActionButtons()\nend\n\n--Creates selection buttons on objects\nfunction createButtonsOnAllObjects()\n    local howManyButtons = 0\n    for _, obj in ipairs(getAllObjects()) do\n        if obj ~= self then\n            local dummyIndex = howManyButtons\n            --On a normal bag, the button positions aren't the same size as the bag.\n            globalScaleFactor = 1.25 * 1/self.getScale().x\n            --Super sweet math to set button positions\n            local selfPos = self.getPosition()\n            local objPos = obj.getPosition()\n            local deltaPos = findOffsetDistance(selfPos, objPos, obj)\n            local objPos = rotateLocalCoordinates(deltaPos, self)\n            objPos.x = -objPos.x * globalScaleFactor\n            objPos.y = objPos.y * globalScaleFactor\n            objPos.z = objPos.z * globalScaleFactor\n            --Offset rotation of bag\n            local rot = self.getRotation()\n            rot.y = -rot.y + 180\n            --Create function\n            local funcName = \"selectButton_\" .. howManyButtons\n            local func = function() buttonClick_selection(dummyIndex, obj) end\n            self.setVar(funcName, func)\n            self.createButton({\n                click_function=funcName, function_owner=self,\n                position=objPos, rotation=rot, height=1000, width=1000,\n                color={0.75,0.25,0.25,0.6},\n            })\n            howManyButtons = howManyButtons + 1\n        end\n    end\nend\n\n--Creates submit and cancel buttons\nfunction createSetupActionButtons()\n    self.createButton({\n        label=\"Cancel\", click_function=\"buttonClick_cancel\", function_owner=self,\n        position={0,0.3,-2}, rotation={0,180,0}, height=350, width=1100,\n        font_size=250, color={0,0,0}, font_color={1,1,1}\n    })\n    self.createButton({\n        label=\"Submit\", click_function=\"buttonClick_submit\", function_owner=self,\n        position={0,0.3,-2.8}, rotation={0,180,0}, height=350, width=1100,\n        font_size=250, color={0,0,0}, font_color={1,1,1}\n    })\n    self.createButton({\n        label=\"Reset\", click_function=\"buttonClick_reset\", function_owner=self,\n        position={-2,0.3,0}, rotation={0,270,0}, height=350, width=800,\n        font_size=250, color={0,0,0}, font_color={1,1,1}\n    })\nend\n\n\n--During Setup\n\n\n--Checks or unchecks buttons\nfunction buttonClick_selection(index, obj)\n    local color = {0,1,0,0.6}\n    if memoryList[obj.getGUID()] == nil then\n        self.editButton({index=index, color=color})\n        --Adding pos/rot to memory table\n        local pos, rot = obj.getPosition(), obj.getRotation()\n        --I need to add it like this or it won't save due to indexing issue\n        memoryList[obj.getGUID()] = {\n            pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\n            rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\n            lock=obj.getLock()\n        }\n        obj.highlightOn({0,1,0})\n    else\n        color = {0.75,0.25,0.25,0.6}\n        self.editButton({index=index, color=color})\n        memoryList[obj.getGUID()] = nil\n        obj.highlightOff()\n    end\nend\n\n--Cancels selection process\nfunction buttonClick_cancel()\n    memoryList = memoryListBackup\n    self.clearButtons()\n    if next(memoryList) == nil then\n        createSetupButton()\n    else\n        createMemoryActionButtons()\n    end\n    removeAllHighlights()\n    broadcastToAll(\"Selection Canceled\", {1,1,1})\nend\n\n--Saves selections\nfunction buttonClick_submit()\n    if next(memoryList) == nil then\n        broadcastToAll(\"You cannot submit without any selections.\", {0.75, 0.25, 0.25})\n    else\n        self.clearButtons()\n        createMemoryActionButtons()\n        local count = 0\n        for guid in pairs(memoryList) do\n            count = count + 1\n            local obj = getObjectFromGUID(guid)\n            if obj ~= nil then obj.highlightOff() end\n        end\n        broadcastToAll(count..\" Objects Saved\", {1,1,1})\n        updateSave()\n    end\nend\n\n--Resets bag to starting status\nfunction buttonClick_reset()\n    memoryList = {}\n    self.clearButtons()\n    createSetupButton()\n    removeAllHighlights()\n    broadcastToAll(\"Tool Reset\", {1,1,1})\n    updateSave()\nend\n\n\n--After Setup\n\n\n--Creates recall and place buttons\nfunction createMemoryActionButtons()\n    self.createButton({\n        label=\"Place\", click_function=\"buttonClick_place\", function_owner=self,\n        position={0,0.3,-2}, rotation={0,180,0}, height=350, width=800,\n        font_size=250, color={0,0,0}, font_color={1,1,1}\n    })\n    self.createButton({\n        label=\"Recall\", click_function=\"buttonClick_recall\", function_owner=self,\n        position={0,0.3,-2.8}, rotation={0,180,0}, height=350, width=800,\n        font_size=250, color={0,0,0}, font_color={1,1,1}\n    })\n--    self.createButton({\n--        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\n--        position={-2,0.3,0}, rotation={0,270,0}, height=350, width=800,\n--        font_size=250, color={0,0,0}, font_color={1,1,1}\n--    })\nend\n\n--Sends objects from bag/table to their saved position/rotation\nfunction buttonClick_place()\n    local bagObjList = self.getObjects()\n    for guid, entry in pairs(memoryList) do\n        local obj = getObjectFromGUID(guid)\n        --If obj is out on the table, move it to the saved pos/rot\n        if obj ~= nil then\n            obj.setPositionSmooth(entry.pos)\n            obj.setRotationSmooth(entry.rot)\n            obj.setLock(entry.lock)\n        else\n            --If obj is inside of the bag\n            for _, bagObj in ipairs(bagObjList) do\n                if bagObj.guid == guid then\n                    local item = self.takeObject({\n                        guid=guid, position=entry.pos, rotation=entry.rot,\n                    })\n                    item.setLock(entry.lock)\n                    break\n                end\n            end\n        end\n    end\n    broadcastToAll(\"Objects Placed\", {1,1,1})\nend\n\n--Recalls objects to bag from table\nfunction buttonClick_recall()\n    for guid, entry in pairs(memoryList) do\n        local obj = getObjectFromGUID(guid)\n        if obj ~= nil then self.putObject(obj) end\n    end\n    broadcastToAll(\"Objects Recalled\", {1,1,1})\nend\n\n\n--Utility functions\n\n\n--Find delta (difference) between 2 x/y/z coordinates\nfunction findOffsetDistance(p1, p2, obj)\n    local deltaPos = {}\n    local bounds = obj.getBounds()\n    deltaPos.x = (p2.x-p1.x)\n    deltaPos.y = (p2.y-p1.y) + (bounds.size.y - bounds.offset.y)\n    deltaPos.z = (p2.z-p1.z)\n    return deltaPos\nend\n\n--Used to rotate a set of coordinates by an angle\nfunction rotateLocalCoordinates(desiredPos, obj)\n\tlocal objPos, objRot = obj.getPosition(), obj.getRotation()\n    local angle = math.rad(objRot.y)\n\tlocal x = desiredPos.x * math.cos(angle) - desiredPos.z * math.sin(angle)\n\tlocal z = desiredPos.x * math.sin(angle) + desiredPos.z * math.cos(angle)\n\t--return {x=objPos.x+x, y=objPos.y+desiredPos.y, z=objPos.z+z}\n    return {x=x, y=desiredPos.y, z=z}\nend\n\n--Coroutine delay, in seconds\nfunction wait(time)\n    local start = os.time()\n    repeat coroutine.yield(0) until os.time() > start + time\nend\n\n--Duplicates a table (needed to prevent it making reference to the same objects)\nfunction duplicateTable(oldTable)\n    local newTable = {}\n    for k, v in pairs(oldTable) do\n        newTable[k] = v\n    end\n    return newTable\nend\n\n--Moves scripted highlight from all objects\nfunction removeAllHighlights()\n    for _, obj in ipairs(getAllObjects()) do\n        obj.highlightOff()\n    end\nend\n\n--Round number (num) to the Nth decimal (dec)\nfunction round(num, dec)\n  local mult = 10^(dec or 0)\n  return math.floor(num * mult + 0.5) / mult\nend\n",
           "LuaScriptState": "{\"ml\":{\"34d21c\":{\"lock\":false,\"pos\":{\"x\":-20.3836,\"y\":1.6224,\"z\":-3.5339},\"rot\":{\"x\":359.9201,\"y\":270.007,\"z\":0.0168}},\"6af4f4\":{\"lock\":false,\"pos\":{\"x\":-26.8702,\"y\":1.6315,\"z\":-3.3655},\"rot\":{\"x\":359.9201,\"y\":269.99,\"z\":0.0169}},\"8b17a1\":{\"lock\":false,\"pos\":{\"x\":-20.3417,\"y\":1.6244,\"z\":3.2286},\"rot\":{\"x\":359.9201,\"y\":269.9904,\"z\":0.0169}},\"8e78c7\":{\"lock\":false,\"pos\":{\"x\":-20.3494,\"y\":1.6118,\"z\":6.7083},\"rot\":{\"x\":359.9201,\"y\":269.9997,\"z\":0.0168}},\"a2f955\":{\"lock\":false,\"pos\":{\"x\":-23.6765,\"y\":1.6281,\"z\":-0.03},\"rot\":{\"x\":359.9201,\"y\":270.0169,\"z\":0.0168}},\"f4d669\":{\"lock\":false,\"pos\":{\"x\":-26.8404,\"y\":1.6335,\"z\":3.3455},\"rot\":{\"x\":359.9201,\"y\":270.0083,\"z\":0.0168}}}}",
-          "XmlUI": "",
           "ContainedObjects": [
             {
               "GUID": "34d21c",
@@ -4627,28 +2746,8 @@
               },
               "Nickname": "Legs of Atlach-Nacha",
               "Description": "Ancient One. Spider. Elite.",
-              "GMNotes": "",
-              "ColorDiffuse": {
-                "r": 0.713235259,
-                "g": 0.713235259,
-                "b": 0.713235259
-              },
-              "LayoutGroupSortIndex": 0,
-              "Value": 0,
-              "Locked": false,
-              "Grid": true,
               "Snap": false,
-              "IgnoreFoW": false,
-              "MeasureMovement": false,
-              "DragSelectable": true,
-              "Autoraise": true,
-              "Sticky": true,
-              "Tooltip": true,
-              "GridProjection": false,
-              "HideWhenFaceDown": true,
-              "Hands": true,
               "CardID": 234638,
-              "SidewaysCard": false,
               "CustomDeck": {
                 "2346": {
                   "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1016065725025770470/7C77423FFA657FB6B5937C80D6813C24E2D0E88C/",
@@ -4659,10 +2758,7 @@
                   "UniqueBack": false,
                   "Type": 0
                 }
-              },
-              "LuaScript": "",
-              "LuaScriptState": "",
-              "XmlUI": ""
+              }
             },
             {
               "GUID": "6af4f4",
@@ -4680,28 +2776,8 @@
               },
               "Nickname": "Legs of Atlach-Nacha",
               "Description": "Ancient One. Spider. Elite.",
-              "GMNotes": "",
-              "ColorDiffuse": {
-                "r": 0.713235259,
-                "g": 0.713235259,
-                "b": 0.713235259
-              },
-              "LayoutGroupSortIndex": 0,
-              "Value": 0,
-              "Locked": false,
-              "Grid": true,
               "Snap": false,
-              "IgnoreFoW": false,
-              "MeasureMovement": false,
-              "DragSelectable": true,
-              "Autoraise": true,
-              "Sticky": true,
-              "Tooltip": true,
-              "GridProjection": false,
-              "HideWhenFaceDown": true,
-              "Hands": true,
               "CardID": 234640,
-              "SidewaysCard": false,
               "CustomDeck": {
                 "2346": {
                   "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1016065725025770470/7C77423FFA657FB6B5937C80D6813C24E2D0E88C/",
@@ -4712,10 +2788,7 @@
                   "UniqueBack": false,
                   "Type": 0
                 }
-              },
-              "LuaScript": "",
-              "LuaScriptState": "",
-              "XmlUI": ""
+              }
             },
             {
               "GUID": "8b17a1",
@@ -4733,28 +2806,8 @@
               },
               "Nickname": "Legs of Atlach-Nacha",
               "Description": "Ancient One. Spider. Elite.",
-              "GMNotes": "",
-              "ColorDiffuse": {
-                "r": 0.713235259,
-                "g": 0.713235259,
-                "b": 0.713235259
-              },
-              "LayoutGroupSortIndex": 0,
-              "Value": 0,
-              "Locked": false,
-              "Grid": true,
               "Snap": false,
-              "IgnoreFoW": false,
-              "MeasureMovement": false,
-              "DragSelectable": true,
-              "Autoraise": true,
-              "Sticky": true,
-              "Tooltip": true,
-              "GridProjection": false,
-              "HideWhenFaceDown": true,
-              "Hands": true,
               "CardID": 234637,
-              "SidewaysCard": false,
               "CustomDeck": {
                 "2346": {
                   "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1016065725025770470/7C77423FFA657FB6B5937C80D6813C24E2D0E88C/",
@@ -4765,10 +2818,7 @@
                   "UniqueBack": false,
                   "Type": 0
                 }
-              },
-              "LuaScript": "",
-              "LuaScriptState": "",
-              "XmlUI": ""
+              }
             },
             {
               "GUID": "8e78c7",
@@ -4786,24 +2836,11 @@
               },
               "Nickname": "Atlach-Nacha Helper",
               "Description": "Rotates Atlach-Nacha with her legs, damage tokens, and card attachments by the number of spaces displayed. Left-click the number to increase, right-click to decrease, then click Rotate.",
-              "GMNotes": "",
               "ColorDiffuse": {
                 "r": 1.0,
                 "g": 1.0,
                 "b": 1.0
               },
-              "LayoutGroupSortIndex": 0,
-              "Value": 0,
-              "Locked": false,
-              "Grid": true,
-              "Snap": true,
-              "IgnoreFoW": false,
-              "MeasureMovement": false,
-              "DragSelectable": true,
-              "Autoraise": true,
-              "Sticky": true,
-              "Tooltip": true,
-              "GridProjection": false,
               "HideWhenFaceDown": false,
               "Hands": false,
               "CustomImage": {
@@ -4818,9 +2855,7 @@
                   "Stretch": true
                 }
               },
-              "LuaScript": "ENCOUNTER_DECK_POS = {-3.8, 1, 5.7}\nMIN_VALUE = 1\n\nfunction onload()\n    val = 1\n\n    self.createButton({\n        label=\"Rotate\",\n        click_function=\"doRotation\",\n        function_owner=self,\n        position={0,0.1,-0.4},\n        height=120,\n        width=450,\n        scale={x=1.75, y=1.75, z=1.75},\n        font_size=100\n    })\n\n    self.createButton({\n        label=val,\n        click_function=\"add_subtract\",\n        function_owner=self,\n        position={0,0.1,0.4},\n        height=120,\n        width=250,\n        scale={x=1.75, y=1.75, z=1.75},\n        font_size=100\n    })\nend\n\nfunction add_subtract(_obj, _color, alt_click)\n    local mod = alt_click and -1 or 1\n    new_value = math.max(val + mod, MIN_VALUE)\n    if val ~= new_value then\n        val = new_value\n        self.editButton({\n            index = 1,\n            label = tostring(val)\n        })\n    end\nend\n\nfunction doRotation(_obj, _color, alt_click)\n    if IS_ROTATING then return end\n\n    IS_ROTATING = true\n    local body = getObjectFromGUID(\"a2f955\")\n    if body == nil then\n        printToColor(\"Place Atlach-Nacha first, then try again\", _color)\n    end\n\n    local objs = Physics.cast({\n        origin = body.getPosition(),\n        direction = {0,1,0},\n        type = 2,\n        size = { 6, 6, 6 },\n        max_distance = 0\n    })\n\n    local numAttachments = 0\n    for i,v in ipairs(objs) do\n        local obj = v.hit_object\n        if obj.getGUID() ~= \"a2f955\" and (obj.tag == \"Card\" or obj.getName() == \"Damage\") then\n            numAttachments = numAttachments + 1\n            body.addAttachment(obj)\n        end\n    end\n\n    local r = body.getRotation()\n    body.setRotationSmooth({ r.x, r.y + (45 * val), r.z }, false, true)\n\n    Wait.time(|| detachLegs(body, numAttachments), 1)\nend\n\nfunction detachLegs(body, numAttachments)\n    for i = numAttachments-1,0,-1 do\n        body.removeAttachment(i)\n    end\n    Wait.time(function() IS_ROTATING = false end, 1)\nend\n",
-              "LuaScriptState": "",
-              "XmlUI": ""
+              "LuaScript": "ENCOUNTER_DECK_POS = {-3.8, 1, 5.7}\nMIN_VALUE = 1\n\nfunction onload()\n    val = 1\n\n    self.createButton({\n        label=\"Rotate\",\n        click_function=\"doRotation\",\n        function_owner=self,\n        position={0,0.1,-0.4},\n        height=120,\n        width=450,\n        scale={x=1.75, y=1.75, z=1.75},\n        font_size=100\n    })\n\n    self.createButton({\n        label=val,\n        click_function=\"add_subtract\",\n        function_owner=self,\n        position={0,0.1,0.4},\n        height=120,\n        width=250,\n        scale={x=1.75, y=1.75, z=1.75},\n        font_size=100\n    })\nend\n\nfunction add_subtract(_obj, _color, alt_click)\n    local mod = alt_click and -1 or 1\n    new_value = math.max(val + mod, MIN_VALUE)\n    if val ~= new_value then\n        val = new_value\n        self.editButton({\n            index = 1,\n            label = tostring(val)\n        })\n    end\nend\n\nfunction doRotation(_obj, _color, alt_click)\n    if IS_ROTATING then return end\n\n    IS_ROTATING = true\n    local body = getObjectFromGUID(\"a2f955\")\n    if body == nil then\n        printToColor(\"Place Atlach-Nacha first, then try again\", _color)\n    end\n\n    local objs = Physics.cast({\n        origin = body.getPosition(),\n        direction = {0,1,0},\n        type = 2,\n        size = { 6, 6, 6 },\n        max_distance = 0\n    })\n\n    local numAttachments = 0\n    for i,v in ipairs(objs) do\n        local obj = v.hit_object\n        if obj.getGUID() ~= \"a2f955\" and (obj.tag == \"Card\" or obj.getName() == \"Damage\") then\n            numAttachments = numAttachments + 1\n            body.addAttachment(obj)\n        end\n    end\n\n    local r = body.getRotation()\n    body.setRotationSmooth({ r.x, r.y + (45 * val), r.z }, false, true)\n\n    Wait.time(|| detachLegs(body, numAttachments), 1)\nend\n\nfunction detachLegs(body, numAttachments)\n    for i = numAttachments-1,0,-1 do\n        body.removeAttachment(i)\n    end\n    Wait.time(function() IS_ROTATING = false end, 1)\nend\n"
             },
             {
               "GUID": "a2f955",
@@ -4838,28 +2873,9 @@
               },
               "Nickname": "Atlach-Nacha",
               "Description": "The Spider God",
-              "GMNotes": "",
-              "ColorDiffuse": {
-                "r": 0.713235259,
-                "g": 0.713235259,
-                "b": 0.713235259
-              },
-              "LayoutGroupSortIndex": 0,
-              "Value": 0,
-              "Locked": false,
-              "Grid": true,
               "Snap": false,
-              "IgnoreFoW": false,
-              "MeasureMovement": false,
-              "DragSelectable": true,
-              "Autoraise": true,
-              "Sticky": true,
-              "Tooltip": true,
-              "GridProjection": false,
               "HideWhenFaceDown": false,
-              "Hands": true,
               "CardID": 234743,
-              "SidewaysCard": false,
               "CustomDeck": {
                 "2347": {
                   "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1016065725025781079/EBC4A272423668544053A4ACD161A993E038255D/",
@@ -4870,10 +2886,7 @@
                   "UniqueBack": true,
                   "Type": 0
                 }
-              },
-              "LuaScript": "",
-              "LuaScriptState": "",
-              "XmlUI": ""
+              }
             },
             {
               "GUID": "f4d669",
@@ -4891,28 +2904,8 @@
               },
               "Nickname": "Legs of Atlach-Nacha",
               "Description": "Ancient One. Spider. Elite.",
-              "GMNotes": "",
-              "ColorDiffuse": {
-                "r": 0.713235259,
-                "g": 0.713235259,
-                "b": 0.713235259
-              },
-              "LayoutGroupSortIndex": 0,
-              "Value": 0,
-              "Locked": false,
-              "Grid": true,
               "Snap": false,
-              "IgnoreFoW": false,
-              "MeasureMovement": false,
-              "DragSelectable": true,
-              "Autoraise": true,
-              "Sticky": true,
-              "Tooltip": true,
-              "GridProjection": false,
-              "HideWhenFaceDown": true,
-              "Hands": true,
               "CardID": 234639,
-              "SidewaysCard": false,
               "CustomDeck": {
                 "2346": {
                   "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1016065725025770470/7C77423FFA657FB6B5937C80D6813C24E2D0E88C/",
@@ -4923,10 +2916,7 @@
                   "UniqueBack": false,
                   "Type": 0
                 }
-              },
-              "LuaScript": "",
-              "LuaScriptState": "",
-              "XmlUI": ""
+              }
             }
           ]
         }
@@ -4948,24 +2938,11 @@
       },
       "Nickname": "Carnevale of Spiders",
       "Description": "click to set chaos token difficulty",
-      "GMNotes": "",
       "ColorDiffuse": {
         "r": 1.0,
         "g": 1.0,
         "b": 1.0
       },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
       "HideWhenFaceDown": false,
       "Hands": false,
       "CustomImage": {
@@ -4980,9 +2957,7 @@
           "Stretch": true
         }
       },
-      "LuaScript": "-- Bundled by luabundle {\"version\":\"1.6.0\"}\nlocal __bundle_require, __bundle_loaded, __bundle_register, __bundle_modules = (function(superRequire)\n\tlocal loadingPlaceholder = {[{}] = true}\n\n\tlocal register\n\tlocal modules = {}\n\n\tlocal require\n\tlocal loaded = {}\n\n\tregister = function(name, body)\n\t\tif not modules[name] then\n\t\t\tmodules[name] = body\n\t\tend\n\tend\n\n\trequire = function(name)\n\t\tlocal loadedModule = loaded[name]\n\n\t\tif loadedModule then\n\t\t\tif loadedModule == loadingPlaceholder then\n\t\t\t\treturn nil\n\t\t\tend\n\t\telse\n\t\t\tif not modules[name] then\n\t\t\t\tif not superRequire then\n\t\t\t\t\tlocal identifier = type(name) == 'string' and '\\\"' .. name .. '\\\"' or tostring(name)\n\t\t\t\t\terror('Tried to require ' .. identifier .. ', but no such module has been registered')\n\t\t\t\telse\n\t\t\t\t\treturn superRequire(name)\n\t\t\t\tend\n\t\t\tend\n\n\t\t\tloaded[name] = loadingPlaceholder\n\t\t\tloadedModule = modules[name](require, loaded, register, modules)\n\t\t\tloaded[name] = loadedModule\n\t\tend\n\n\t\treturn loadedModule\n\tend\n\n\treturn require, loaded, register, modules\nend)(nil)\n__bundle_register(\"DifficultySelectorLibrary\", function(require, _LOADED, __bundle_register, __bundle_modules)\n--[[ Library file for Difficulty Selectors\n- define the \"tokenData\" table and then require this file\n- list of valid ids: 'p1', '0', 'm1' - 'm8', 'skull', 'cultist', 'tablet', 'elder', 'red', 'blue', 'bless', 'curse', 'frost'\n\nExample:\ntokenData = {\n  Easy = { token = { 'p1', 'p1', '0', '0', '0', 'm1', 'm1', 'm1', 'm2', 'm2', 'skull', 'skull', 'cultist', 'tablet', 'red', 'blue' } },\n  Standard = { token = { 'p1', '0', '0', 'm1', 'm1', 'm1', 'm2', 'm2', 'm3', 'm4', 'skull', 'skull', 'cultist', 'tablet', 'red', 'blue' } }\n}\nrequire ...\n]]\n\nfunction onLoad()\n  local z_offset = -0.15\n  for difficulty, _ in pairs(tokenData) do\n    local clickFunction = difficulty:lower() .. \"Click\"\n    self.setVar(clickFunction, function() clickFun(difficulty) end)\n    self.createButton({\n      label = difficulty,\n      function_owner = self,\n      click_function = clickFunction,\n      position = { 0, 0.1, z_offset },\n      scale = { 0.47, 1, 0.47 },\n      height = 200,\n      width = 1150,\n      color = { 0.87, 0.8, 0.70 },\n    })\n    z_offset = z_offset + 0.225\n  end\nend\n\nfunction clickFun(difficulty)\n  local data = tokenData[difficulty]\n  if data.random then\n    -- handling for Carcosa standalone mode\n    math.randomseed(os.time())\n    local randomGroup = math.random(1, #data.random)\n    for _, tokenId in ipairs(data.random[randomGroup]) do\n      table.insert(data.token, tokenId)\n    end\n  end\n  Global.call(\"setChaosBagState\", data.token)\nend\nend)\n__bundle_register(\"DifficultySelectors/S02-CarnevaleOfHorrors\", function(require, _LOADED, __bundle_register, __bundle_modules)\ntokenData = {\n  Standard = { token = { 'p1', '0', '0', '0', 'm1', 'm1', 'm1', 'm2', 'm3', 'm4', 'm6', 'skull', 'skull', 'skull', 'cultist', 'tablet', 'elder', 'red', 'blue' } },\n  Hard = { token = { 'p1', '0', '0', '0', 'm1', 'm1', 'm3', 'm4', 'm5', 'm6', 'm7', 'skull', 'skull', 'skull', 'cultist', 'tablet', 'elder', 'red', 'blue' } }\n}\n\nrequire(\"DifficultySelectorLibrary\")\nend)\n__bundle_register(\"__root\", function(require, _LOADED, __bundle_register, __bundle_modules)\nrequire(\"DifficultySelectors/S02-CarnevaleOfHorrors\")\nend)\nreturn __bundle_require(\"__root\")",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      "LuaScript": "-- Bundled by luabundle {\"version\":\"1.6.0\"}\nlocal __bundle_require, __bundle_loaded, __bundle_register, __bundle_modules = (function(superRequire)\n\tlocal loadingPlaceholder = {[{}] = true}\n\n\tlocal register\n\tlocal modules = {}\n\n\tlocal require\n\tlocal loaded = {}\n\n\tregister = function(name, body)\n\t\tif not modules[name] then\n\t\t\tmodules[name] = body\n\t\tend\n\tend\n\n\trequire = function(name)\n\t\tlocal loadedModule = loaded[name]\n\n\t\tif loadedModule then\n\t\t\tif loadedModule == loadingPlaceholder then\n\t\t\t\treturn nil\n\t\t\tend\n\t\telse\n\t\t\tif not modules[name] then\n\t\t\t\tif not superRequire then\n\t\t\t\t\tlocal identifier = type(name) == 'string' and '\\\"' .. name .. '\\\"' or tostring(name)\n\t\t\t\t\terror('Tried to require ' .. identifier .. ', but no such module has been registered')\n\t\t\t\telse\n\t\t\t\t\treturn superRequire(name)\n\t\t\t\tend\n\t\t\tend\n\n\t\t\tloaded[name] = loadingPlaceholder\n\t\t\tloadedModule = modules[name](require, loaded, register, modules)\n\t\t\tloaded[name] = loadedModule\n\t\tend\n\n\t\treturn loadedModule\n\tend\n\n\treturn require, loaded, register, modules\nend)(nil)\n__bundle_register(\"DifficultySelectorLibrary\", function(require, _LOADED, __bundle_register, __bundle_modules)\n--[[ Library file for Difficulty Selectors\n- define the \"tokenData\" table and then require this file\n- list of valid ids: 'p1', '0', 'm1' - 'm8', 'skull', 'cultist', 'tablet', 'elder', 'red', 'blue', 'bless', 'curse', 'frost'\n\nExample:\ntokenData = {\n  Easy = { token = { 'p1', 'p1', '0', '0', '0', 'm1', 'm1', 'm1', 'm2', 'm2', 'skull', 'skull', 'cultist', 'tablet', 'red', 'blue' } },\n  Standard = { token = { 'p1', '0', '0', 'm1', 'm1', 'm1', 'm2', 'm2', 'm3', 'm4', 'skull', 'skull', 'cultist', 'tablet', 'red', 'blue' } }\n}\nrequire ...\n]]\n\nfunction onLoad()\n  local z_offset = -0.15\n  for difficulty, _ in pairs(tokenData) do\n    local clickFunction = difficulty:lower() .. \"Click\"\n    self.setVar(clickFunction, function() clickFun(difficulty) end)\n    self.createButton({\n      label = difficulty,\n      function_owner = self,\n      click_function = clickFunction,\n      position = { 0, 0.1, z_offset },\n      scale = { 0.47, 1, 0.47 },\n      height = 200,\n      width = 1150,\n      color = { 0.87, 0.8, 0.70 },\n    })\n    z_offset = z_offset + 0.225\n  end\nend\n\nfunction clickFun(difficulty)\n  local data = tokenData[difficulty]\n  if data.random then\n    -- handling for Carcosa standalone mode\n    math.randomseed(os.time())\n    local randomGroup = math.random(1, #data.random)\n    for _, tokenId in ipairs(data.random[randomGroup]) do\n      table.insert(data.token, tokenId)\n    end\n  end\n  Global.call(\"setChaosBagState\", data.token)\nend\nend)\n__bundle_register(\"DifficultySelectors/S02-CarnevaleOfHorrors\", function(require, _LOADED, __bundle_register, __bundle_modules)\ntokenData = {\n  Standard = { token = { 'p1', '0', '0', '0', 'm1', 'm1', 'm1', 'm2', 'm3', 'm4', 'm6', 'skull', 'skull', 'skull', 'cultist', 'tablet', 'elder', 'red', 'blue' } },\n  Hard = { token = { 'p1', '0', '0', '0', 'm1', 'm1', 'm3', 'm4', 'm5', 'm6', 'm7', 'skull', 'skull', 'skull', 'cultist', 'tablet', 'elder', 'red', 'blue' } }\n}\n\nrequire(\"DifficultySelectorLibrary\")\nend)\n__bundle_register(\"__root\", function(require, _LOADED, __bundle_register, __bundle_modules)\nrequire(\"DifficultySelectors/S02-CarnevaleOfHorrors\")\nend)\nreturn __bundle_require(\"__root\")"
     },
     {
       "GUID": "ab0576",
@@ -4999,25 +2974,11 @@
         "scaleZ": 1.0
       },
       "Nickname": "",
-      "Description": "",
-      "GMNotes": "",
       "ColorDiffuse": {
         "r": 0.6045295,
         "g": 0.6045295,
         "b": 0.6045295
       },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
       "HideWhenFaceDown": false,
       "Hands": false,
       "CustomImage": {
@@ -5032,9 +2993,6 @@
           "Stretch": true
         }
       },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": "",
       "States": {
         "3": {
           "GUID": "5b38c6",
@@ -5051,25 +3009,11 @@
             "scaleZ": 0.8
           },
           "Nickname": "",
-          "Description": "",
-          "GMNotes": "",
           "ColorDiffuse": {
             "r": 0.6045295,
             "g": 0.6045295,
             "b": 0.6045295
           },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "HideWhenFaceDown": false,
           "Hands": false,
           "CustomImage": {
@@ -5083,10 +3027,7 @@
               "Stackable": false,
               "Stretch": true
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         "1": {
           "GUID": "7234af",
@@ -5103,25 +3044,11 @@
             "scaleZ": 1.0
           },
           "Nickname": "",
-          "Description": "",
-          "GMNotes": "",
           "ColorDiffuse": {
             "r": 0.6045295,
             "g": 0.6045295,
             "b": 0.6045295
           },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "HideWhenFaceDown": false,
           "Hands": false,
           "CustomImage": {
@@ -5135,10 +3062,7 @@
               "Stackable": false,
               "Stretch": true
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         }
       }
     },
@@ -5157,25 +3081,11 @@
         "scaleZ": 1.0
       },
       "Nickname": "",
-      "Description": "",
-      "GMNotes": "",
       "ColorDiffuse": {
         "r": 0.6045295,
         "g": 0.6045295,
         "b": 0.6045295
       },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
       "HideWhenFaceDown": false,
       "Hands": false,
       "CustomImage": {
@@ -5190,9 +3100,6 @@
           "Stretch": true
         }
       },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": "",
       "States": {
         "3": {
           "GUID": "5b38c6",
@@ -5209,25 +3116,11 @@
             "scaleZ": 0.8
           },
           "Nickname": "",
-          "Description": "",
-          "GMNotes": "",
           "ColorDiffuse": {
             "r": 0.6045295,
             "g": 0.6045295,
             "b": 0.6045295
           },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "HideWhenFaceDown": false,
           "Hands": false,
           "CustomImage": {
@@ -5241,10 +3134,7 @@
               "Stackable": false,
               "Stretch": true
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         "1": {
           "GUID": "7234af",
@@ -5261,25 +3151,11 @@
             "scaleZ": 1.0
           },
           "Nickname": "",
-          "Description": "",
-          "GMNotes": "",
           "ColorDiffuse": {
             "r": 0.6045295,
             "g": 0.6045295,
             "b": 0.6045295
           },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "HideWhenFaceDown": false,
           "Hands": false,
           "CustomImage": {
@@ -5293,10 +3169,7 @@
               "Stackable": false,
               "Stretch": true
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         }
       }
     },
@@ -5316,27 +3189,7 @@
       },
       "Nickname": "Masked Carnevale-Goer",
       "Description": "Carnevale of Horrors",
-      "GMNotes": "",
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
       "Hands": false,
-      "SidewaysCard": false,
       "DeckIDs": [
         545016,
         545020,
@@ -5357,9 +3210,6 @@
           "Type": 0
         }
       },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": "",
       "ContainedObjects": [
         {
           "GUID": "be4dc6",
@@ -5377,28 +3227,7 @@
           },
           "Nickname": "Masked Carnevale-Goer",
           "Description": "Carnevale.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 545016,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2346": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642364764/EBA4638B8847E97B3C153A928955F0A536677F8F/",
@@ -5409,10 +3238,7 @@
               "UniqueBack": true,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "659820",
@@ -5430,28 +3256,7 @@
           },
           "Nickname": "Masked Carnevale-Goer",
           "Description": "Carnevale.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 545020,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2346": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642364764/EBA4638B8847E97B3C153A928955F0A536677F8F/",
@@ -5462,10 +3267,7 @@
               "UniqueBack": true,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "105277",
@@ -5483,28 +3285,7 @@
           },
           "Nickname": "Masked Carnevale-Goer",
           "Description": "Carnevale.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 545021,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2346": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642364764/EBA4638B8847E97B3C153A928955F0A536677F8F/",
@@ -5515,10 +3296,7 @@
               "UniqueBack": true,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "44845f",
@@ -5536,28 +3314,7 @@
           },
           "Nickname": "Masked Carnevale-Goer",
           "Description": "Carnevale.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 545022,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2346": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642364764/EBA4638B8847E97B3C153A928955F0A536677F8F/",
@@ -5568,10 +3325,7 @@
               "UniqueBack": true,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "f64f68",
@@ -5589,28 +3343,7 @@
           },
           "Nickname": "Masked Carnevale-Goer",
           "Description": "Carnevale.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 545018,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2346": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642364764/EBA4638B8847E97B3C153A928955F0A536677F8F/",
@@ -5621,10 +3354,7 @@
               "UniqueBack": true,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "0a2381",
@@ -5642,28 +3372,7 @@
           },
           "Nickname": "Masked Carnevale-Goer",
           "Description": "Carnevale.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 545019,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2346": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642364764/EBA4638B8847E97B3C153A928955F0A536677F8F/",
@@ -5674,10 +3383,7 @@
               "UniqueBack": true,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "1d6b52",
@@ -5695,28 +3401,7 @@
           },
           "Nickname": "Masked Carnevale-Goer",
           "Description": "Carnevale.",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 545017,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2346": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/87094793642364764/EBA4638B8847E97B3C153A928955F0A536677F8F/",
@@ -5727,10 +3412,7 @@
               "UniqueBack": true,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         }
       ]
     },
@@ -5749,28 +3431,7 @@
         "scaleZ": 0.82
       },
       "Nickname": "Agenda Deck",
-      "Description": "",
-      "GMNotes": "",
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
       "Hands": false,
-      "SidewaysCard": false,
       "DeckIDs": [
         267100,
         266900,
@@ -5805,9 +3466,6 @@
           "Type": 0
         }
       },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": "",
       "ContainedObjects": [
         {
           "GUID": "13a04f",
@@ -5824,29 +3482,7 @@
             "scaleZ": 1.0
           },
           "Nickname": "",
-          "Description": "",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 267100,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2671": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1464184778779167196/6BFAB978799D4E3CC447E48B4D3CBAEDF934A768/",
@@ -5857,10 +3493,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "4adae3",
@@ -5877,29 +3510,7 @@
             "scaleZ": 1.0
           },
           "Nickname": "",
-          "Description": "",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 266900,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2669": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1464184778779165807/3947DD87F45C5377BB0527B1F3473BDF348F16D4/",
@@ -5910,10 +3521,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "3c09f5",
@@ -5930,29 +3538,7 @@
             "scaleZ": 1.0
           },
           "Nickname": "",
-          "Description": "",
-          "GMNotes": "",
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 266700,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2667": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/1464184778779164355/3BA5868C62BF054878B8081BCA5A5E2563EAC16C/",
@@ -5963,10 +3549,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         }
       ]
     },
@@ -5985,25 +3568,11 @@
         "scaleZ": 1.0
       },
       "Nickname": "",
-      "Description": "",
-      "GMNotes": "",
       "ColorDiffuse": {
         "r": 0.6045295,
         "g": 0.6045295,
         "b": 0.6045295
       },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
       "HideWhenFaceDown": false,
       "Hands": false,
       "CustomImage": {
@@ -6018,9 +3587,6 @@
           "Stretch": true
         }
       },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": "",
       "States": {
         "3": {
           "GUID": "5b38c6",
@@ -6037,25 +3603,11 @@
             "scaleZ": 0.8
           },
           "Nickname": "",
-          "Description": "",
-          "GMNotes": "",
           "ColorDiffuse": {
             "r": 0.6045295,
             "g": 0.6045295,
             "b": 0.6045295
           },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "HideWhenFaceDown": false,
           "Hands": false,
           "CustomImage": {
@@ -6069,10 +3621,7 @@
               "Stackable": false,
               "Stretch": true
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         "1": {
           "GUID": "7234af",
@@ -6089,25 +3638,11 @@
             "scaleZ": 1.0
           },
           "Nickname": "",
-          "Description": "",
-          "GMNotes": "",
           "ColorDiffuse": {
             "r": 0.6045295,
             "g": 0.6045295,
             "b": 0.6045295
           },
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
           "HideWhenFaceDown": false,
           "Hands": false,
           "CustomImage": {
@@ -6121,10 +3656,7 @@
               "Stackable": false,
               "Stretch": true
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         }
       }
     }
