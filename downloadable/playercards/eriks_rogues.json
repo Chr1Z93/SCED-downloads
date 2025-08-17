@@ -5,42 +5,22 @@
     "posX": 50.51717,
     "posY": 1.48149908,
     "posZ": -26.1600876,
-    "rotX": 2.61512781E-07,
+    "rotX": 2.61512781e-07,
     "rotY": 270.016754,
-    "rotZ": 1.41672515E-07,
+    "rotZ": 1.41672515e-07,
     "scaleX": 2.21,
     "scaleY": 0.46,
     "scaleZ": 2.42
   },
   "Nickname": "Rogues",
   "Description": "Investigator Set",
-  "GMNotes": "",
-  "AltLookAngle": {
-    "x": 0.0,
-    "y": 0.0,
-    "z": 0.0
-  },
   "ColorDiffuse": {
     "r": 1.0,
     "g": 1.0,
     "b": 1.0
   },
-  "LayoutGroupSortIndex": 0,
-  "Value": 0,
-  "Locked": false,
-  "Grid": true,
-  "Snap": true,
-  "IgnoreFoW": false,
-  "MeasureMovement": false,
-  "DragSelectable": true,
-  "Autoraise": true,
-  "Sticky": true,
-  "Tooltip": true,
-  "GridProjection": false,
   "HideWhenFaceDown": false,
   "Hands": false,
-  "MaterialIndex": -1,
-  "MeshIndex": -1,
   "CustomMesh": {
     "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/62583916778515333/9F0BE0C211BE3BD1725B4B855F5D3C9C0D020394/",
     "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/2004702731853000680/0A438E16959C3D695C4C33AA5312C099CC8938B0/",
@@ -61,12 +41,8 @@
     },
     "CastShadows": true
   },
-  "Bag": {
-    "Order": 0
-  },
   "LuaScript": "-- Utility memory bag by Directsun\n-- Version 2.5.2\n-- Fork of Memory Bag 2.0 by MrStump\n\nfunction updateSave()\n    local data_to_save = {[\"ml\"]=memoryList}\n    saved_data = JSON.encode(data_to_save)\n    self.script_state = saved_data\nend\n\nfunction combineMemoryFromBagsWithin()\n  local bagObjList = self.getObjects()\n  for _, bagObj in ipairs(bagObjList) do\n    local data = bagObj.lua_script_state\n      if data ~= nil then\n        local j = JSON.decode(data)\n        if j ~= nil and j.ml ~= nil then\n          for guid, entry in pairs(j.ml) do\n            memoryList[guid] = entry\n          end\n        end\n      end\n    end\nend\n\nfunction updateMemoryWithMoves()\n    memoryList = memoryListBackup\n    --get the first transposed object's coordinates\n    local obj = getObjectFromGUID(moveGuid)\n\n    -- p1 is where needs to go, p2 is where it was\n    local refObjPos = memoryList[moveGuid].pos\n    local deltaPos = findOffsetDistance(obj.getPosition(), refObjPos, nil)\n    local movedRotation = obj.getRotation()\n    for guid, entry in pairs(memoryList) do\n        memoryList[guid].pos.x = entry.pos.x - deltaPos.x\n        memoryList[guid].pos.y = entry.pos.y - deltaPos.y\n        memoryList[guid].pos.z = entry.pos.z - deltaPos.z\n        -- memoryList[guid].rot.x = movedRotation.x\n        -- memoryList[guid].rot.y = movedRotation.y\n        -- memoryList[guid].rot.z = movedRotation.z\n    end\n\n    --theList[obj.getGUID()] = {\n    --    pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\n    --    rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\n    --    lock=obj.getLock()\n    --}\n    moveList = {}\nend\n\nfunction onload(saved_data)\n    fresh = true\n    if saved_data ~= \"\" then\n        local loaded_data = JSON.decode(saved_data)\n        --Set up information off of loaded_data\n        memoryList = loaded_data.ml\n    else\n        --Set up information for if there is no saved saved data\n        memoryList = {}\n    end\n\n    moveList = {}\n    moveGuid = nil\n\n    if next(memoryList) == nil then\n        createSetupButton()\n    else\n        fresh = false\n        createMemoryActionButtons()\n    end\nend\n\n\n--Beginning Setup\n\n\n--Make setup button\nfunction createSetupButton()\n    self.createButton({\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\n        position={0,0.1,-2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\nend\n\n--Triggered by Transpose button\nfunction buttonClick_transpose()\n    moveGuid = nil\n    broadcastToAll(\"Select one object and move it- all objects will move relative to the new location\", {0.75, 0.75, 1})\n    memoryListBackup = duplicateTable(memoryList)\n    memoryList = {}\n    moveList = {}\n    self.clearButtons()\n    createButtonsOnAllObjects(true)\n    createSetupActionButtons(true)\nend\n\n--Triggered by setup button,\nfunction buttonClick_setup()\n    memoryListBackup = duplicateTable(memoryList)\n    memoryList = {}\n    self.clearButtons()\n    createButtonsOnAllObjects(false)\n    createSetupActionButtons(false)\nend\n\nfunction getAllObjectsInMemory()\n  local objTable = {}\n  local curObj = {}\n\n  for guid in pairs(memoryListBackup) do\n    curObj = getObjectFromGUID(guid)\n    table.insert(objTable, curObj)\n  end\n\n  return objTable\n  -- return getAllObjects()\nend\n\n--Creates selection buttons on objects\nfunction createButtonsOnAllObjects(move)\n    local howManyButtons = 0\n\n    local objsToHaveButtons = {}\n    if move == true then\n      objsToHaveButtons = getAllObjectsInMemory()\n    else\n      objsToHaveButtons = getAllObjects()\n    end\n\n    for _, obj in ipairs(objsToHaveButtons) do\n        if obj ~= self then\n            local dummyIndex = howManyButtons\n            --On a normal bag, the button positions aren't the same size as the bag.\n            globalScaleFactor = 1 * 1/self.getScale().x\n            --Super sweet math to set button positions\n            local selfPos = self.getPosition()\n            local objPos = obj.getPosition()\n            local deltaPos = findOffsetDistance(selfPos, objPos, obj)\n            local objPos = rotateLocalCoordinates(deltaPos, self)\n            objPos.x = -objPos.x * globalScaleFactor\n            objPos.y = objPos.y * globalScaleFactor + 2\n            objPos.z = objPos.z * globalScaleFactor * 0.9\n            --Offset rotation of bag\n            local rot = self.getRotation()\n            rot.y = -rot.y + 180\n            --Create function\n            local funcName = \"selectButton_\" .. howManyButtons\n            local func = function() buttonClick_selection(dummyIndex, obj, move) end\n            local color = {0.75,0.25,0.25,0.6}\n            local colorMove = {0,0,1,0.6}\n            if move == true then\n              color = colorMove\n            end\n            self.setVar(funcName, func)\n            self.createButton({\n                click_function=funcName, function_owner=self,\n                position=objPos, rotation=rot, height=500, width=500,\n                color=color,\n            })\n            howManyButtons = howManyButtons + 1\n        end\n    end\nend\n\n--Creates submit and cancel buttons\nfunction createSetupActionButtons(move)\n    self.createButton({\n        label=\"Cancel\", click_function=\"buttonClick_cancel\", function_owner=self,\n      position={-0.6,0.1,-2.1}, rotation={0,0,0}, height=220, width=550,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n\n    self.createButton({\n        label=\"Submit\", click_function=\"buttonClick_submit\", function_owner=self,\n        position={-0.6,0.3,-2.5}, rotation={0,0,0}, height=220, width=550,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n\n    if move == false then\n      self.createButton({\n          label=\"Add\", click_function=\"buttonClick_add\", function_owner=self,\n          position={0.6,0.3,-2.1}, rotation={0,0,0}, height=220, width=550,\n          font_size=130, color={0,0,0}, font_color={0.25,1,0.25}\n      })\n\n        if fresh == false then\n            self.createButton({\n                label=\"Set New\", click_function=\"buttonClick_setNew\", function_owner=self,\n                position={0.6,0.3,-2.9}, rotation={0,0,0}, height=220, width=550,\n                font_size=130, color={0,0,0}, font_color={0.75,0.75,1}\n            })\n            self.createButton({\n                label=\"Remove\", click_function=\"buttonClick_remove\", function_owner=self,\n                position={0.6,0.3,-2.5}, rotation={0,0,0}, height=220, width=550,\n                font_size=130, color={0,0,0}, font_color={1,0.25,0.25}\n            })\n        end\n    end\n\n    self.createButton({\n        label=\"Reset\", click_function=\"buttonClick_reset\", function_owner=self,\n        position={-0.6,0.3,-2.9}, rotation={0,0,0}, height=220, width=550,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\nend\n\n\n--During Setup\n\n\n--Checks or unchecks buttons\nfunction buttonClick_selection(index, obj, move)\n    local colorMove = {0,0,1,0.6}\n    local color = {0,1,0,0.6}\n\n    previousGuid = selectedGuid\n    selectedGuid = obj.getGUID()\n\n    theList = memoryList\n    if move == true then\n       theList = moveList\n       if previousGuid ~= nil and previousGuid ~= selectedGuid then\n         local prevObj = getObjectFromGUID(previousGuid)\n         prevObj.highlightOff()\n         self.editButton({index=previousIndex, color=colorMove})\n         theList[previousGuid] = nil\n       end\n       previousIndex = index\n    end\n\n    if theList[selectedGuid] == nil then\n        self.editButton({index=index, color=color})\n        --Adding pos/rot to memory table\n        local pos, rot = obj.getPosition(), obj.getRotation()\n        --I need to add it like this or it won't save due to indexing issue\n        theList[obj.getGUID()] = {\n            pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\n            rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\n            lock=obj.getLock()\n        }\n        obj.highlightOn({0,1,0})\n    else\n      color = {0.75,0.25,0.25,0.6}\n      if move == true then\n        color = colorMove\n      end\n        self.editButton({index=index, color=color})\n        theList[obj.getGUID()] = nil\n        obj.highlightOff()\n    end\nend\n\n--Cancels selection process\nfunction buttonClick_cancel()\n    memoryList = memoryListBackup\n    moveList = {}\n    self.clearButtons()\n    if next(memoryList) == nil then\n        createSetupButton()\n    else\n        createMemoryActionButtons()\n    end\n    removeAllHighlights()\n    broadcastToAll(\"Selection Canceled\", {1,1,1})\n    moveGuid = nil\nend\n\n--Saves selections\nfunction buttonClick_submit()\n    fresh = false\n    if next(moveList) ~= nil then\n        for guid in pairs(moveList) do\n            moveGuid = guid\n        end\n        if memoryListBackup[moveGuid] == nil then\n            broadcastToAll(\"Item selected for moving is not already in memory\", {1, 0.25, 0.25})\n        else\n            broadcastToAll(\"Moving all items in memory relative to new objects position!\", {0.75, 0.75, 1})\n            self.clearButtons()\n            createMemoryActionButtons()\n            local count = 0\n            for guid in pairs(moveList) do\n                moveGuid = guid\n                count = count + 1\n                local obj = getObjectFromGUID(guid)\n                if obj ~= nil then obj.highlightOff() end\n            end\n            updateMemoryWithMoves()\n            updateSave()\n            buttonClick_place()\n        end\n    elseif next(memoryList) == nil and moveGuid == nil then\n      memoryList = memoryListBackup\n      broadcastToAll(\"No selections made.\", {0.75, 0.25, 0.25})\n    end\n    combineMemoryFromBagsWithin()\n    self.clearButtons()\n    createMemoryActionButtons()\n    local count = 0\n    for guid in pairs(memoryList) do\n        count = count + 1\n        local obj = getObjectFromGUID(guid)\n        if obj ~= nil then obj.highlightOff() end\n    end\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\n    updateSave()\n    moveGuid = nil\nend\n\nfunction combineTables(first_table, second_table)\n  for k,v in pairs(second_table) do first_table[k] = v end\nend\n\nfunction buttonClick_add()\n    fresh = false\n    combineTables(memoryList, memoryListBackup)\n    broadcastToAll(\"Adding internal bags and selections to existing memory\", {0.25, 0.75, 0.25})\n    combineMemoryFromBagsWithin()\n    self.clearButtons()\n    createMemoryActionButtons()\n    local count = 0\n    for guid in pairs(memoryList) do\n        count = count + 1\n        local obj = getObjectFromGUID(guid)\n        if obj ~= nil then obj.highlightOff() end\n    end\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\n    updateSave()\nend\n\nfunction buttonClick_remove()\n        broadcastToAll(\"Removing Selected Entries From Memory\", {1.0, 0.25, 0.25})\n        self.clearButtons()\n        createMemoryActionButtons()\n        local count = 0\n        for guid in pairs(memoryList) do\n            count = count + 1\n            memoryListBackup[guid] = nil\n            local obj = getObjectFromGUID(guid)\n            if obj ~= nil then obj.highlightOff() end\n        end\n        broadcastToAll(count..\" Objects Removed\", {1,1,1})\n        memoryList = memoryListBackup\n        updateSave()\nend\n\nfunction buttonClick_setNew()\n    broadcastToAll(\"Setting new position relative to items in memory\", {0.75, 0.75, 1})\n    self.clearButtons()\n    createMemoryActionButtons()\n    local count = 0\n    for _, obj in ipairs(getAllObjects()) do\n        guid = obj.guid\n        if memoryListBackup[guid] ~= nil then\n            count = count + 1\n            memoryListBackup[guid].pos = obj.getPosition()\n            memoryListBackup[guid].rot = obj.getRotation()\n            memoryListBackup[guid].lock = obj.getLock()\n        end\n    end\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\n    memoryList = memoryListBackup\n    updateSave()\nend\n\n--Resets bag to starting status\nfunction buttonClick_reset()\n    fresh = true\n    memoryList = {}\n    self.clearButtons()\n    createSetupButton()\n    removeAllHighlights()\n    broadcastToAll(\"Tool Reset\", {1,1,1})\n    updateSave()\nend\n\n\n--After Setup\n\n\n--Creates recall and place buttons\nfunction createMemoryActionButtons()\n    self.createButton({\n        label=\"Place\", click_function=\"buttonClick_place\", function_owner=self,\n        position={0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n    self.createButton({\n        label=\"Recall\", click_function=\"buttonClick_recall\", function_owner=self,\n        position={-0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n    self.createButton({\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\n        position={0,0.1,-2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n---    self.createButton({\n---      label=\"Move\", click_function=\"buttonClick_transpose\", function_owner=self,\n---      position={-2.8,0.3,0}, rotation={0,0,0}, height=350, width=800,\n---      font_size=250, color={0,0,0}, font_color={0.75,0.75,1}\n---    })\nend\n\n--Sends objects from bag/table to their saved position/rotation\nfunction buttonClick_place()\n    local bagObjList = self.getObjects()\n    for guid, entry in pairs(memoryList) do\n        local obj = getObjectFromGUID(guid)\n        --If obj is out on the table, move it to the saved pos/rot\n        if obj ~= nil then\n            obj.setPositionSmooth(entry.pos)\n            obj.setRotationSmooth(entry.rot)\n            obj.setLock(entry.lock)\n        else\n            --If obj is inside of the bag\n            for _, bagObj in ipairs(bagObjList) do\n                if bagObj.guid == guid then\n                    local item = self.takeObject({\n                        guid=guid, position=entry.pos, rotation=entry.rot, smooth=false\n                    })\n                    item.setLock(entry.lock)\n                    break\n                end\n            end\n        end\n    end\n    broadcastToAll(\"Objects Placed\", {1,1,1})\nend\n\n--Recalls objects to bag from table\nfunction buttonClick_recall()\n    for guid, entry in pairs(memoryList) do\n        local obj = getObjectFromGUID(guid)\n        if obj ~= nil then self.putObject(obj) end\n    end\n    broadcastToAll(\"Objects Recalled\", {1,1,1})\nend\n\n\n--Utility functions\n\n\n--Find delta (difference) between 2 x/y/z coordinates\nfunction findOffsetDistance(p1, p2, obj)\n    local yOffset = 0\n    if obj ~= nil then\n        local bounds = obj.getBounds()\n        yOffset = (bounds.size.y - bounds.offset.y)\n    end\n    local deltaPos = {}\n    deltaPos.x = (p2.x-p1.x)\n    deltaPos.y = (p2.y-p1.y) + yOffset\n    deltaPos.z = (p2.z-p1.z)\n    return deltaPos\nend\n\n--Used to rotate a set of coordinates by an angle\nfunction rotateLocalCoordinates(desiredPos, obj)\n\tlocal objPos, objRot = obj.getPosition(), obj.getRotation()\n    local angle = math.rad(objRot.y)\n\tlocal x = desiredPos.x * math.cos(angle) - desiredPos.z * math.sin(angle)\n\tlocal z = desiredPos.x * math.sin(angle) + desiredPos.z * math.cos(angle)\n\t--return {x=objPos.x+x, y=objPos.y+desiredPos.y, z=objPos.z+z}\n    return {x=x, y=desiredPos.y, z=z}\nend\n\nfunction rotateMyCoordinates(desiredPos, obj)\n\tlocal angle = math.rad(obj.getRotation().y)\n  local x = desiredPos.x * math.sin(angle)\n\tlocal z = desiredPos.z * math.cos(angle)\n    return {x=x, y=desiredPos.y, z=z}\nend\n\n--Coroutine delay, in seconds\nfunction wait(time)\n    local start = os.time()\n    repeat coroutine.yield(0) until os.time() > start + time\nend\n\n--Duplicates a table (needed to prevent it making reference to the same objects)\nfunction duplicateTable(oldTable)\n    local newTable = {}\n    for k, v in pairs(oldTable) do\n        newTable[k] = v\n    end\n    return newTable\nend\n\n--Moves scripted highlight from all objects\nfunction removeAllHighlights()\n    for _, obj in ipairs(getAllObjects()) do\n        obj.highlightOff()\n    end\nend\n\n--Round number (num) to the Nth decimal (dec)\nfunction round(num, dec)\n  local mult = 10^(dec or 0)\n  return math.floor(num * mult + 0.5) / mult\nend",
   "LuaScriptState": "{\"ml\":{\"0105d8\":{\"lock\":false,\"pos\":{\"x\":3.6197,\"y\":1.4951,\"z\":73.2266},\"rot\":{\"x\":0,\"y\":270.0002,\"z\":0}},\"0ebdac\":{\"lock\":false,\"pos\":{\"x\":3.6197,\"y\":1.4951,\"z\":80.8766},\"rot\":{\"x\":0,\"y\":270.024,\"z\":0}},\"1483ea\":{\"lock\":false,\"pos\":{\"x\":0.3197,\"y\":1.4951,\"z\":73.2266},\"rot\":{\"x\":0,\"y\":269.9843,\"z\":0}},\"1e6a5b\":{\"lock\":false,\"pos\":{\"x\":0.3197,\"y\":1.4951,\"z\":57.9266},\"rot\":{\"x\":0,\"y\":269.9998,\"z\":0}},\"2de149\":{\"lock\":false,\"pos\":{\"x\":13.5197,\"y\":1.4951,\"z\":80.8766},\"rot\":{\"x\":0,\"y\":270.0015,\"z\":0}},\"40426d\":{\"lock\":false,\"pos\":{\"x\":13.5197,\"y\":1.4951,\"z\":69.3966},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"438589\":{\"lock\":false,\"pos\":{\"x\":0.3197,\"y\":1.4951,\"z\":61.7466},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"4c927a\":{\"lock\":false,\"pos\":{\"x\":13.5197,\"y\":1.4951,\"z\":84.7066},\"rot\":{\"x\":0,\"y\":269.9991,\"z\":0}},\"4d55e3\":{\"lock\":false,\"pos\":{\"x\":13.5197,\"y\":1.4951,\"z\":77.0566},\"rot\":{\"x\":0,\"y\":269.9992,\"z\":0}},\"4eba63\":{\"lock\":false,\"pos\":{\"x\":0.3197,\"y\":1.4951,\"z\":84.7066},\"rot\":{\"x\":0,\"y\":269.9931,\"z\":0}},\"65e42d\":{\"lock\":false,\"pos\":{\"x\":6.9197,\"y\":1.4951,\"z\":84.7066},\"rot\":{\"x\":0,\"y\":269.9734,\"z\":0}},\"68c9b4\":{\"lock\":false,\"pos\":{\"x\":10.2197,\"y\":1.4951,\"z\":73.2266},\"rot\":{\"x\":0,\"y\":269.9991,\"z\":0}},\"762ff0\":{\"lock\":false,\"pos\":{\"x\":6.9197,\"y\":1.4951,\"z\":77.0566},\"rot\":{\"x\":0,\"y\":269.9997,\"z\":0}},\"a1a74e\":{\"lock\":false,\"pos\":{\"x\":3.6197,\"y\":1.4951,\"z\":84.7066},\"rot\":{\"x\":0,\"y\":270.0262,\"z\":0}},\"abeb09\":{\"lock\":false,\"pos\":{\"x\":0.3197,\"y\":1.4951,\"z\":65.5766},\"rot\":{\"x\":0,\"y\":269.9999,\"z\":0}},\"ad8cf2\":{\"lock\":false,\"pos\":{\"x\":6.9197,\"y\":1.4951,\"z\":80.8766},\"rot\":{\"x\":0,\"y\":270.0294,\"z\":0}},\"c10d42\":{\"lock\":false,\"pos\":{\"x\":0.3197,\"y\":1.4951,\"z\":80.8766},\"rot\":{\"x\":0,\"y\":270.0233,\"z\":0}},\"cddb38\":{\"lock\":false,\"pos\":{\"x\":10.2197,\"y\":1.4951,\"z\":77.0566},\"rot\":{\"x\":0,\"y\":269.9995,\"z\":0}},\"e08a6c\":{\"lock\":false,\"pos\":{\"x\":13.5197,\"y\":1.4951,\"z\":73.2266},\"rot\":{\"x\":0,\"y\":269.9995,\"z\":0}},\"e8e1ff\":{\"lock\":false,\"pos\":{\"x\":10.2197,\"y\":1.4951,\"z\":84.7066},\"rot\":{\"x\":0,\"y\":270.023,\"z\":0}},\"ec73da\":{\"lock\":false,\"pos\":{\"x\":10.2197,\"y\":1.4951,\"z\":80.8766},\"rot\":{\"x\":0,\"y\":269.9965,\"z\":0}},\"ef984b\":{\"lock\":false,\"pos\":{\"x\":0.3197,\"y\":1.4951,\"z\":77.0566},\"rot\":{\"x\":0,\"y\":269.9995,\"z\":0}},\"f0acc0\":{\"lock\":false,\"pos\":{\"x\":6.9197,\"y\":1.4951,\"z\":73.2266},\"rot\":{\"x\":0,\"y\":269.9999,\"z\":0}},\"fcc84d\":{\"lock\":false,\"pos\":{\"x\":0.3197,\"y\":1.4951,\"z\":69.3966},\"rot\":{\"x\":0,\"y\":270.0001,\"z\":0}},\"ff54e5\":{\"lock\":false,\"pos\":{\"x\":3.6197,\"y\":1.4951,\"z\":77.0566},\"rot\":{\"x\":0,\"y\":270.0002,\"z\":0}}}}",
-  "XmlUI": "",
   "ContainedObjects": [
     {
       "GUID": "4c927a",
@@ -75,42 +51,16 @@
         "posX": 13.519721,
         "posY": 1.49510384,
         "posZ": 84.70658,
-        "rotX": -1.6784595E-08,
+        "rotX": -1.6784595e-08,
         "rotY": 269.999084,
-        "rotZ": -4.9623516E-08,
+        "rotZ": -4.9623516e-08,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
       },
       "Nickname": "Simone LaRue",
-      "Description": "",
       "GMNotes": "{\n  \"id\": \"ROG01-m\",\n  \"type\": \"Minicard\"\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 866100,
-      "SidewaysCard": false,
       "CustomDeck": {
         "8661": {
           "FaceURL": "https://imgur.com/71Os77z.png",
@@ -121,10 +71,7 @@
           "UniqueBack": false,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "2de149",
@@ -133,9 +80,9 @@
         "posX": 13.519721,
         "posY": 1.49510384,
         "posZ": 80.87658,
-        "rotX": 1.057344E-07,
+        "rotX": 1.057344e-07,
         "rotY": 270.001526,
-        "rotZ": -1.22428759E-07,
+        "rotZ": -1.22428759e-07,
         "scaleX": 0.8062451,
         "scaleY": 1.0,
         "scaleZ": 0.8062451
@@ -143,32 +90,7 @@
       "Nickname": "Simone LaRue",
       "Description": "The Forger",
       "GMNotes": "{\n  \"id\": \"ROG01\",\n  \"type\": \"Investigator\",\n  \"class\": \"Rogue\",\n  \"traits\": \"Criminal. Artist.\",\n  \"willpowerIcons\": 3,\n  \"intellectIcons\": 4,\n  \"combatIcons\": 2,\n  \"agilityIcons\": 3,\n  \"cycle\": \"Rogues\"\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 866200,
-      "SidewaysCard": false,
       "CustomDeck": {
         "8662": {
           "FaceURL": "https://imgur.com/zWSQ7Nv.png",
@@ -179,10 +101,7 @@
           "UniqueBack": false,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "4d55e3",
@@ -191,42 +110,16 @@
         "posX": 13.519721,
         "posY": 1.49510384,
         "posZ": 77.05658,
-        "rotX": -2.87498487E-08,
+        "rotX": -2.87498487e-08,
         "rotY": 269.999176,
-        "rotZ": -1.19897123E-07,
+        "rotZ": -1.19897123e-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
       },
       "Nickname": "Expert Forgery",
-      "Description": "",
       "GMNotes": "{\n  \"id\": \"ROG02\",\n  \"type\": \"Event\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Trick. Illicit.\",\n  \"agilityIcons\": 2,\n  \"cycle\": \"Rogues\"\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 866300,
-      "SidewaysCard": false,
       "CustomDeck": {
         "8663": {
           "FaceURL": "https://imgur.com/HBYgBad.png",
@@ -237,10 +130,7 @@
           "UniqueBack": false,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "e08a6c",
@@ -249,42 +139,16 @@
         "posX": 13.519721,
         "posY": 1.49510384,
         "posZ": 73.22657,
-        "rotX": -4.23764028E-08,
+        "rotX": -4.23764028e-08,
         "rotY": 269.9995,
-        "rotZ": 1.6386597E-08,
+        "rotZ": 1.6386597e-08,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
       },
       "Nickname": "Expert Forgery",
-      "Description": "",
       "GMNotes": "{\n  \"id\": \"ROG02\",\n  \"type\": \"Event\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Trick. Illicit.\",\n  \"agilityIcons\": 2,\n  \"cycle\": \"Rogues\"\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 866300,
-      "SidewaysCard": false,
       "CustomDeck": {
         "8663": {
           "FaceURL": "https://imgur.com/HBYgBad.png",
@@ -295,10 +159,7 @@
           "UniqueBack": false,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "40426d",
@@ -307,9 +168,9 @@
         "posX": 13.5197134,
         "posY": 1.49510384,
         "posZ": 69.39657,
-        "rotX": -5.53139436E-08,
+        "rotX": -5.53139436e-08,
         "rotY": 269.999969,
-        "rotZ": 6.591724E-08,
+        "rotZ": 6.591724e-08,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -317,32 +178,7 @@
       "Nickname": "Antiquities Dealer",
       "Description": "Weakness",
       "GMNotes": "{\n  \"id\": \"ROG03\",\n  \"type\": \"Enemy\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Humanoid.\",\n  \"weakness\": true,\n  \"cycle\": \"Rogues\"\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 866400,
-      "SidewaysCard": false,
       "CustomDeck": {
         "8664": {
           "FaceURL": "https://imgur.com/pWCNMA4.png",
@@ -353,10 +189,7 @@
           "UniqueBack": false,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "e8e1ff",
@@ -365,42 +198,16 @@
         "posX": 10.219718,
         "posY": 1.49510384,
         "posZ": 84.70659,
-        "rotX": 2.50384211E-08,
+        "rotX": 2.50384211e-08,
         "rotY": 270.023,
-        "rotZ": -8.61586855E-08,
+        "rotZ": -8.61586855e-08,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
       },
       "Nickname": "Riley MacCormack",
-      "Description": "",
       "GMNotes": "{\n  \"id\": \"ROG04-m\",\n  \"type\": \"Minicard\"\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 866500,
-      "SidewaysCard": false,
       "CustomDeck": {
         "8665": {
           "FaceURL": "https://imgur.com/9WTSh6l.png",
@@ -411,10 +218,7 @@
           "UniqueBack": false,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "ec73da",
@@ -423,9 +227,9 @@
         "posX": 10.219718,
         "posY": 1.49510384,
         "posZ": 80.87658,
-        "rotX": -1.01404531E-07,
+        "rotX": -1.01404531e-07,
         "rotY": 269.99646,
-        "rotZ": -1.84172979E-08,
+        "rotZ": -1.84172979e-08,
         "scaleX": 0.8062451,
         "scaleY": 1.0,
         "scaleZ": 0.8062451
@@ -433,32 +237,7 @@
       "Nickname": "Riley MacCormack",
       "Description": "The Goon",
       "GMNotes": "{\n  \"id\": \"ROG04\",\n  \"type\": \"Investigator\",\n  \"class\": \"Rogue\",\n  \"traits\": \"Criminal.\",\n  \"willpowerIcons\": 1,\n  \"intellectIcons\": 3,\n  \"combatIcons\": 5,\n  \"agilityIcons\": 3,\n  \"cycle\": \"Rogues\"\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 866600,
-      "SidewaysCard": false,
       "CustomDeck": {
         "8666": {
           "FaceURL": "https://imgur.com/RyN8Ln8.png",
@@ -469,10 +248,7 @@
           "UniqueBack": false,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "cddb38",
@@ -481,42 +257,16 @@
         "posX": 10.219718,
         "posY": 1.49510384,
         "posZ": 77.05658,
-        "rotX": 7.43268425E-09,
+        "rotX": 7.43268425e-09,
         "rotY": 269.9995,
-        "rotZ": -5.983593E-09,
+        "rotZ": -5.983593e-09,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
       },
       "Nickname": "\"Rough 'em up!\"",
-      "Description": "",
       "GMNotes": "{\n  \"id\": \"ROG05\",\n  \"type\": \"Asset\",\n  \"class\": \"Neutral\",\n  \"cost\": 2,\n  \"traits\": \"Talent. Illicit.\",\n  \"combatIcons\": 2,\n  \"cycle\": \"Rogues\"\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 866700,
-      "SidewaysCard": false,
       "CustomDeck": {
         "8667": {
           "FaceURL": "https://imgur.com/alLa7HI.png",
@@ -527,10 +277,7 @@
           "UniqueBack": false,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "68c9b4",
@@ -539,42 +286,16 @@
         "posX": 10.219718,
         "posY": 1.49510384,
         "posZ": 73.22657,
-        "rotX": -1.89672463E-07,
+        "rotX": -1.89672463e-07,
         "rotY": 269.999146,
-        "rotZ": 2.342675E-07,
+        "rotZ": 2.342675e-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
       },
       "Nickname": "Retribution",
-      "Description": "",
       "GMNotes": "{\n  \"id\": \"ROG06\",\n  \"type\": \"Treachery\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Flaw.\",\n  \"weakness\": true,\n  \"cycle\": \"Rogues\"\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 866800,
-      "SidewaysCard": false,
       "CustomDeck": {
         "8668": {
           "FaceURL": "https://imgur.com/KhhJUhC.png",
@@ -585,10 +306,7 @@
           "UniqueBack": false,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "f0acc0",
@@ -597,9 +315,9 @@
         "posX": 6.91971636,
         "posY": 1.49510384,
         "posZ": 73.22657,
-        "rotX": -4.456543E-09,
+        "rotX": -4.456543e-09,
         "rotY": 269.999939,
-        "rotZ": -1.05789977E-09,
+        "rotZ": -1.05789977e-09,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -607,32 +325,7 @@
       "Nickname": "Elliott Stone",
       "Description": "Weakness",
       "GMNotes": "{\n  \"type\": \"Enemy\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Detective. Humanoid.\",\n  \"weakness\": true,\n  \"cycle\": \"Rogues\"\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 867200,
-      "SidewaysCard": false,
       "CustomDeck": {
         "8672": {
           "FaceURL": "https://imgur.com/TfOwreg.png",
@@ -643,10 +336,7 @@
           "UniqueBack": false,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "762ff0",
@@ -655,42 +345,16 @@
         "posX": 6.91971827,
         "posY": 1.49510384,
         "posZ": 77.05658,
-        "rotX": -3.358564E-09,
+        "rotX": -3.358564e-09,
         "rotY": 269.9997,
-        "rotZ": -1.25311814E-07,
+        "rotZ": -1.25311814e-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
       },
       "Nickname": "Pilfered Keys",
-      "Description": "",
       "GMNotes": "{\n  \"id\": \"ROG08\",\n  \"type\": \"Asset\",\n  \"class\": \"Neutral\",\n  \"startsInPlay\": true,\n  \"traits\": \"Item. Tool. Illicit.\",\n  \"cycle\": \"Rogues\"\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 867100,
-      "SidewaysCard": false,
       "CustomDeck": {
         "8671": {
           "FaceURL": "https://imgur.com/lovOuCN.png",
@@ -701,10 +365,7 @@
           "UniqueBack": false,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "ad8cf2",
@@ -713,9 +374,9 @@
         "posX": 6.91971445,
         "posY": 1.49510384,
         "posZ": 80.87658,
-        "rotX": -1.76938528E-07,
+        "rotX": -1.76938528e-07,
         "rotY": 270.029358,
-        "rotZ": 9.507237E-08,
+        "rotZ": 9.507237e-08,
         "scaleX": 0.8062451,
         "scaleY": 1.0,
         "scaleZ": 0.8062451
@@ -723,32 +384,7 @@
       "Nickname": "Elizabeth 'Lizzie' Cunningham",
       "Description": "The Burglar",
       "GMNotes": "{\n  \"id\": \"ROG07\",\n  \"type\": \"Investigator\",\n  \"class\": \"Rogue\",\n  \"traits\": \"Criminal.\",\n  \"willpowerIcons\": 2,\n  \"intellectIcons\": 3,\n  \"combatIcons\": 2,\n  \"agilityIcons\": 5,\n  \"cycle\": \"Rogues\"\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 867000,
-      "SidewaysCard": false,
       "CustomDeck": {
         "8670": {
           "FaceURL": "https://imgur.com/lD2CYhq.png",
@@ -759,10 +395,7 @@
           "UniqueBack": false,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "65e42d",
@@ -771,42 +404,16 @@
         "posX": 6.91971064,
         "posY": 1.49510384,
         "posZ": 84.70659,
-        "rotX": -1.5108543E-07,
+        "rotX": -1.5108543e-07,
         "rotY": 269.973419,
-        "rotZ": 8.54226E-08,
+        "rotZ": 8.54226e-08,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
       },
       "Nickname": "Elizabeth 'Lizzie' Cunningham",
-      "Description": "",
       "GMNotes": "{\n  \"id\": \"ROG07-m\",\n  \"type\": \"Minicard\"\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 866900,
-      "SidewaysCard": false,
       "CustomDeck": {
         "8669": {
           "FaceURL": "https://imgur.com/zyBUOSi.png",
@@ -817,10 +424,7 @@
           "UniqueBack": false,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "a1a74e",
@@ -829,42 +433,16 @@
         "posX": 3.61970925,
         "posY": 1.49510384,
         "posZ": 84.70659,
-        "rotX": -4.28868354E-08,
+        "rotX": -4.28868354e-08,
         "rotY": 270.026154,
-        "rotZ": 1.26671722E-07,
+        "rotZ": 1.26671722e-07,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
       },
       "Nickname": "Vernon Taylor",
-      "Description": "",
       "GMNotes": "{\n  \"id\": \"ROG10-m\",\n  \"type\": \"Minicard\"\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 867300,
-      "SidewaysCard": false,
       "CustomDeck": {
         "8673": {
           "FaceURL": "https://imgur.com/YJu0gK7.png",
@@ -875,10 +453,7 @@
           "UniqueBack": false,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "0ebdac",
@@ -887,9 +462,9 @@
         "posX": 3.61970925,
         "posY": 1.49510384,
         "posZ": 80.87658,
-        "rotX": 6.16693754E-08,
+        "rotX": 6.16693754e-08,
         "rotY": 270.024,
-        "rotZ": -9.19949343E-08,
+        "rotZ": -9.19949343e-08,
         "scaleX": 0.8062451,
         "scaleY": 1.0,
         "scaleZ": 0.8062451
@@ -897,32 +472,7 @@
       "Nickname": "Vernon Taylor",
       "Description": "The Card Sharp",
       "GMNotes": "{\n  \"id\": \"ROG10\",\n  \"type\": \"Investigator\",\n  \"class\": \"Rogue\",\n  \"traits\": \"Criminal. Socialite.\",\n  \"willpowerIcons\": 2,\n  \"intellectIcons\": 4,\n  \"combatIcons\": 2,\n  \"agilityIcons\": 4,\n  \"cycle\": \"Rogues\"\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 867400,
-      "SidewaysCard": false,
       "CustomDeck": {
         "8674": {
           "FaceURL": "https://imgur.com/MGKgsDb.png",
@@ -933,10 +483,7 @@
           "UniqueBack": false,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "ff54e5",
@@ -945,42 +492,16 @@
         "posX": 3.61970925,
         "posY": 1.49510384,
         "posZ": 77.05658,
-        "rotX": -7.141444E-08,
+        "rotX": -7.141444e-08,
         "rotY": 270.000244,
-        "rotZ": -3.02366239E-08,
+        "rotZ": -3.02366239e-08,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
       },
       "Nickname": "Stacked Deck",
-      "Description": "",
       "GMNotes": "{\n  \"id\": \"11ROG\",\n  \"type\": \"Asset\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Item. Illicit.\",\n  \"intellectIcons\": 1,\n  \"wildIcons\": 2,\n  \"cycle\": \"Rogue\"\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 867500,
-      "SidewaysCard": false,
       "CustomDeck": {
         "8675": {
           "FaceURL": "https://imgur.com/uvx0oBZ.png",
@@ -991,10 +512,7 @@
           "UniqueBack": false,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "0105d8",
@@ -1003,9 +521,9 @@
         "posX": 3.61970925,
         "posY": 1.49510384,
         "posZ": 73.22657,
-        "rotX": 1.577362E-08,
+        "rotX": 1.577362e-08,
         "rotY": 270.0002,
-        "rotZ": -7.292053E-08,
+        "rotZ": -7.292053e-08,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -1013,32 +531,7 @@
       "Nickname": "Caught in the Act",
       "Description": "Weakness",
       "GMNotes": "{\n  \"id\": \"ROG12\",\n  \"type\": \"Treachery\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Flaw.\",\n  \"weakness\": true,\n  \"cycle\": \"Rogues\"\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 867600,
-      "SidewaysCard": false,
       "CustomDeck": {
         "8676": {
           "FaceURL": "https://imgur.com/zFiTf1E.png",
@@ -1049,10 +542,7 @@
           "UniqueBack": false,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "4eba63",
@@ -1061,42 +551,16 @@
         "posX": 0.3197078,
         "posY": 1.49510384,
         "posZ": 84.70658,
-        "rotX": -7.84051E-08,
+        "rotX": -7.84051e-08,
         "rotY": 269.993073,
-        "rotZ": -4.365142E-06,
+        "rotZ": -4.365142e-06,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
       },
       "Nickname": "Emily Gibson",
-      "Description": "",
       "GMNotes": "{\n  \"id\": \"ROG13-m\",\n  \"type\": \"Minicard\"\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 867700,
-      "SidewaysCard": false,
       "CustomDeck": {
         "8677": {
           "FaceURL": "https://imgur.com/YMRgN39.png",
@@ -1107,10 +571,7 @@
           "UniqueBack": false,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "c10d42",
@@ -1119,9 +580,9 @@
         "posX": 0.31970787,
         "posY": 1.49510384,
         "posZ": 80.87658,
-        "rotX": -1.239711E-07,
+        "rotX": -1.239711e-07,
         "rotY": 270.0233,
-        "rotZ": 8.128016E-09,
+        "rotZ": 8.128016e-09,
         "scaleX": 0.8062451,
         "scaleY": 1.0,
         "scaleZ": 0.8062451
@@ -1129,32 +590,7 @@
       "Nickname": "Emily GIbson",
       "Description": "The Grifter",
       "GMNotes": "{\n  \"id\": \"ROG13\",\n  \"type\": \"Investigator\",\n  \"class\": \"Rogue\",\n  \"traits\": \"Criminal. Sorcerer.\",\n  \"willpowerIcons\": 4,\n  \"intellectIcons\": 3,\n  \"combatIcons\": 2,\n  \"agilityIcons\": 3,\n  \"cycle\": \"Rogues\"\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 868300,
-      "SidewaysCard": false,
       "CustomDeck": {
         "8683": {
           "FaceURL": "https://imgur.com/mfY3zGg.png",
@@ -1165,10 +601,7 @@
           "UniqueBack": false,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "ef984b",
@@ -1177,42 +610,16 @@
         "posX": 0.319707841,
         "posY": 1.49510384,
         "posZ": 77.05657,
-        "rotX": -2.02384811E-08,
+        "rotX": -2.02384811e-08,
         "rotY": 269.999481,
-        "rotZ": -1.22474518E-07,
+        "rotZ": -1.22474518e-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
       },
       "Nickname": "Spirit Beacon",
-      "Description": "",
       "GMNotes": "{\n  \"id\": \"ROG14\",\n  \"type\": \"Asset\",\n  \"class\": \"Neutral\",\n  \"startsInPlay\": true,\n  \"traits\": \"Ritual. Cursed.\",\n  \"uses\": [\n    {\n      \"count\": 1,\n      \"type\": \"Soul\",\n      \"token\": \"resource\"\n    }\n  ],\n  \"cycle\": \"Rogues\"\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 867900,
-      "SidewaysCard": false,
       "CustomDeck": {
         "8679": {
           "FaceURL": "https://imgur.com/282G8Yn.png",
@@ -1223,10 +630,7 @@
           "UniqueBack": false,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "1483ea",
@@ -1235,42 +639,16 @@
         "posX": 0.319707841,
         "posY": 1.49510384,
         "posZ": 73.22657,
-        "rotX": 8.072785E-08,
+        "rotX": 8.072785e-08,
         "rotY": 269.984253,
-        "rotZ": 2.33256131E-07,
+        "rotZ": 2.33256131e-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
       },
       "Nickname": "Spirit Board",
-      "Description": "",
       "GMNotes": "{\n  \"id\": \"21ROG\",\n  \"type\": \"Asset\",\n  \"class\": \"Neutral\",\n  \"cost\": 3,\n  \"traits\": \"Item. Charm.\",\n  \"willIcons\": 1,\n  \"wildIcons\": 2,\n  \"cycle\": \"Rogue\"\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 873600,
-      "SidewaysCard": false,
       "CustomDeck": {
         "8736": {
           "FaceURL": "https://imgur.com/ipBm8Pf.png",
@@ -1281,10 +659,7 @@
           "UniqueBack": false,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "fcc84d",
@@ -1293,9 +668,9 @@
         "posX": 0.3197079,
         "posY": 1.49510384,
         "posZ": 69.39657,
-        "rotX": -4.56025973E-08,
+        "rotX": -4.56025973e-08,
         "rotY": 270.000061,
-        "rotZ": -1.30651543E-07,
+        "rotZ": -1.30651543e-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
@@ -1303,32 +678,7 @@
       "Nickname": "Hidden Past",
       "Description": "Weakness",
       "GMNotes": "{\n  \"id\": \"ROG17\",\n  \"type\": \"Treachery\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Flaw. Madness.\",\n  \"weakness\": true,\n  \"cycle\": \"Rogues\"\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 868100,
-      "SidewaysCard": false,
       "CustomDeck": {
         "8681": {
           "FaceURL": "https://imgur.com/hWij9BW.png",
@@ -1339,10 +689,7 @@
           "UniqueBack": false,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "abeb09",
@@ -1351,42 +698,15 @@
         "posX": 0.319709748,
         "posY": 1.49510384,
         "posZ": 65.57656,
-        "rotX": -1.00430817E-07,
+        "rotX": -1.00430817e-07,
         "rotY": 269.999939,
-        "rotZ": -1.48019392E-08,
+        "rotZ": -1.48019392e-08,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
       },
       "Nickname": "Haunting Spirit",
-      "Description": "",
-      "GMNotes": "",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 868200,
-      "SidewaysCard": false,
       "CustomDeck": {
         "8682": {
           "FaceURL": "https://imgur.com/8pCVDPp.png",
@@ -1397,10 +717,7 @@
           "UniqueBack": false,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "438589",
@@ -1409,42 +726,15 @@
         "posX": 0.3197079,
         "posY": 1.49510384,
         "posZ": 61.74656,
-        "rotX": -5.88680855E-08,
+        "rotX": -5.88680855e-08,
         "rotY": 270.000061,
-        "rotZ": -1.47591436E-07,
+        "rotZ": -1.47591436e-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
       },
       "Nickname": "Haunting Spirit",
-      "Description": "",
-      "GMNotes": "",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 868200,
-      "SidewaysCard": false,
       "CustomDeck": {
         "8682": {
           "FaceURL": "https://imgur.com/8pCVDPp.png",
@@ -1455,10 +745,7 @@
           "UniqueBack": false,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "1e6a5b",
@@ -1467,42 +754,15 @@
         "posX": 0.3197117,
         "posY": 1.49510384,
         "posZ": 57.9265556,
-        "rotX": -3.93873556E-09,
+        "rotX": -3.93873556e-09,
         "rotY": 269.9998,
-        "rotZ": -2.7113E-07,
+        "rotZ": -2.7113e-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
       },
       "Nickname": "Haunting Spirit",
-      "Description": "",
-      "GMNotes": "",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 868200,
-      "SidewaysCard": false,
       "CustomDeck": {
         "8682": {
           "FaceURL": "https://imgur.com/8pCVDPp.png",
@@ -1513,10 +773,7 @@
           "UniqueBack": false,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     }
   ],
   "AttachedDecals": [

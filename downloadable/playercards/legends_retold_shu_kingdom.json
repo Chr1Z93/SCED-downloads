@@ -14,33 +14,13 @@
   },
   "Nickname": "Legends Retold - SHU Kingdom",
   "Description": "by Popest\n\nLegends Retold Expansion - Investigators\nEach investigator from the Legends Retold expansion is double-sided. At the start of the game, each investigator begins on their regular form (designated by faction labels such as \"Shu,\" \"Wei,\" \"Wu,\" etc., located at the top left corner of the card).\n\nDuring gameplay, investigators may shift into their Legend form, which alters both their base skill values and abilities. This transformation is referred to as \"becoming a Legend\", and it causes the investigator card to be flipped to its Legend side. Conversely, \"reverting back to\" occurs when an investigator returns to the form they started the game with, flipping the investigator card back to its regular form.\n\nDeckbuilding instructions for these investigators are provided on a separate Deckbuilding card, included in the expansion box.",
-  "GMNotes": "",
-  "AltLookAngle": {
-    "x": 0.0,
-    "y": 0.0,
-    "z": 0.0
-  },
   "ColorDiffuse": {
     "r": 1.0,
     "g": 1.0,
     "b": 1.0
   },
-  "LayoutGroupSortIndex": 0,
-  "Value": 0,
-  "Locked": false,
-  "Grid": true,
-  "Snap": true,
-  "IgnoreFoW": false,
-  "MeasureMovement": false,
-  "DragSelectable": true,
-  "Autoraise": true,
-  "Sticky": true,
-  "Tooltip": true,
-  "GridProjection": false,
   "HideWhenFaceDown": false,
   "Hands": false,
-  "MaterialIndex": -1,
-  "MeshIndex": -1,
   "CustomMesh": {
     "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/2469750756894231860/9F0BE0C211BE3BD1725B4B855F5D3C9C0D020394/",
     "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/2469750756894231981/BA50EC09FA42029459564B4D53744EA73035BE79/",
@@ -61,12 +41,8 @@
     },
     "CastShadows": true
   },
-  "Bag": {
-    "Order": 0
-  },
   "LuaScript": "-- Utility memory bag by Directsun\n-- Version 2.5.2\n-- Fork of Memory Bag 2.0 by MrStump\n\nfunction updateSave()\n    local data_to_save = {[\"ml\"]=memoryList}\n    saved_data = JSON.encode(data_to_save)\n    self.script_state = saved_data\nend\n\nfunction combineMemoryFromBagsWithin()\n  local bagObjList = self.getObjects()\n  for _, bagObj in ipairs(bagObjList) do\n    local data = bagObj.lua_script_state\n      if data ~= nil then\n        local j = JSON.decode(data)\n        if j ~= nil and j.ml ~= nil then\n          for guid, entry in pairs(j.ml) do\n            memoryList[guid] = entry\n          end\n        end\n      end\n    end\nend\n\nfunction updateMemoryWithMoves()\n    memoryList = memoryListBackup\n    --get the first transposed object's coordinates\n    local obj = getObjectFromGUID(moveGuid)\n\n    -- p1 is where needs to go, p2 is where it was\n    local refObjPos = memoryList[moveGuid].pos\n    local deltaPos = findOffsetDistance(obj.getPosition(), refObjPos, nil)\n    local movedRotation = obj.getRotation()\n    for guid, entry in pairs(memoryList) do\n        memoryList[guid].pos.x = entry.pos.x - deltaPos.x\n        memoryList[guid].pos.y = entry.pos.y - deltaPos.y\n        memoryList[guid].pos.z = entry.pos.z - deltaPos.z\n        -- memoryList[guid].rot.x = movedRotation.x\n        -- memoryList[guid].rot.y = movedRotation.y\n        -- memoryList[guid].rot.z = movedRotation.z\n    end\n\n    --theList[obj.getGUID()] = {\n    --    pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\n    --    rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\n    --    lock=obj.getLock()\n    --}\n    moveList = {}\nend\n\nfunction onload(saved_data)\n    fresh = true\n    if saved_data ~= \"\" then\n        local loaded_data = JSON.decode(saved_data)\n        --Set up information off of loaded_data\n        memoryList = loaded_data.ml\n    else\n        --Set up information for if there is no saved saved data\n        memoryList = {}\n    end\n\n    moveList = {}\n    moveGuid = nil\n\n    if next(memoryList) == nil then\n        createSetupButton()\n    else\n        fresh = false\n        createMemoryActionButtons()\n    end\nend\n\n\n--Beginning Setup\n\n\n--Make setup button\nfunction createSetupButton()\n    self.createButton({\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\n        position={0,0.1,-2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\nend\n\n--Triggered by Transpose button\nfunction buttonClick_transpose()\n    moveGuid = nil\n    broadcastToAll(\"Select one object and move it- all objects will move relative to the new location\", {0.75, 0.75, 1})\n    memoryListBackup = duplicateTable(memoryList)\n    memoryList = {}\n    moveList = {}\n    self.clearButtons()\n    createButtonsOnAllObjects(true)\n    createSetupActionButtons(true)\nend\n\n--Triggered by setup button,\nfunction buttonClick_setup()\n    memoryListBackup = duplicateTable(memoryList)\n    memoryList = {}\n    self.clearButtons()\n    createButtonsOnAllObjects(false)\n    createSetupActionButtons(false)\nend\n\nfunction getAllObjectsInMemory()\n  local objTable = {}\n  local curObj = {}\n\n  for guid in pairs(memoryListBackup) do\n    curObj = getObjectFromGUID(guid)\n    table.insert(objTable, curObj)\n  end\n\n  return objTable\n  -- return getAllObjects()\nend\n\n--Creates selection buttons on objects\nfunction createButtonsOnAllObjects(move)\n    local howManyButtons = 0\n\n    local objsToHaveButtons = {}\n    if move == true then\n      objsToHaveButtons = getAllObjectsInMemory()\n    else\n      objsToHaveButtons = getAllObjects()\n    end\n\n    for _, obj in ipairs(objsToHaveButtons) do\n        if obj ~= self then\n            local dummyIndex = howManyButtons\n            --On a normal bag, the button positions aren't the same size as the bag.\n            globalScaleFactor = 1 * 1/self.getScale().x\n            --Super sweet math to set button positions\n            local selfPos = self.getPosition()\n            local objPos = obj.getPosition()\n            local deltaPos = findOffsetDistance(selfPos, objPos, obj)\n            local objPos = rotateLocalCoordinates(deltaPos, self)\n            objPos.x = -objPos.x * globalScaleFactor\n            objPos.y = objPos.y * globalScaleFactor + 2\n            objPos.z = objPos.z * globalScaleFactor * 0.9\n            --Offset rotation of bag\n            local rot = self.getRotation()\n            rot.y = -rot.y + 180\n            --Create function\n            local funcName = \"selectButton_\" .. howManyButtons\n            local func = function() buttonClick_selection(dummyIndex, obj, move) end\n            local color = {0.75,0.25,0.25,0.6}\n            local colorMove = {0,0,1,0.6}\n            if move == true then\n              color = colorMove\n            end\n            self.setVar(funcName, func)\n            self.createButton({\n                click_function=funcName, function_owner=self,\n                position=objPos, rotation=rot, height=500, width=500,\n                color=color,\n            })\n            howManyButtons = howManyButtons + 1\n        end\n    end\nend\n\n--Creates submit and cancel buttons\nfunction createSetupActionButtons(move)\n    self.createButton({\n        label=\"Cancel\", click_function=\"buttonClick_cancel\", function_owner=self,\n      position={-0.6,0.1,-2.1}, rotation={0,0,0}, height=220, width=550,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n\n    self.createButton({\n        label=\"Submit\", click_function=\"buttonClick_submit\", function_owner=self,\n        position={-0.6,0.3,-2.5}, rotation={0,0,0}, height=220, width=550,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n\n    if move == false then\n      self.createButton({\n          label=\"Add\", click_function=\"buttonClick_add\", function_owner=self,\n          position={0.6,0.3,-2.1}, rotation={0,0,0}, height=220, width=550,\n          font_size=130, color={0,0,0}, font_color={0.25,1,0.25}\n      })\n\n        if fresh == false then\n            self.createButton({\n                label=\"Set New\", click_function=\"buttonClick_setNew\", function_owner=self,\n                position={0.6,0.3,-2.9}, rotation={0,0,0}, height=220, width=550,\n                font_size=130, color={0,0,0}, font_color={0.75,0.75,1}\n            })\n            self.createButton({\n                label=\"Remove\", click_function=\"buttonClick_remove\", function_owner=self,\n                position={0.6,0.3,-2.5}, rotation={0,0,0}, height=220, width=550,\n                font_size=130, color={0,0,0}, font_color={1,0.25,0.25}\n            })\n        end\n    end\n\n    self.createButton({\n        label=\"Reset\", click_function=\"buttonClick_reset\", function_owner=self,\n        position={-0.6,0.3,-2.9}, rotation={0,0,0}, height=220, width=550,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\nend\n\n\n--During Setup\n\n\n--Checks or unchecks buttons\nfunction buttonClick_selection(index, obj, move)\n    local colorMove = {0,0,1,0.6}\n    local color = {0,1,0,0.6}\n\n    previousGuid = selectedGuid\n    selectedGuid = obj.getGUID()\n\n    theList = memoryList\n    if move == true then\n       theList = moveList\n       if previousGuid ~= nil and previousGuid ~= selectedGuid then\n         local prevObj = getObjectFromGUID(previousGuid)\n         prevObj.highlightOff()\n         self.editButton({index=previousIndex, color=colorMove})\n         theList[previousGuid] = nil\n       end\n       previousIndex = index\n    end\n\n    if theList[selectedGuid] == nil then\n        self.editButton({index=index, color=color})\n        --Adding pos/rot to memory table\n        local pos, rot = obj.getPosition(), obj.getRotation()\n        --I need to add it like this or it won't save due to indexing issue\n        theList[obj.getGUID()] = {\n            pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\n            rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\n            lock=obj.getLock()\n        }\n        obj.highlightOn({0,1,0})\n    else\n      color = {0.75,0.25,0.25,0.6}\n      if move == true then\n        color = colorMove\n      end\n        self.editButton({index=index, color=color})\n        theList[obj.getGUID()] = nil\n        obj.highlightOff()\n    end\nend\n\n--Cancels selection process\nfunction buttonClick_cancel()\n    memoryList = memoryListBackup\n    moveList = {}\n    self.clearButtons()\n    if next(memoryList) == nil then\n        createSetupButton()\n    else\n        createMemoryActionButtons()\n    end\n    removeAllHighlights()\n    broadcastToAll(\"Selection Canceled\", {1,1,1})\n    moveGuid = nil\nend\n\n--Saves selections\nfunction buttonClick_submit()\n    fresh = false\n    if next(moveList) ~= nil then\n        for guid in pairs(moveList) do\n            moveGuid = guid\n        end\n        if memoryListBackup[moveGuid] == nil then\n            broadcastToAll(\"Item selected for moving is not already in memory\", {1, 0.25, 0.25})\n        else\n            broadcastToAll(\"Moving all items in memory relative to new objects position!\", {0.75, 0.75, 1})\n            self.clearButtons()\n            createMemoryActionButtons()\n            local count = 0\n            for guid in pairs(moveList) do\n                moveGuid = guid\n                count = count + 1\n                local obj = getObjectFromGUID(guid)\n                if obj ~= nil then obj.highlightOff() end\n            end\n            updateMemoryWithMoves()\n            updateSave()\n            buttonClick_place()\n        end\n    elseif next(memoryList) == nil and moveGuid == nil then\n      memoryList = memoryListBackup\n      broadcastToAll(\"No selections made.\", {0.75, 0.25, 0.25})\n    end\n    combineMemoryFromBagsWithin()\n    self.clearButtons()\n    createMemoryActionButtons()\n    local count = 0\n    for guid in pairs(memoryList) do\n        count = count + 1\n        local obj = getObjectFromGUID(guid)\n        if obj ~= nil then obj.highlightOff() end\n    end\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\n    updateSave()\n    moveGuid = nil\nend\n\nfunction combineTables(first_table, second_table)\n  for k,v in pairs(second_table) do first_table[k] = v end\nend\n\nfunction buttonClick_add()\n    fresh = false\n    combineTables(memoryList, memoryListBackup)\n    broadcastToAll(\"Adding internal bags and selections to existing memory\", {0.25, 0.75, 0.25})\n    combineMemoryFromBagsWithin()\n    self.clearButtons()\n    createMemoryActionButtons()\n    local count = 0\n    for guid in pairs(memoryList) do\n        count = count + 1\n        local obj = getObjectFromGUID(guid)\n        if obj ~= nil then obj.highlightOff() end\n    end\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\n    updateSave()\nend\n\nfunction buttonClick_remove()\n        broadcastToAll(\"Removing Selected Entries From Memory\", {1.0, 0.25, 0.25})\n        self.clearButtons()\n        createMemoryActionButtons()\n        local count = 0\n        for guid in pairs(memoryList) do\n            count = count + 1\n            memoryListBackup[guid] = nil\n            local obj = getObjectFromGUID(guid)\n            if obj ~= nil then obj.highlightOff() end\n        end\n        broadcastToAll(count..\" Objects Removed\", {1,1,1})\n        memoryList = memoryListBackup\n        updateSave()\nend\n\nfunction buttonClick_setNew()\n    broadcastToAll(\"Setting new position relative to items in memory\", {0.75, 0.75, 1})\n    self.clearButtons()\n    createMemoryActionButtons()\n    local count = 0\n    for _, obj in ipairs(getAllObjects()) do\n        guid = obj.guid\n        if memoryListBackup[guid] ~= nil then\n            count = count + 1\n            memoryListBackup[guid].pos = obj.getPosition()\n            memoryListBackup[guid].rot = obj.getRotation()\n            memoryListBackup[guid].lock = obj.getLock()\n        end\n    end\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\n    memoryList = memoryListBackup\n    updateSave()\nend\n\n--Resets bag to starting status\nfunction buttonClick_reset()\n    fresh = true\n    memoryList = {}\n    self.clearButtons()\n    createSetupButton()\n    removeAllHighlights()\n    broadcastToAll(\"Tool Reset\", {1,1,1})\n    updateSave()\nend\n\n\n--After Setup\n\n\n--Creates recall and place buttons\nfunction createMemoryActionButtons()\n    self.createButton({\n        label=\"Place\", click_function=\"buttonClick_place\", function_owner=self,\n        position={0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n    self.createButton({\n        label=\"Recall\", click_function=\"buttonClick_recall\", function_owner=self,\n        position={-0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n    self.createButton({\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\n        position={0,0.1,-2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n---    self.createButton({\n---      label=\"Move\", click_function=\"buttonClick_transpose\", function_owner=self,\n---      position={-2.8,0.3,0}, rotation={0,0,0}, height=350, width=800,\n---      font_size=250, color={0,0,0}, font_color={0.75,0.75,1}\n---    })\nend\n\n--Sends objects from bag/table to their saved position/rotation\nfunction buttonClick_place()\n    local bagObjList = self.getObjects()\n    for guid, entry in pairs(memoryList) do\n        local obj = getObjectFromGUID(guid)\n        --If obj is out on the table, move it to the saved pos/rot\n        if obj ~= nil then\n            obj.setPositionSmooth(entry.pos)\n            obj.setRotationSmooth(entry.rot)\n            obj.setLock(entry.lock)\n        else\n            --If obj is inside of the bag\n            for _, bagObj in ipairs(bagObjList) do\n                if bagObj.guid == guid then\n                    local item = self.takeObject({\n                        guid=guid, position=entry.pos, rotation=entry.rot, smooth=false\n                    })\n                    item.setLock(entry.lock)\n                    break\n                end\n            end\n        end\n    end\n    broadcastToAll(\"Objects Placed\", {1,1,1})\nend\n\n--Recalls objects to bag from table\nfunction buttonClick_recall()\n    for guid, entry in pairs(memoryList) do\n        local obj = getObjectFromGUID(guid)\n        if obj ~= nil then self.putObject(obj) end\n    end\n    broadcastToAll(\"Objects Recalled\", {1,1,1})\nend\n\n\n--Utility functions\n\n\n--Find delta (difference) between 2 x/y/z coordinates\nfunction findOffsetDistance(p1, p2, obj)\n    local yOffset = 0\n    if obj ~= nil then\n        local bounds = obj.getBounds()\n        yOffset = (bounds.size.y - bounds.offset.y)\n    end\n    local deltaPos = {}\n    deltaPos.x = (p2.x-p1.x)\n    deltaPos.y = (p2.y-p1.y) + yOffset\n    deltaPos.z = (p2.z-p1.z)\n    return deltaPos\nend\n\n--Used to rotate a set of coordinates by an angle\nfunction rotateLocalCoordinates(desiredPos, obj)\n\tlocal objPos, objRot = obj.getPosition(), obj.getRotation()\n    local angle = math.rad(objRot.y)\n\tlocal x = desiredPos.x * math.cos(angle) - desiredPos.z * math.sin(angle)\n\tlocal z = desiredPos.x * math.sin(angle) + desiredPos.z * math.cos(angle)\n\t--return {x=objPos.x+x, y=objPos.y+desiredPos.y, z=objPos.z+z}\n    return {x=x, y=desiredPos.y, z=z}\nend\n\nfunction rotateMyCoordinates(desiredPos, obj)\n\tlocal angle = math.rad(obj.getRotation().y)\n  local x = desiredPos.x * math.sin(angle)\n\tlocal z = desiredPos.z * math.cos(angle)\n    return {x=x, y=desiredPos.y, z=z}\nend\n\n--Coroutine delay, in seconds\nfunction wait(time)\n    local start = os.time()\n    repeat coroutine.yield(0) until os.time() > start + time\nend\n\n--Duplicates a table (needed to prevent it making reference to the same objects)\nfunction duplicateTable(oldTable)\n    local newTable = {}\n    for k, v in pairs(oldTable) do\n        newTable[k] = v\n    end\n    return newTable\nend\n\n--Moves scripted highlight from all objects\nfunction removeAllHighlights()\n    for _, obj in ipairs(getAllObjects()) do\n        obj.highlightOff()\n    end\nend\n\n--Round number (num) to the Nth decimal (dec)\nfunction round(num, dec)\n  local mult = 10^(dec or 0)\n  return math.floor(num * mult + 0.5) / mult\nend",
   "LuaScriptState": "{\"ml\":{\"03a473\":{\"lock\":false,\"pos\":{\"x\":44.45,\"y\":1.4951,\"z\":83},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"1d8532\":{\"lock\":false,\"pos\":{\"x\":41.25,\"y\":1.5121,\"z\":65},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"29cd95\":{\"lock\":false,\"pos\":{\"x\":41.25,\"y\":1.5121,\"z\":71},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"2cad65\":{\"lock\":false,\"pos\":{\"x\":44.45,\"y\":1.4951,\"z\":65},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"40b573\":{\"lock\":false,\"pos\":{\"x\":47,\"y\":1.4951,\"z\":77},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"508d51\":{\"lock\":false,\"pos\":{\"x\":44.45,\"y\":1.4951,\"z\":71},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"7992a3\":{\"lock\":false,\"pos\":{\"x\":47,\"y\":1.4951,\"z\":65},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"8d2b67\":{\"lock\":false,\"pos\":{\"x\":44.45,\"y\":1.4951,\"z\":77},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"950bd9\":{\"lock\":false,\"pos\":{\"x\":41.25,\"y\":1.5121,\"z\":77},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"a292a9\":{\"lock\":false,\"pos\":{\"x\":44.45,\"y\":1.4951,\"z\":59},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"b454b8\":{\"lock\":false,\"pos\":{\"x\":43.696,\"y\":1.4951,\"z\":52.1084},\"rot\":{\"x\":0,\"y\":270,\"z\":180}},\"c01a22\":{\"lock\":false,\"pos\":{\"x\":47,\"y\":1.4951,\"z\":59},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"c1856e\":{\"lock\":false,\"pos\":{\"x\":47,\"y\":1.4951,\"z\":83},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"c900dd\":{\"lock\":false,\"pos\":{\"x\":41.25,\"y\":1.5121,\"z\":59},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"db04d9\":{\"lock\":false,\"pos\":{\"x\":47,\"y\":1.4951,\"z\":71},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"f6d6be\":{\"lock\":false,\"pos\":{\"x\":43.6821,\"y\":1.4951,\"z\":46.0614},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"fb6884\":{\"lock\":false,\"pos\":{\"x\":41.25,\"y\":1.5121,\"z\":83},\"rot\":{\"x\":0,\"y\":270,\"z\":0}}}}",
-  "XmlUI": "",
   "ContainedObjects": [
     {
       "GUID": "03a473",
@@ -75,9 +51,9 @@
         "posX": 44.45,
         "posY": 1.49510384,
         "posZ": 83.0,
-        "rotX": -2.969738E-08,
+        "rotX": -2.969738e-08,
         "rotY": 180.0,
-        "rotZ": -7.048765E-07,
+        "rotZ": -7.048765e-07,
         "scaleX": 1.15,
         "scaleY": 1.0,
         "scaleZ": 1.15
@@ -85,34 +61,11 @@
       "Nickname": "Zhang Fei",
       "Description": "The Unequalled",
       "GMNotes": "{\n  \"id\": \"SHU01\",\n  \"type\": \"Investigator\",\n  \"class\": \"Guardian\",\n  \"traits\": \"Pikeman.\",\n  \"willpowerIcons\": 3,\n  \"intellectIcons\": 2,\n  \"combatIcons\": 5,\n  \"agilityIcons\": 2,\n  \"cycle\": \"Legends Retold - SHU\",\n  \"signatures\": [\n    {\n      \"SHU06\": 1,\n      \"SHU07\": 1\n    }\n  ]\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
       "Tags": [
         "Investigator",
         "PlayerCard"
       ],
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
       "HideWhenFaceDown": false,
-      "Hands": true,
       "CardID": 918600,
       "SidewaysCard": true,
       "CustomDeck": {
@@ -125,10 +78,7 @@
           "UniqueBack": true,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "1d8532",
@@ -137,41 +87,15 @@
         "posX": 41.25,
         "posY": 1.51205766,
         "posZ": 65.0,
-        "rotX": 3.41733823E-08,
+        "rotX": 3.41733823e-08,
         "rotY": 270.0,
-        "rotZ": -9.965041E-08,
+        "rotZ": -9.965041e-08,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
       },
       "Nickname": "",
-      "Description": "",
-      "GMNotes": "",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
       "Hands": false,
-      "SidewaysCard": false,
       "DeckIDs": [
         918407,
         918406
@@ -187,9 +111,6 @@
           "Type": 0
         }
       },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": "",
       "ContainedObjects": [
         {
           "GUID": "070a82",
@@ -198,45 +119,19 @@
             "posX": 34.89292,
             "posY": 1.49510431,
             "posZ": 62.30042,
-            "rotX": -2.96012036E-06,
+            "rotX": -2.96012036e-06,
             "rotY": 270.02002,
-            "rotZ": 3.056369E-05,
+            "rotZ": 3.056369e-05,
             "scaleX": 1.0,
             "scaleY": 1.0,
             "scaleZ": 1.0
           },
           "Nickname": "Fight or Die",
-          "Description": "",
           "GMNotes": "{\n  \"id\": \"SHU13\",\n  \"type\": \"Treachery\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Curse.\",\n  \"weakness\": true,\n  \"cycle\": \"Legends Retold - SHU\"\n}",
-          "AltLookAngle": {
-            "x": 0.0,
-            "y": 0.0,
-            "z": 0.0
-          },
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
           "Tags": [
             "PlayerCard"
           ],
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 918407,
-          "SidewaysCard": false,
           "CustomDeck": {
             "9184": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2469750756894233259/CC8A419FA31F224FD0D6791039BB8C48CD55E45E/",
@@ -247,10 +142,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "083d81",
@@ -259,7 +151,7 @@
             "posX": 34.46236,
             "posY": 1.50924945,
             "posZ": 64.4038544,
-            "rotX": -2.85480564E-06,
+            "rotX": -2.85480564e-06,
             "rotY": 270.040527,
             "rotZ": 359.258942,
             "scaleX": 1.0,
@@ -269,36 +161,11 @@
           "Nickname": "Liu Shan",
           "Description": "The Incapable Ruler",
           "GMNotes": "{\n  \"id\": \"SHU12\",\n  \"type\": \"Asset\",\n  \"slot\": \"Ally\",\n  \"class\": \"Neutral\",\n  \"cost\": 2,\n  \"traits\": \"Ally.\",\n  \"cycle\": \"Legends Retold - SHU\"\n}",
-          "AltLookAngle": {
-            "x": 0.0,
-            "y": 0.0,
-            "z": 0.0
-          },
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
           "Tags": [
             "Asset",
             "PlayerCard"
           ],
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 918406,
-          "SidewaysCard": false,
           "CustomDeck": {
             "9184": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2469750756894233259/CC8A419FA31F224FD0D6791039BB8C48CD55E45E/",
@@ -309,10 +176,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         }
       ]
     },
@@ -323,41 +187,15 @@
         "posX": 41.25,
         "posY": 1.51205766,
         "posZ": 71.0,
-        "rotX": -8.911849E-08,
+        "rotX": -8.911849e-08,
         "rotY": 270.0,
-        "rotZ": 2.24675887E-07,
+        "rotZ": 2.24675887e-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
       },
       "Nickname": "",
-      "Description": "",
-      "GMNotes": "",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
       "Hands": false,
-      "SidewaysCard": false,
       "DeckIDs": [
         918405,
         918404
@@ -373,9 +211,6 @@
           "Type": 0
         }
       },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": "",
       "ContainedObjects": [
         {
           "GUID": "e8afcd",
@@ -384,45 +219,19 @@
             "posX": 34.6471252,
             "posY": 1.49510384,
             "posZ": 67.10281,
-            "rotX": 1.84097317E-07,
+            "rotX": 1.84097317e-07,
             "rotY": 269.9974,
-            "rotZ": -7.957061E-08,
+            "rotZ": -7.957061e-08,
             "scaleX": 1.0,
             "scaleY": 1.0,
             "scaleZ": 1.0
           },
           "Nickname": "\"Hit! ... a tree\"",
-          "Description": "",
           "GMNotes": "{\n  \"id\": \"SHU11\",\n  \"type\": \"Treachery\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Blunder.\",\n  \"weakness\": true,\n  \"cycle\": \"Legends Retold - SHU\"\n}",
-          "AltLookAngle": {
-            "x": 0.0,
-            "y": 0.0,
-            "z": 0.0
-          },
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
           "Tags": [
             "PlayerCard"
           ],
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 918405,
-          "SidewaysCard": false,
           "CustomDeck": {
             "9184": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2469750756894233259/CC8A419FA31F224FD0D6791039BB8C48CD55E45E/",
@@ -433,10 +242,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "2cca13",
@@ -445,9 +251,9 @@
             "posX": 34.744957,
             "posY": 1.49510384,
             "posZ": 69.67644,
-            "rotX": 3.98230178E-08,
+            "rotX": 3.98230178e-08,
             "rotY": 269.993469,
-            "rotZ": -9.733937E-08,
+            "rotZ": -9.733937e-08,
             "scaleX": 1.0,
             "scaleY": 1.0,
             "scaleZ": 1.0
@@ -455,36 +261,11 @@
           "Nickname": "Riflesand",
           "Description": "The Iron Horse",
           "GMNotes": "{\n  \"id\": \"SHU10\",\n  \"type\": \"Asset\",\n  \"class\": \"Neutral\",\n  \"cost\": 1,\n  \"traits\": \"Ally. Creature.\",\n  \"cycle\": \"Legends Retold - SHU\"\n}",
-          "AltLookAngle": {
-            "x": 0.0,
-            "y": 0.0,
-            "z": 0.0
-          },
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
           "Tags": [
             "Asset",
             "PlayerCard"
           ],
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 918404,
-          "SidewaysCard": false,
           "CustomDeck": {
             "9184": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2469750756894233259/CC8A419FA31F224FD0D6791039BB8C48CD55E45E/",
@@ -495,10 +276,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         }
       ]
     },
@@ -509,9 +287,9 @@
         "posX": 44.45,
         "posY": 1.49510384,
         "posZ": 65.0,
-        "rotX": -6.85387036E-08,
+        "rotX": -6.85387036e-08,
         "rotY": 180.0,
-        "rotZ": -4.972825E-07,
+        "rotZ": -4.972825e-07,
         "scaleX": 1.15,
         "scaleY": 1.0,
         "scaleZ": 1.15
@@ -519,34 +297,11 @@
       "Nickname": "Zhao Yun",
       "Description": "The Yound General",
       "GMNotes": "{\n  \"id\": \"SHU04\",\n  \"type\": \"Investigator\",\n  \"class\": \"Mystic\",\n  \"traits\": \"Guard. Rodeleros.\",\n  \"willpowerIcons\": 6,\n  \"intellectIcons\": 2,\n  \"combatIcons\": 2,\n  \"agilityIcons\": 2,\n  \"cycle\": \"Legends Retold - SHU\",\n  \"extraToken\": \"Reaction\",\n  \"signatures\": [\n    {\n      \"SHU12\": 1,\n      \"SHU13\": 1\n    }\n  ]\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
       "Tags": [
         "Investigator",
         "PlayerCard"
       ],
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
       "HideWhenFaceDown": false,
-      "Hands": true,
       "CardID": 918603,
       "SidewaysCard": true,
       "CustomDeck": {
@@ -559,10 +314,7 @@
           "UniqueBack": true,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "40b573",
@@ -571,45 +323,20 @@
         "posX": 47.0,
         "posY": 1.49510384,
         "posZ": 77.0,
-        "rotX": -4.5201844E-08,
+        "rotX": -4.5201844e-08,
         "rotY": 270.0,
-        "rotZ": -1.0431777E-07,
+        "rotZ": -1.0431777e-07,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
       },
       "Nickname": "Zhuge Liang",
-      "Description": "",
       "GMNotes": "{\n  \"id\": \"SHU02-m\",\n  \"type\": \"Minicard\"\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
       "Tags": [
         "Minicard"
       ],
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
       "HideWhenFaceDown": false,
-      "Hands": true,
       "CardID": 917401,
-      "SidewaysCard": false,
       "CustomDeck": {
         "9174": {
           "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2469750756894232335/F15FF589241A668D3EEEACC459D551A5BC9D0DFF/",
@@ -620,10 +347,7 @@
           "UniqueBack": true,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "508d51",
@@ -632,9 +356,9 @@
         "posX": 44.45,
         "posY": 1.49510384,
         "posZ": 71.0,
-        "rotX": -1.19047634E-08,
+        "rotX": -1.19047634e-08,
         "rotY": 180.0,
-        "rotZ": -6.771316E-08,
+        "rotZ": -6.771316e-08,
         "scaleX": 1.15,
         "scaleY": 1.0,
         "scaleZ": 1.15
@@ -642,34 +366,11 @@
       "Nickname": "Ma Chao",
       "Description": "The Splendid",
       "GMNotes": "{\n  \"id\": \"SHU03\",\n  \"type\": \"Investigator\",\n  \"class\": \"Rogue\",\n  \"traits\": \"Cavalry.\",\n  \"willpowerIcons\": 2,\n  \"intellectIcons\": 3,\n  \"combatIcons\": 3,\n  \"agilityIcons\": 4,\n  \"cycle\": \"Legends Retold - SHU\",\n  \"extraToken\": \"PlayItem\",\n  \"signatures\": [\n    {\n      \"SHU10\": 1,\n      \"SHU11\": 1\n    }\n  ]\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
       "Tags": [
         "Investigator",
         "PlayerCard"
       ],
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
       "HideWhenFaceDown": false,
-      "Hands": true,
       "CardID": 918602,
       "SidewaysCard": true,
       "CustomDeck": {
@@ -682,10 +383,7 @@
           "UniqueBack": true,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "7992a3",
@@ -694,45 +392,20 @@
         "posX": 47.0,
         "posY": 1.49510384,
         "posZ": 65.0,
-        "rotX": -4.5201844E-08,
+        "rotX": -4.5201844e-08,
         "rotY": 270.0,
-        "rotZ": -1.0431777E-07,
+        "rotZ": -1.0431777e-07,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
       },
       "Nickname": "Zhao Yun",
-      "Description": "",
       "GMNotes": "{\n  \"id\": \"SHU04-m\",\n  \"type\": \"Minicard\"\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
       "Tags": [
         "Minicard"
       ],
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
       "HideWhenFaceDown": false,
-      "Hands": true,
       "CardID": 917403,
-      "SidewaysCard": false,
       "CustomDeck": {
         "9174": {
           "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2469750756894232335/F15FF589241A668D3EEEACC459D551A5BC9D0DFF/",
@@ -743,10 +416,7 @@
           "UniqueBack": true,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "8d2b67",
@@ -755,9 +425,9 @@
         "posX": 44.45,
         "posY": 1.49510384,
         "posZ": 77.0,
-        "rotX": -1.19047634E-08,
+        "rotX": -1.19047634e-08,
         "rotY": 180.0,
-        "rotZ": -6.771316E-08,
+        "rotZ": -6.771316e-08,
         "scaleX": 1.15,
         "scaleY": 1.0,
         "scaleZ": 1.15
@@ -765,34 +435,11 @@
       "Nickname": "Zhuge Liang",
       "Description": "Wo Long",
       "GMNotes": "{\n  \"id\": \"SHU02\",\n  \"type\": \"Investigator\",\n  \"class\": \"Seeker\",\n  \"traits\": \"Counselor.\",\n  \"willpowerIcons\": 4,\n  \"intellectIcons\": 4,\n  \"combatIcons\": 3,\n  \"agilityIcons\": 1,\n  \"cycle\": \"Legends Retold - SHU\",\n  \"signatures\": [\n    {\n      \"SHU08\": 1,\n      \"SHU09\": 1\n    }\n  ]\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
       "Tags": [
         "Investigator",
         "PlayerCard"
       ],
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
       "HideWhenFaceDown": false,
-      "Hands": true,
       "CardID": 918601,
       "SidewaysCard": true,
       "CustomDeck": {
@@ -805,10 +452,7 @@
           "UniqueBack": true,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "950bd9",
@@ -817,41 +461,15 @@
         "posX": 41.25,
         "posY": 1.51205766,
         "posZ": 77.0,
-        "rotX": 9.138849E-08,
+        "rotX": 9.138849e-08,
         "rotY": 270.0,
-        "rotZ": -1.91247853E-08,
+        "rotZ": -1.91247853e-08,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
       },
       "Nickname": "",
-      "Description": "",
-      "GMNotes": "",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
       "Hands": false,
-      "SidewaysCard": false,
       "DeckIDs": [
         918403,
         918402
@@ -867,9 +485,6 @@
           "Type": 0
         }
       },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": "",
       "ContainedObjects": [
         {
           "GUID": "a91044",
@@ -878,45 +493,19 @@
             "posX": 34.78451,
             "posY": 1.49510384,
             "posZ": 72.37909,
-            "rotX": -5.77823975E-08,
+            "rotX": -5.77823975e-08,
             "rotY": 269.986145,
-            "rotZ": -9.69468346E-08,
+            "rotZ": -9.69468346e-08,
             "scaleX": 1.0,
             "scaleY": 1.0,
             "scaleZ": 1.0
           },
           "Nickname": "Cataclysm",
-          "Description": "",
           "GMNotes": "{\n  \"id\": \"SHU09\",\n  \"type\": \"Event\",\n  \"class\": \"Neutral\",\n  \"cost\": 0,\n  \"traits\": \"Omen.\",\n  \"weakness\": true,\n  \"cycle\": \"Legends Retold - SHU\"\n}",
-          "AltLookAngle": {
-            "x": 0.0,
-            "y": 0.0,
-            "z": 0.0
-          },
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
           "Tags": [
             "PlayerCard"
           ],
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 918403,
-          "SidewaysCard": false,
           "CustomDeck": {
             "9184": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2469750756894233259/CC8A419FA31F224FD0D6791039BB8C48CD55E45E/",
@@ -927,10 +516,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "de9f5b",
@@ -939,9 +525,9 @@
             "posX": 34.91782,
             "posY": 1.49510384,
             "posZ": 74.79044,
-            "rotX": 1.03427631E-07,
+            "rotX": 1.03427631e-07,
             "rotY": 270.001923,
-            "rotZ": -1.36788756E-07,
+            "rotZ": -1.36788756e-07,
             "scaleX": 1.0,
             "scaleY": 1.0,
             "scaleZ": 1.0
@@ -949,36 +535,11 @@
           "Nickname": "Pang Tong",
           "Description": "The Fledgling Phoenix",
           "GMNotes": "{\n  \"id\": \"SHU08\",\n  \"type\": \"Asset\",\n  \"slot\": \"Ally\",\n  \"class\": \"Neutral\",\n  \"cost\": 3,\n  \"traits\": \"Ally\",\n\n  \"cycle\": \"Legends Retold - SHU\"\n}",
-          "AltLookAngle": {
-            "x": 0.0,
-            "y": 0.0,
-            "z": 0.0
-          },
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
           "Tags": [
             "Asset",
             "PlayerCard"
           ],
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 918402,
-          "SidewaysCard": false,
           "CustomDeck": {
             "9184": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2469750756894233259/CC8A419FA31F224FD0D6791039BB8C48CD55E45E/",
@@ -989,10 +550,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         }
       ]
     },
@@ -1003,9 +561,9 @@
         "posX": 44.45,
         "posY": 1.49510384,
         "posZ": 59.0,
-        "rotX": -2.164448E-08,
+        "rotX": -2.164448e-08,
         "rotY": 180.0,
-        "rotZ": 1.59859027E-07,
+        "rotZ": 1.59859027e-07,
         "scaleX": 1.15,
         "scaleY": 1.0,
         "scaleZ": 1.15
@@ -1013,34 +571,11 @@
       "Nickname": "Guan Yu",
       "Description": "Lord of the Magnificent Beard",
       "GMNotes": "{\n  \"id\": \"SHU05\",\n  \"type\": \"Investigator\",\n  \"class\": \"Survivor\",\n  \"traits\": \"Cavalry.\",\n  \"willpowerIcons\": 2,\n  \"intellectIcons\": 3,\n  \"combatIcons\": 4,\n  \"agilityIcons\": 3,\n  \"cycle\": \"Legends Retold - SHU\",\n  \"extraToken\": \"Reaction\",\n  \"signatures\": [\n    {\n      \"SHU14\": 1,\n      \"SHU15\": 1\n    }\n  ]\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
       "Tags": [
         "Investigator",
         "PlayerCard"
       ],
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
       "HideWhenFaceDown": false,
-      "Hands": true,
       "CardID": 918607,
       "SidewaysCard": true,
       "CustomDeck": {
@@ -1053,10 +588,7 @@
           "UniqueBack": true,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "b454b8",
@@ -1065,7 +597,7 @@
         "posX": 43.696,
         "posY": 1.49510384,
         "posZ": 52.1084,
-        "rotX": -5.43932046E-08,
+        "rotX": -5.43932046e-08,
         "rotY": 270.0,
         "rotZ": 180.0,
         "scaleX": 2.73749614,
@@ -1074,33 +606,7 @@
       },
       "Nickname": "Legends Retold - Rulebook",
       "Description": "Legends Retold Expansion - Investigators\nEach investigator from the Legends Retold expansion is double-sided. At the start of the game, each investigator begins on their regular form (designated by faction labels such as \"Shu,\" \"Wei,\" \"Wu,\" etc., located at the top left corner of the card).\n\nDuring gameplay, investigators may shift into their Legend form, which alters both their base skill values and abilities. This transformation is referred to as \"becoming a Legend\", and it causes the investigator card to be flipped to its Legend side. Conversely, \"reverting back to\" occurs when an investigator returns to the form they started the game with, flipping the investigator card back to its regular form.\n\nDeckbuilding instructions for these investigators are provided on a separate Deckbuilding card, included in the expansion box.",
-      "GMNotes": "",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 919000,
-      "SidewaysCard": false,
       "CustomDeck": {
         "9190": {
           "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2469750756894696040/C9DC7AFC738D318F4B384F5348B74B54226AB086/",
@@ -1111,10 +617,7 @@
           "UniqueBack": false,
           "Type": 1
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "c01a22",
@@ -1123,45 +626,20 @@
         "posX": 47.0,
         "posY": 1.49510384,
         "posZ": 59.0,
-        "rotX": -1.27646985E-07,
+        "rotX": -1.27646985e-07,
         "rotY": 270.0,
-        "rotZ": 2.72571924E-07,
+        "rotZ": 2.72571924e-07,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
       },
       "Nickname": "Guan Yu",
-      "Description": "",
       "GMNotes": "{\n  \"id\": \"SHU05-m\",\n  \"type\": \"Minicard\"\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
       "Tags": [
         "Minicard"
       ],
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
       "HideWhenFaceDown": false,
-      "Hands": true,
       "CardID": 917404,
-      "SidewaysCard": false,
       "CustomDeck": {
         "9174": {
           "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2469750756894232335/F15FF589241A668D3EEEACC459D551A5BC9D0DFF/",
@@ -1172,10 +650,7 @@
           "UniqueBack": true,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "c1856e",
@@ -1184,45 +659,20 @@
         "posX": 47.0,
         "posY": 1.49510384,
         "posZ": 83.0,
-        "rotX": -4.5201844E-08,
+        "rotX": -4.5201844e-08,
         "rotY": 270.0,
-        "rotZ": -1.0431777E-07,
+        "rotZ": -1.0431777e-07,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
       },
       "Nickname": "Zhang Fei",
-      "Description": "",
       "GMNotes": "{\n  \"id\": \"SHU01-m\",\n  \"type\": \"Minicard\"\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
       "Tags": [
         "Minicard"
       ],
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
       "HideWhenFaceDown": false,
-      "Hands": true,
       "CardID": 917400,
-      "SidewaysCard": false,
       "CustomDeck": {
         "9174": {
           "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2469750756894232335/F15FF589241A668D3EEEACC459D551A5BC9D0DFF/",
@@ -1233,10 +683,7 @@
           "UniqueBack": true,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "c900dd",
@@ -1245,41 +692,15 @@
         "posX": 41.25,
         "posY": 1.51205766,
         "posZ": 59.0,
-        "rotX": -8.221295E-09,
+        "rotX": -8.221295e-09,
         "rotY": 270.0,
-        "rotZ": 1.2935854E-07,
+        "rotZ": 1.2935854e-07,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
       },
       "Nickname": "",
-      "Description": "",
-      "GMNotes": "",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
       "Hands": false,
-      "SidewaysCard": false,
       "DeckIDs": [
         918409,
         266908
@@ -1304,9 +725,6 @@
           "Type": 0
         }
       },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": "",
       "ContainedObjects": [
         {
           "GUID": "8a2d6e",
@@ -1315,45 +733,19 @@
             "posX": 34.07585,
             "posY": 1.49510384,
             "posZ": 57.3103676,
-            "rotX": -1.76147967E-08,
+            "rotX": -1.76147967e-08,
             "rotY": 269.999329,
-            "rotZ": -1.63101262E-07,
+            "rotZ": -1.63101262e-07,
             "scaleX": 1.0,
             "scaleY": 1.0,
             "scaleZ": 1.0
           },
           "Nickname": "\"Haunt him down!\"",
-          "Description": "",
           "GMNotes": "{\n  \"id\": \"SHU15\",\n  \"type\": \"Event\",\n  \"class\": \"Neutral\",\n  \"cost\": 2,\n  \"traits\": \"Madness.\",\n  \"weakness\": true,\n  \"cycle\": \"Legends Retold - SHU\"\n}",
-          "AltLookAngle": {
-            "x": 0.0,
-            "y": 0.0,
-            "z": 0.0
-          },
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
           "Tags": [
             "PlayerCard"
           ],
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 918409,
-          "SidewaysCard": false,
           "CustomDeck": {
             "9184": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2469750756894233259/CC8A419FA31F224FD0D6791039BB8C48CD55E45E/",
@@ -1364,10 +756,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "77208b",
@@ -1376,9 +765,9 @@
             "posX": 34.1997566,
             "posY": 1.49510384,
             "posZ": 59.6397972,
-            "rotX": 4.279479E-08,
+            "rotX": 4.279479e-08,
             "rotY": 270.022644,
-            "rotZ": -6.030407E-08,
+            "rotZ": -6.030407e-08,
             "scaleX": 1.0,
             "scaleY": 1.0,
             "scaleZ": 1.0
@@ -1386,36 +775,11 @@
           "Nickname": "Red Hare",
           "Description": "The Ferghana Horse",
           "GMNotes": "{\n  \"id\": \"SHU14\",\n  \"type\": \"Asset\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Ally. Creature. Summon\",\n  \"startsInPlay\": true,\n  \"cycle\": \"Legends Retold - SHU\"\n}",
-          "AltLookAngle": {
-            "x": 0.0,
-            "y": 0.0,
-            "z": 0.0
-          },
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
           "Tags": [
             "Asset",
             "PlayerCard"
           ],
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 266908,
-          "SidewaysCard": false,
           "CustomDeck": {
             "2669": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2469750756894233259/CC8A419FA31F224FD0D6791039BB8C48CD55E45E/",
@@ -1426,10 +790,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         }
       ]
     },
@@ -1440,45 +801,20 @@
         "posX": 47.0,
         "posY": 1.49510384,
         "posZ": 71.0,
-        "rotX": -4.5201844E-08,
+        "rotX": -4.5201844e-08,
         "rotY": 270.0,
-        "rotZ": -1.0431777E-07,
+        "rotZ": -1.0431777e-07,
         "scaleX": 0.6,
         "scaleY": 1.0,
         "scaleZ": 0.6
       },
       "Nickname": "Ma Chao",
-      "Description": "",
       "GMNotes": "{\n  \"id\": \"SHU03-m\",\n  \"type\": \"Minicard\"\n}",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
       "Tags": [
         "Minicard"
       ],
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
       "HideWhenFaceDown": false,
-      "Hands": true,
       "CardID": 917402,
-      "SidewaysCard": false,
       "CustomDeck": {
         "9174": {
           "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2469750756894232335/F15FF589241A668D3EEEACC459D551A5BC9D0DFF/",
@@ -1489,10 +825,7 @@
           "UniqueBack": true,
           "Type": 0
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "f6d6be",
@@ -1501,42 +834,16 @@
         "posX": 43.6821,
         "posY": 1.49510384,
         "posZ": 46.0614,
-        "rotX": -4.83600324E-08,
+        "rotX": -4.83600324e-08,
         "rotY": 270.0,
-        "rotZ": 3.42140183E-09,
+        "rotZ": 3.42140183e-09,
         "scaleX": 2.73749614,
         "scaleY": 1.0,
         "scaleZ": 2.73749614
       },
       "Nickname": "SHU Kingdom DBI",
       "Description": "Legends Retold Expansion - Investigators\nEach investigator from the Legends Retold expansion is double-sided. At the start of the game, each investigator begins on their regular form (designated by faction labels such as \"Shu,\" \"Wei,\" \"Wu,\" etc., located at the top left corner of the card).\n\nDuring gameplay, investigators may shift into their Legend form, which alters both their base skill values and abilities. This transformation is referred to as \"becoming a Legend\", and it causes the investigator card to be flipped to its Legend side. Conversely, \"reverting back to\" occurs when an investigator returns to the form they started the game with, flipping the investigator card back to its regular form.\n\nDeckbuilding instructions for these investigators are provided on a separate Deckbuilding card, included in the expansion box.",
-      "GMNotes": "",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
-      "Hands": true,
       "CardID": 918900,
-      "SidewaysCard": false,
       "CustomDeck": {
         "9189": {
           "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2469750756894696040/C9DC7AFC738D318F4B384F5348B74B54226AB086/",
@@ -1547,10 +854,7 @@
           "UniqueBack": false,
           "Type": 1
         }
-      },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": ""
+      }
     },
     {
       "GUID": "fb6884",
@@ -1559,41 +863,15 @@
         "posX": 41.25,
         "posY": 1.51205766,
         "posZ": 83.0,
-        "rotX": 9.202571E-08,
+        "rotX": 9.202571e-08,
         "rotY": 270.0,
-        "rotZ": -2.03635047E-08,
+        "rotZ": -2.03635047e-08,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
       },
       "Nickname": "",
-      "Description": "",
-      "GMNotes": "",
-      "AltLookAngle": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-      },
-      "ColorDiffuse": {
-        "r": 0.713235259,
-        "g": 0.713235259,
-        "b": 0.713235259
-      },
-      "LayoutGroupSortIndex": 0,
-      "Value": 0,
-      "Locked": false,
-      "Grid": true,
-      "Snap": true,
-      "IgnoreFoW": false,
-      "MeasureMovement": false,
-      "DragSelectable": true,
-      "Autoraise": true,
-      "Sticky": true,
-      "Tooltip": true,
-      "GridProjection": false,
-      "HideWhenFaceDown": true,
       "Hands": false,
-      "SidewaysCard": false,
       "DeckIDs": [
         918401,
         918400
@@ -1609,9 +887,6 @@
           "Type": 0
         }
       },
-      "LuaScript": "",
-      "LuaScriptState": "",
-      "XmlUI": "",
       "ContainedObjects": [
         {
           "GUID": "62e2c5",
@@ -1620,45 +895,19 @@
             "posX": 34.8248367,
             "posY": 1.49510384,
             "posZ": 77.6081,
-            "rotX": 9.718707E-09,
+            "rotX": 9.718707e-09,
             "rotY": 270.02417,
-            "rotZ": -1.7847168E-07,
+            "rotZ": -1.7847168e-07,
             "scaleX": 1.0,
             "scaleY": 1.0,
             "scaleZ": 1.0
           },
           "Nickname": "Tipsy and Merry",
-          "Description": "",
           "GMNotes": "{\n  \"id\": \"SHU07\",\n  \"type\": \"Treachery\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Madness.\",\n  \"weakness\": true,\n  \"cycle\": \"Legends Retold - SHU\"\n}",
-          "AltLookAngle": {
-            "x": 0.0,
-            "y": 0.0,
-            "z": 0.0
-          },
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
           "Tags": [
             "PlayerCard"
           ],
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 918401,
-          "SidewaysCard": false,
           "CustomDeck": {
             "9184": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2469750756894233259/CC8A419FA31F224FD0D6791039BB8C48CD55E45E/",
@@ -1669,10 +918,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         },
         {
           "GUID": "190cdd",
@@ -1681,46 +927,20 @@
             "posX": 34.4173,
             "posY": 1.49510384,
             "posZ": 80.2746,
-            "rotX": 9.037687E-07,
+            "rotX": 9.037687e-07,
             "rotY": 269.984528,
-            "rotZ": -5.526922E-07,
+            "rotZ": -5.526922e-07,
             "scaleX": 1.0,
             "scaleY": 1.0,
             "scaleZ": 1.0
           },
           "Nickname": "Snake Spear",
-          "Description": "",
           "GMNotes": "{\n  \"id\": \"SHU06\",\n  \"type\": \"Asset\",\n  \"slot\": \"Body|Hand x2\",\n  \"class\": \"Neutral\",\n  \"cost\": 0,\n  \"traits\": \"Item. Weapon. Melee.\",\n  \"cycle\": \"Legends Retold - SHU\"\n}",
-          "AltLookAngle": {
-            "x": 0.0,
-            "y": 0.0,
-            "z": 0.0
-          },
-          "ColorDiffuse": {
-            "r": 0.713235259,
-            "g": 0.713235259,
-            "b": 0.713235259
-          },
           "Tags": [
             "Asset",
             "PlayerCard"
           ],
-          "LayoutGroupSortIndex": 0,
-          "Value": 0,
-          "Locked": false,
-          "Grid": true,
-          "Snap": true,
-          "IgnoreFoW": false,
-          "MeasureMovement": false,
-          "DragSelectable": true,
-          "Autoraise": true,
-          "Sticky": true,
-          "Tooltip": true,
-          "GridProjection": false,
-          "HideWhenFaceDown": true,
-          "Hands": true,
           "CardID": 918400,
-          "SidewaysCard": false,
           "CustomDeck": {
             "9184": {
               "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2469750756894233259/CC8A419FA31F224FD0D6791039BB8C48CD55E45E/",
@@ -1731,10 +951,7 @@
               "UniqueBack": false,
               "Type": 0
             }
-          },
-          "LuaScript": "",
-          "LuaScriptState": "",
-          "XmlUI": ""
+          }
         }
       ]
     }
