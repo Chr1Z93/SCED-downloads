@@ -24,9 +24,6 @@
   "CustomMesh": {
     "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/62583916778515333/9F0BE0C211BE3BD1725B4B855F5D3C9C0D020394/",
     "DiffuseURL": "https://i.imgur.com/ftafgpa.pnghttps://i.imgur.com/ftafgpa.png",
-    "NormalURL": "",
-    "ColliderURL": "",
-    "Convex": true,
     "MaterialIndex": 2,
     "TypeIndex": 6,
     "CustomShader": {
@@ -38,8 +35,7 @@
       "SpecularIntensity": 0.3,
       "SpecularSharpness": 8.0,
       "FresnelStrength": 0.4999999
-    },
-    "CastShadows": true
+    }
   },
   "LuaScript": "-- Utility memory bag by Directsun\n-- Version 2.5.2\n-- Fork of Memory Bag 2.0 by MrStump\n\nfunction updateSave()\n    local data_to_save = {[\"ml\"]=memoryList}\n    saved_data = JSON.encode(data_to_save)\n    self.script_state = saved_data\nend\n\nfunction combineMemoryFromBagsWithin()\n  local bagObjList = self.getObjects()\n  for _, bagObj in ipairs(bagObjList) do\n    local data = bagObj.lua_script_state\n      if data ~= nil then\n        local j = JSON.decode(data)\n        if j ~= nil and j.ml ~= nil then\n          for guid, entry in pairs(j.ml) do\n            memoryList[guid] = entry\n          end\n        end\n      end\n    end\nend\n\nfunction updateMemoryWithMoves()\n    memoryList = memoryListBackup\n    --get the first transposed object's coordinates\n    local obj = getObjectFromGUID(moveGuid)\n\n    -- p1 is where needs to go, p2 is where it was\n    local refObjPos = memoryList[moveGuid].pos\n    local deltaPos = findOffsetDistance(obj.getPosition(), refObjPos, nil)\n    local movedRotation = obj.getRotation()\n    for guid, entry in pairs(memoryList) do\n        memoryList[guid].pos.x = entry.pos.x - deltaPos.x\n        memoryList[guid].pos.y = entry.pos.y - deltaPos.y\n        memoryList[guid].pos.z = entry.pos.z - deltaPos.z\n        -- memoryList[guid].rot.x = movedRotation.x\n        -- memoryList[guid].rot.y = movedRotation.y\n        -- memoryList[guid].rot.z = movedRotation.z\n    end\n\n    --theList[obj.getGUID()] = {\n    --    pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\n    --    rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\n    --    lock=obj.getLock()\n    --}\n    moveList = {}\nend\n\nfunction onload(saved_data)\n    fresh = true\n    if saved_data ~= \"\" then\n        local loaded_data = JSON.decode(saved_data)\n        --Set up information off of loaded_data\n        memoryList = loaded_data.ml\n    else\n        --Set up information for if there is no saved saved data\n        memoryList = {}\n    end\n\n    moveList = {}\n    moveGuid = nil\n\n    if next(memoryList) == nil then\n        createSetupButton()\n    else\n        fresh = false\n        createMemoryActionButtons()\n    end\nend\n\n\n--Beginning Setup\n\n\n--Make setup button\nfunction createSetupButton()\n    self.createButton({\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\n        position={0,0.1,-2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\nend\n\n--Triggered by Transpose button\nfunction buttonClick_transpose()\n    moveGuid = nil\n    broadcastToAll(\"Select one object and move it- all objects will move relative to the new location\", {0.75, 0.75, 1})\n    memoryListBackup = duplicateTable(memoryList)\n    memoryList = {}\n    moveList = {}\n    self.clearButtons()\n    createButtonsOnAllObjects(true)\n    createSetupActionButtons(true)\nend\n\n--Triggered by setup button,\nfunction buttonClick_setup()\n    memoryListBackup = duplicateTable(memoryList)\n    memoryList = {}\n    self.clearButtons()\n    createButtonsOnAllObjects(false)\n    createSetupActionButtons(false)\nend\n\nfunction getAllObjectsInMemory()\n  local objTable = {}\n  local curObj = {}\n\n  for guid in pairs(memoryListBackup) do\n    curObj = getObjectFromGUID(guid)\n    table.insert(objTable, curObj)\n  end\n\n  return objTable\n  -- return getAllObjects()\nend\n\n--Creates selection buttons on objects\nfunction createButtonsOnAllObjects(move)\n    local howManyButtons = 0\n\n    local objsToHaveButtons = {}\n    if move == true then\n      objsToHaveButtons = getAllObjectsInMemory()\n    else\n      objsToHaveButtons = getAllObjects()\n    end\n\n    for _, obj in ipairs(objsToHaveButtons) do\n        if obj ~= self then\n            local dummyIndex = howManyButtons\n            --On a normal bag, the button positions aren't the same size as the bag.\n            globalScaleFactor = 1 * 1/self.getScale().x\n            --Super sweet math to set button positions\n            local selfPos = self.getPosition()\n            local objPos = obj.getPosition()\n            local deltaPos = findOffsetDistance(selfPos, objPos, obj)\n            local objPos = rotateLocalCoordinates(deltaPos, self)\n            objPos.x = -objPos.x * globalScaleFactor\n            objPos.y = objPos.y * globalScaleFactor + 2\n            objPos.z = objPos.z * globalScaleFactor * 0.9\n            --Offset rotation of bag\n            local rot = self.getRotation()\n            rot.y = -rot.y + 180\n            --Create function\n            local funcName = \"selectButton_\" .. howManyButtons\n            local func = function() buttonClick_selection(dummyIndex, obj, move) end\n            local color = {0.75,0.25,0.25,0.6}\n            local colorMove = {0,0,1,0.6}\n            if move == true then\n              color = colorMove\n            end\n            self.setVar(funcName, func)\n            self.createButton({\n                click_function=funcName, function_owner=self,\n                position=objPos, rotation=rot, height=500, width=500,\n                color=color,\n            })\n            howManyButtons = howManyButtons + 1\n        end\n    end\nend\n\n--Creates submit and cancel buttons\nfunction createSetupActionButtons(move)\n    self.createButton({\n        label=\"Cancel\", click_function=\"buttonClick_cancel\", function_owner=self,\n      position={-0.6,0.1,-2.1}, rotation={0,0,0}, height=220, width=550,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n\n    self.createButton({\n        label=\"Submit\", click_function=\"buttonClick_submit\", function_owner=self,\n        position={-0.6,0.3,-2.5}, rotation={0,0,0}, height=220, width=550,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n\n    if move == false then\n      self.createButton({\n          label=\"Add\", click_function=\"buttonClick_add\", function_owner=self,\n          position={0.6,0.3,-2.1}, rotation={0,0,0}, height=220, width=550,\n          font_size=130, color={0,0,0}, font_color={0.25,1,0.25}\n      })\n\n        if fresh == false then\n            self.createButton({\n                label=\"Set New\", click_function=\"buttonClick_setNew\", function_owner=self,\n                position={0.6,0.3,-2.9}, rotation={0,0,0}, height=220, width=550,\n                font_size=130, color={0,0,0}, font_color={0.75,0.75,1}\n            })\n            self.createButton({\n                label=\"Remove\", click_function=\"buttonClick_remove\", function_owner=self,\n                position={0.6,0.3,-2.5}, rotation={0,0,0}, height=220, width=550,\n                font_size=130, color={0,0,0}, font_color={1,0.25,0.25}\n            })\n        end\n    end\n\n    self.createButton({\n        label=\"Reset\", click_function=\"buttonClick_reset\", function_owner=self,\n        position={-0.6,0.3,-2.9}, rotation={0,0,0}, height=220, width=550,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\nend\n\n\n--During Setup\n\n\n--Checks or unchecks buttons\nfunction buttonClick_selection(index, obj, move)\n    local colorMove = {0,0,1,0.6}\n    local color = {0,1,0,0.6}\n\n    previousGuid = selectedGuid\n    selectedGuid = obj.getGUID()\n\n    theList = memoryList\n    if move == true then\n       theList = moveList\n       if previousGuid ~= nil and previousGuid ~= selectedGuid then\n         local prevObj = getObjectFromGUID(previousGuid)\n         prevObj.highlightOff()\n         self.editButton({index=previousIndex, color=colorMove})\n         theList[previousGuid] = nil\n       end\n       previousIndex = index\n    end\n\n    if theList[selectedGuid] == nil then\n        self.editButton({index=index, color=color})\n        --Adding pos/rot to memory table\n        local pos, rot = obj.getPosition(), obj.getRotation()\n        --I need to add it like this or it won't save due to indexing issue\n        theList[obj.getGUID()] = {\n            pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\n            rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\n            lock=obj.getLock()\n        }\n        obj.highlightOn({0,1,0})\n    else\n      color = {0.75,0.25,0.25,0.6}\n      if move == true then\n        color = colorMove\n      end\n        self.editButton({index=index, color=color})\n        theList[obj.getGUID()] = nil\n        obj.highlightOff()\n    end\nend\n\n--Cancels selection process\nfunction buttonClick_cancel()\n    memoryList = memoryListBackup\n    moveList = {}\n    self.clearButtons()\n    if next(memoryList) == nil then\n        createSetupButton()\n    else\n        createMemoryActionButtons()\n    end\n    removeAllHighlights()\n    broadcastToAll(\"Selection Canceled\", {1,1,1})\n    moveGuid = nil\nend\n\n--Saves selections\nfunction buttonClick_submit()\n    fresh = false\n    if next(moveList) ~= nil then\n        for guid in pairs(moveList) do\n            moveGuid = guid\n        end\n        if memoryListBackup[moveGuid] == nil then\n            broadcastToAll(\"Item selected for moving is not already in memory\", {1, 0.25, 0.25})\n        else\n            broadcastToAll(\"Moving all items in memory relative to new objects position!\", {0.75, 0.75, 1})\n            self.clearButtons()\n            createMemoryActionButtons()\n            local count = 0\n            for guid in pairs(moveList) do\n                moveGuid = guid\n                count = count + 1\n                local obj = getObjectFromGUID(guid)\n                if obj ~= nil then obj.highlightOff() end\n            end\n            updateMemoryWithMoves()\n            updateSave()\n            buttonClick_place()\n        end\n    elseif next(memoryList) == nil and moveGuid == nil then\n      memoryList = memoryListBackup\n      broadcastToAll(\"No selections made.\", {0.75, 0.25, 0.25})\n    end\n    combineMemoryFromBagsWithin()\n    self.clearButtons()\n    createMemoryActionButtons()\n    local count = 0\n    for guid in pairs(memoryList) do\n        count = count + 1\n        local obj = getObjectFromGUID(guid)\n        if obj ~= nil then obj.highlightOff() end\n    end\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\n    updateSave()\n    moveGuid = nil\nend\n\nfunction combineTables(first_table, second_table)\n  for k,v in pairs(second_table) do first_table[k] = v end\nend\n\nfunction buttonClick_add()\n    fresh = false\n    combineTables(memoryList, memoryListBackup)\n    broadcastToAll(\"Adding internal bags and selections to existing memory\", {0.25, 0.75, 0.25})\n    combineMemoryFromBagsWithin()\n    self.clearButtons()\n    createMemoryActionButtons()\n    local count = 0\n    for guid in pairs(memoryList) do\n        count = count + 1\n        local obj = getObjectFromGUID(guid)\n        if obj ~= nil then obj.highlightOff() end\n    end\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\n    updateSave()\nend\n\nfunction buttonClick_remove()\n        broadcastToAll(\"Removing Selected Entries From Memory\", {1.0, 0.25, 0.25})\n        self.clearButtons()\n        createMemoryActionButtons()\n        local count = 0\n        for guid in pairs(memoryList) do\n            count = count + 1\n            memoryListBackup[guid] = nil\n            local obj = getObjectFromGUID(guid)\n            if obj ~= nil then obj.highlightOff() end\n        end\n        broadcastToAll(count..\" Objects Removed\", {1,1,1})\n        memoryList = memoryListBackup\n        updateSave()\nend\n\nfunction buttonClick_setNew()\n    broadcastToAll(\"Setting new position relative to items in memory\", {0.75, 0.75, 1})\n    self.clearButtons()\n    createMemoryActionButtons()\n    local count = 0\n    for _, obj in ipairs(getAllObjects()) do\n        guid = obj.guid\n        if memoryListBackup[guid] ~= nil then\n            count = count + 1\n            memoryListBackup[guid].pos = obj.getPosition()\n            memoryListBackup[guid].rot = obj.getRotation()\n            memoryListBackup[guid].lock = obj.getLock()\n        end\n    end\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\n    memoryList = memoryListBackup\n    updateSave()\nend\n\n--Resets bag to starting status\nfunction buttonClick_reset()\n    fresh = true\n    memoryList = {}\n    self.clearButtons()\n    createSetupButton()\n    removeAllHighlights()\n    broadcastToAll(\"Tool Reset\", {1,1,1})\n    updateSave()\nend\n\n\n--After Setup\n\n\n--Creates recall and place buttons\nfunction createMemoryActionButtons()\n    self.createButton({\n        label=\"Place\", click_function=\"buttonClick_place\", function_owner=self,\n        position={0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n    self.createButton({\n        label=\"Recall\", click_function=\"buttonClick_recall\", function_owner=self,\n        position={-0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n    self.createButton({\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\n        position={0,0.1,-2.1}, rotation={0,0,0}, height=220, width=500,\n        font_size=130, color={0,0,0}, font_color={1,1,1}\n    })\n---    self.createButton({\n---      label=\"Move\", click_function=\"buttonClick_transpose\", function_owner=self,\n---      position={-2.8,0.3,0}, rotation={0,0,0}, height=350, width=800,\n---      font_size=250, color={0,0,0}, font_color={0.75,0.75,1}\n---    })\nend\n\n--Sends objects from bag/table to their saved position/rotation\nfunction buttonClick_place()\n    local bagObjList = self.getObjects()\n    for guid, entry in pairs(memoryList) do\n        local obj = getObjectFromGUID(guid)\n        --If obj is out on the table, move it to the saved pos/rot\n        if obj ~= nil then\n            obj.setPositionSmooth(entry.pos)\n            obj.setRotationSmooth(entry.rot)\n            obj.setLock(entry.lock)\n        else\n            --If obj is inside of the bag\n            for _, bagObj in ipairs(bagObjList) do\n                if bagObj.guid == guid then\n                    local item = self.takeObject({\n                        guid=guid, position=entry.pos, rotation=entry.rot, smooth=false\n                    })\n                    item.setLock(entry.lock)\n                    break\n                end\n            end\n        end\n    end\n    broadcastToAll(\"Objects Placed\", {1,1,1})\nend\n\n--Recalls objects to bag from table\nfunction buttonClick_recall()\n    for guid, entry in pairs(memoryList) do\n        local obj = getObjectFromGUID(guid)\n        if obj ~= nil then self.putObject(obj) end\n    end\n    broadcastToAll(\"Objects Recalled\", {1,1,1})\nend\n\n\n--Utility functions\n\n\n--Find delta (difference) between 2 x/y/z coordinates\nfunction findOffsetDistance(p1, p2, obj)\n    local yOffset = 0\n    if obj ~= nil then\n        local bounds = obj.getBounds()\n        yOffset = (bounds.size.y - bounds.offset.y)\n    end\n    local deltaPos = {}\n    deltaPos.x = (p2.x-p1.x)\n    deltaPos.y = (p2.y-p1.y) + yOffset\n    deltaPos.z = (p2.z-p1.z)\n    return deltaPos\nend\n\n--Used to rotate a set of coordinates by an angle\nfunction rotateLocalCoordinates(desiredPos, obj)\n\tlocal objPos, objRot = obj.getPosition(), obj.getRotation()\n    local angle = math.rad(objRot.y)\n\tlocal x = desiredPos.x * math.cos(angle) - desiredPos.z * math.sin(angle)\n\tlocal z = desiredPos.x * math.sin(angle) + desiredPos.z * math.cos(angle)\n\t--return {x=objPos.x+x, y=objPos.y+desiredPos.y, z=objPos.z+z}\n    return {x=x, y=desiredPos.y, z=z}\nend\n\nfunction rotateMyCoordinates(desiredPos, obj)\n\tlocal angle = math.rad(obj.getRotation().y)\n  local x = desiredPos.x * math.sin(angle)\n\tlocal z = desiredPos.z * math.cos(angle)\n    return {x=x, y=desiredPos.y, z=z}\nend\n\n--Coroutine delay, in seconds\nfunction wait(time)\n    local start = os.time()\n    repeat coroutine.yield(0) until os.time() > start + time\nend\n\n--Duplicates a table (needed to prevent it making reference to the same objects)\nfunction duplicateTable(oldTable)\n    local newTable = {}\n    for k, v in pairs(oldTable) do\n        newTable[k] = v\n    end\n    return newTable\nend\n\n--Moves scripted highlight from all objects\nfunction removeAllHighlights()\n    for _, obj in ipairs(getAllObjects()) do\n        obj.highlightOff()\n    end\nend\n\n--Round number (num) to the Nth decimal (dec)\nfunction round(num, dec)\n  local mult = 10^(dec or 0)\n  return math.floor(num * mult + 0.5) / mult\nend",
   "LuaScriptState": "{\"ml\":{\"0088ba\":{\"lock\":false,\"pos\":{\"x\":-6.92639875411987,\"y\":97.6375579833984,\"z\":2.96812868118286},\"rot\":{\"x\":359.5029296875,\"y\":180.023330688477,\"z\":0.330624610185623}},\"0195d3\":{\"lock\":false,\"pos\":{\"x\":-5.3164,\"y\":1.7026,\"z\":0.3783},\"rot\":{\"x\":359.9197,\"y\":270.0199,\"z\":0.0168}},\"02dd21\":{\"lock\":false,\"pos\":{\"x\":-26.2999973297119,\"y\":1.27566242218018,\"z\":-53.4368362426758},\"rot\":{\"x\":359.979156494141,\"y\":89.9969024658203,\"z\":359.983245849609}},\"0745af\":{\"lock\":false,\"pos\":{\"x\":-16.6232299804688,\"y\":1.3615038394928,\"z\":-62.4441375732422},\"rot\":{\"x\":0.0208165217190981,\"y\":269.999938964844,\"z\":0.0167675279080868}},\"0be33e\":{\"lock\":false,\"pos\":{\"x\":-19.2455997467041,\"y\":1.29233181476593,\"z\":-90.5261001586914},\"rot\":{\"x\":0.0208136830478907,\"y\":269.986114501953,\"z\":0.0167653951793909}},\"0de2c4\":{\"lock\":false,\"pos\":{\"x\":-16.640100479126,\"y\":1.35992407798767,\"z\":-67.8206024169922},\"rot\":{\"x\":0.0208164416253567,\"y\":269.999755859375,\"z\":0.0167678892612457}},\"0f241b\":{\"lock\":false,\"pos\":{\"x\":-22.6168975830078,\"y\":1.3063827753067,\"z\":-84.8184967041016},\"rot\":{\"x\":0.016771724447608,\"y\":179.999954223633,\"z\":359.979187011719}},\"11dbe4\":{\"lock\":false,\"pos\":{\"x\":-19.3039,\"y\":1.294,\"z\":-84.8224},\"rot\":{\"x\":0.0208,\"y\":269.9865,\"z\":0.0168}},\"1842b6\":{\"lock\":false,\"pos\":{\"x\":-26.3059005737305,\"y\":1.27565884590149,\"z\":-53.4418983459473},\"rot\":{\"x\":359.979187011719,\"y\":90.0104064941406,\"z\":359.983215332031}},\"19a0c4\":{\"lock\":false,\"pos\":{\"x\":-19.30419921875,\"y\":1.30316603183746,\"z\":-53.4401016235352},\"rot\":{\"x\":0.0208098273724318,\"y\":270.000091552734,\"z\":0.0167705342173576}},\"1a160c\":{\"lock\":false,\"pos\":{\"x\":-22.1548,\"y\":1.3655,\"z\":-53.4315},\"rot\":{\"x\":0.02,\"y\":270.018,\"z\":0.0165}},\"1aebf8\":{\"lock\":false,\"pos\":{\"x\":-26.3001308441162,\"y\":1.27108907699585,\"z\":-69.0606002807617},\"rot\":{\"x\":359.979156494141,\"y\":89.9996719360352,\"z\":359.983245849609}},\"1b0fdd\":{\"lock\":false,\"pos\":{\"x\":-16.5254249572754,\"y\":1.35332095623016,\"z\":-90.5208129882813},\"rot\":{\"x\":359.983215332031,\"y\":3.27318957715761E-05,\"z\":0.0208062957972288}},\"1dee2f\":{\"lock\":false,\"pos\":{\"x\":-6.90673065185547,\"y\":97.6462097167969,\"z\":1.91000008583069},\"rot\":{\"x\":359.501251220703,\"y\":180.003860473633,\"z\":0.333155572414398}},\"1f8fcf\":{\"lock\":false,\"pos\":{\"x\":-16.6235466003418,\"y\":1.35957205295563,\"z\":-69.0435256958008},\"rot\":{\"x\":0.0208160616457462,\"y\":270.00048828125,\"z\":0.0167686101049185}},\"226716\":{\"lock\":false,\"pos\":{\"x\":-16.640100479126,\"y\":1.35920107364655,\"z\":-70.2906036376953},\"rot\":{\"x\":0.0208164621144533,\"y\":269.999572753906,\"z\":0.0167677756398916}},\"24660b\":{\"lock\":false,\"pos\":{\"x\":-16.6233291625977,\"y\":1.36415886878967,\"z\":-53.3736343383789},\"rot\":{\"x\":0.0208165738731623,\"y\":270.000305175781,\"z\":0.0167682748287916}},\"2a0151\":{\"lock\":false,\"pos\":{\"x\":-26.29958152771,\"y\":1.26647675037384,\"z\":-84.817985534668},\"rot\":{\"x\":359.979156494141,\"y\":90.0002746582031,\"z\":359.983215332031}},\"2d7917\":{\"lock\":false,\"pos\":{\"x\":-22.6168994903564,\"y\":1.31328415870667,\"z\":-61.2414016723633},\"rot\":{\"x\":0.016771299764514,\"y\":179.999923706055,\"z\":359.979187011719}},\"307044\":{\"lock\":false,\"pos\":{\"x\":-16.6401996612549,\"y\":1.3549485206604,\"z\":-84.8181991577148},\"rot\":{\"x\":0.0208103768527508,\"y\":270.022247314453,\"z\":0.016776017844677}},\"3b2bad\":{\"lock\":false,\"pos\":{\"x\":-22.6207008361816,\"y\":1.31328284740448,\"z\":-61.2412986755371},\"rot\":{\"x\":0.0208657011389732,\"y\":269.805206298828,\"z\":0.0167002454400063}},\"3c3607\":{\"lock\":false,\"pos\":{\"x\":-16.6233367919922,\"y\":1.36186385154724,\"z\":-61.2142333984375},\"rot\":{\"x\":0.0208165049552917,\"y\":269.99951171875,\"z\":0.0167678613215685}},\"3ddfeb\":{\"lock\":false,\"pos\":{\"x\":-16.6394004821777,\"y\":1.35459744930267,\"z\":-86.0186004638672},\"rot\":{\"x\":0.0208164379000664,\"y\":269.999572753906,\"z\":0.0167675726115704}},\"3f0e28\":{\"lock\":false,\"pos\":{\"x\":-19.2959003448486,\"y\":1.31220149993896,\"z\":-69.0606994628906},\"rot\":{\"x\":0.0208025686442852,\"y\":270.020874023438,\"z\":0.0167785324156284}},\"41bfc7\":{\"lock\":false,\"pos\":{\"x\":-16.640100479126,\"y\":1.3618528842926,\"z\":-61.2309989929199},\"rot\":{\"x\":0.0208135135471821,\"y\":270.010925292969,\"z\":0.0167720373719931}},\"437a37\":{\"lock\":false,\"pos\":{\"x\":-22.6156997680664,\"y\":1.30868768692017,\"z\":-76.9459991455078},\"rot\":{\"x\":0.0208149589598179,\"y\":269.979187011719,\"z\":0.0167635623365641}},\"4722e6\":{\"lock\":false,\"pos\":{\"x\":-26.3049983978271,\"y\":1.2733747959137,\"z\":-61.2458000183105},\"rot\":{\"x\":359.979156494141,\"y\":89.9815063476563,\"z\":359.983245849609}},\"4ad11b\":{\"lock\":false,\"pos\":{\"x\":-16.6396007537842,\"y\":1.357253074646,\"z\":-76.9456024169922},\"rot\":{\"x\":0.0208168551325798,\"y\":269.999694824219,\"z\":0.0167679917067289}},\"4d0a50\":{\"lock\":false,\"pos\":{\"x\":-22.613899230957,\"y\":1.31556940078735,\"z\":-53.4380989074707},\"rot\":{\"x\":0.0167713351547718,\"y\":179.999938964844,\"z\":359.979187011719}},\"4f37be\":{\"lock\":false,\"pos\":{\"x\":-19.3001,\"y\":1.3145,\"z\":-61.2334},\"rot\":{\"x\":0.0208,\"y\":270,\"z\":0.0168}},\"51f42c\":{\"lock\":false,\"pos\":{\"x\":-22.6139,\"y\":1.3156,\"z\":-53.4381},\"rot\":{\"x\":0.0208,\"y\":270.018,\"z\":0.0166}},\"543164\":{\"lock\":false,\"pos\":{\"x\":-16.6403007507324,\"y\":1.35956108570099,\"z\":-69.060302734375},\"rot\":{\"x\":0.0208166968077421,\"y\":269.999481201172,\"z\":0.0167676880955696}},\"5c7b14\":{\"lock\":false,\"pos\":{\"x\":-26.3050994873047,\"y\":1.27108597755432,\"z\":-69.0654067993164},\"rot\":{\"x\":359.979187011719,\"y\":90.010009765625,\"z\":359.983215332031}},\"607bc5\":{\"lock\":false,\"pos\":{\"x\":-22.621000289917,\"y\":1.30638003349304,\"z\":-84.8227005004883},\"rot\":{\"x\":0.0208084154874086,\"y\":270.001800537109,\"z\":0.0167717579752207}},\"6330da\":{\"lock\":false,\"pos\":{\"x\":-16.640100479126,\"y\":1.36378788948059,\"z\":-54.6207008361816},\"rot\":{\"x\":0.0208167098462582,\"y\":270.000457763672,\"z\":0.0167684089392424}},\"698808\":{\"lock\":false,\"pos\":{\"x\":-26.3044986724854,\"y\":1.26647329330444,\"z\":-84.8228073120117},\"rot\":{\"x\":359.979156494141,\"y\":90,\"z\":359.983215332031}},\"69f0d8\":{\"lock\":false,\"pos\":{\"x\":-22.617992401123,\"y\":1.33252048492432,\"z\":-53.4420967102051},\"rot\":{\"x\":0.0208107884973288,\"y\":269.996887207031,\"z\":0.0167698599398136}},\"6d91e6\":{\"lock\":false,\"pos\":{\"x\":-19.2978000640869,\"y\":1.29628801345825,\"z\":-76.94580078125},\"rot\":{\"x\":0.0208093039691448,\"y\":270,\"z\":0.0167701654136181}},\"7069c2\":{\"lock\":false,\"pos\":{\"x\":-16.6233425140381,\"y\":1.3569039106369,\"z\":-78.1588287353516},\"rot\":{\"x\":0.020816657692194,\"y\":270.000732421875,\"z\":0.0167684201151133}},\"709107\":{\"lock\":false,\"pos\":{\"x\":-9.4013557434082,\"y\":97.5541839599609,\"z\":7.28238010406494},\"rot\":{\"x\":359.660949707031,\"y\":269.990417480469,\"z\":359.491882324219}},\"73bbe6\":{\"lock\":false,\"pos\":{\"x\":-6.95197439193726,\"y\":97.6284790039063,\"z\":4.007155418396},\"rot\":{\"x\":359.502532958984,\"y\":180.026397705078,\"z\":0.33254799246788}},\"757716\":{\"lock\":false,\"pos\":{\"x\":-16.6233501434326,\"y\":1.35993504524231,\"z\":-67.803825378418},\"rot\":{\"x\":0.0208157859742641,\"y\":270.00048828125,\"z\":0.0167686063796282}},\"767abd\":{\"lock\":false,\"pos\":{\"x\":-11.8665,\"y\":14.5262,\"z\":4.6576},\"rot\":{\"x\":0.0801,\"y\":90,\"z\":359.9514}},\"778482\":{\"lock\":false,\"pos\":{\"x\":-19.3043,\"y\":1.3009,\"z\":-61.2375},\"rot\":{\"x\":0.0208,\"y\":270.0001,\"z\":0.0168}},\"779aa6\":{\"lock\":false,\"pos\":{\"x\":-16.638500213623,\"y\":1.35532283782959,\"z\":-83.5414962768555},\"rot\":{\"x\":0.0208173394203186,\"y\":269.998016357422,\"z\":0.0167670622467995}},\"7ae4a4\":{\"lock\":false,\"pos\":{\"x\":-16.6233386993408,\"y\":1.36222386360168,\"z\":-59.9842376708984},\"rot\":{\"x\":0.0208168067038059,\"y\":269.999603271484,\"z\":0.0167678035795689}},\"7c476f\":{\"lock\":false,\"pos\":{\"x\":-16.5496215820313,\"y\":1.35362160205841,\"z\":-89.4637145996094},\"rot\":{\"x\":359.983215332031,\"y\":-2.15352629311383E-05,\"z\":0.0208078436553478}},\"7d0121\":{\"lock\":false,\"pos\":{\"x\":-16.6235332489014,\"y\":1.35762691497803,\"z\":-75.6886291503906},\"rot\":{\"x\":0.0208214167505503,\"y\":269.981994628906,\"z\":0.0167614575475454}},\"808696\":{\"lock\":false,\"pos\":{\"x\":-19.3001003265381,\"y\":1.31449115276337,\"z\":-61.2332000732422},\"rot\":{\"x\":0.0208018757402897,\"y\":270.022583007813,\"z\":0.0167793910950422}},\"810d82\":{\"lock\":false,\"pos\":{\"x\":-19.2997989654541,\"y\":1.3075875043869,\"z\":-84.8181991577148},\"rot\":{\"x\":0.0208041854202747,\"y\":270.022644042969,\"z\":0.0167822297662497}},\"8a01b9\":{\"lock\":false,\"pos\":{\"x\":-19.2936000823975,\"y\":1.30989551544189,\"z\":-76.9414978027344},\"rot\":{\"x\":0.020802179351449,\"y\":270.023406982422,\"z\":0.0167793575674295}},\"90165e\":{\"lock\":false,\"pos\":{\"x\":-16.6233406066895,\"y\":1.36379873752594,\"z\":-54.6039276123047},\"rot\":{\"x\":0.0208164323121309,\"y\":270.000213623047,\"z\":0.016768142580986}},\"91d56f\":{\"lock\":false,\"pos\":{\"x\":-19.2936,\"y\":1.3099,\"z\":-76.9416},\"rot\":{\"x\":0.0208,\"y\":270.0001,\"z\":0.0168}},\"928835\":{\"lock\":false,\"pos\":{\"x\":-19.2998,\"y\":1.3076,\"z\":-84.8182},\"rot\":{\"x\":0.0208,\"y\":270,\"z\":0.0168}},\"9c5af7\":{\"lock\":false,\"pos\":{\"x\":-26.3050975799561,\"y\":1.26877748966217,\"z\":-76.9504089355469},\"rot\":{\"x\":359.979156494141,\"y\":90,\"z\":359.983215332031}},\"9e80b9\":{\"lock\":false,\"pos\":{\"x\":-16.640100479126,\"y\":1.36414813995361,\"z\":-53.3903999328613},\"rot\":{\"x\":0.0208209455013275,\"y\":269.983947753906,\"z\":0.0167623087763786}},\"a01c9b\":{\"lock\":false,\"pos\":{\"x\":-19.2999992370605,\"y\":1.31677353382111,\"z\":-53.4357986450195},\"rot\":{\"x\":0.0208026729524136,\"y\":270.021057128906,\"z\":0.0167783722281456}},\"a52a3a\":{\"lock\":false,\"pos\":{\"x\":-16.6228427886963,\"y\":1.35726404190063,\"z\":-76.9288330078125},\"rot\":{\"x\":0.02081648260355,\"y\":270.00048828125,\"z\":0.0167677849531174}},\"aaf149\":{\"lock\":false,\"pos\":{\"x\":-22.6139,\"y\":1.3325,\"z\":-53.438},\"rot\":{\"x\":0.0208,\"y\":269.9995,\"z\":0.0168}},\"b6b36e\":{\"lock\":false,\"pos\":{\"x\":-16.6233329772949,\"y\":1.35921192169189,\"z\":-70.2738342285156},\"rot\":{\"x\":0.0208173170685768,\"y\":269.998687744141,\"z\":0.0167677458375692}},\"b95256\":{\"lock\":false,\"pos\":{\"x\":-19.2959,\"y\":1.3122,\"z\":-69.0607},\"rot\":{\"x\":0.0208,\"y\":270.0001,\"z\":0.0168}},\"bde4a6\":{\"lock\":false,\"pos\":{\"x\":-16.640100479126,\"y\":1.36451041698456,\"z\":-52.1520004272461},\"rot\":{\"x\":0.020816758275032,\"y\":269.999816894531,\"z\":0.0167679078876972}},\"be44cf\":{\"lock\":false,\"pos\":{\"x\":-16.6268348693848,\"y\":1.35460567474365,\"z\":-86.0060272216797},\"rot\":{\"x\":0.0208113081753254,\"y\":270.017486572266,\"z\":0.0167743507772684}},\"bfb635\":{\"lock\":false,\"pos\":{\"x\":-26.3001384735107,\"y\":1.26878118515015,\"z\":-76.9456481933594},\"rot\":{\"x\":359.979156494141,\"y\":89.9997406005859,\"z\":359.983215332031}},\"c1bb90\":{\"lock\":false,\"pos\":{\"x\":-16.6234188079834,\"y\":1.35495948791504,\"z\":-84.8014526367188},\"rot\":{\"x\":0.0208165608346462,\"y\":270.000305175781,\"z\":0.0167681518942118}},\"ce1ca7\":{\"lock\":false,\"pos\":{\"x\":-9.40235042572021,\"y\":97.6034851074219,\"z\":3.199223279953},\"rot\":{\"x\":359.660064697266,\"y\":269.992919921875,\"z\":359.493011474609}},\"cf0fa6\":{\"lock\":false,\"pos\":{\"x\":-16.6233367919922,\"y\":1.36452126502991,\"z\":-52.1352310180664},\"rot\":{\"x\":0.0208160765469074,\"y\":270.000213623047,\"z\":0.0167679488658905}},\"cfcb92\":{\"lock\":false,\"pos\":{\"x\":-26.2994804382324,\"y\":1.27337789535522,\"z\":-61.2407188415527},\"rot\":{\"x\":359.979156494141,\"y\":90,\"z\":359.983245849609}},\"d6fdbf\":{\"lock\":false,\"pos\":{\"x\":-16.6399993896484,\"y\":1.36149287223816,\"z\":-62.4608993530273},\"rot\":{\"x\":0.0208269897848368,\"y\":269.965240478516,\"z\":0.0167553834617138}},\"d92dda\":{\"lock\":false,\"pos\":{\"x\":-22.6156997680664,\"y\":1.30868768692017,\"z\":-76.9459991455078},\"rot\":{\"x\":0.0167711619287729,\"y\":179.999893188477,\"z\":359.979187011719}},\"d9fb86\":{\"lock\":false,\"pos\":{\"x\":-16.640100479126,\"y\":1.35689294338226,\"z\":-78.1755981445313},\"rot\":{\"x\":0.0208139065653086,\"y\":270.008666992188,\"z\":0.0167710781097412}},\"db82b2\":{\"lock\":false,\"pos\":{\"x\":-19.3001,\"y\":1.2986,\"z\":-69.0649},\"rot\":{\"x\":0.0208,\"y\":270.0001,\"z\":0.0168}},\"ddb016\":{\"lock\":false,\"pos\":{\"x\":-22.6156997680664,\"y\":1.31099140644073,\"z\":-69.0755996704102},\"rot\":{\"x\":0.0167711619287729,\"y\":179.999893188477,\"z\":359.979187011719}},\"de216f\":{\"lock\":false,\"pos\":{\"x\":-16.640100479126,\"y\":1.36221301555634,\"z\":-60.0009994506836},\"rot\":{\"x\":0.0208135861903429,\"y\":270.010711669922,\"z\":0.0167716089636087}},\"e04b48\":{\"lock\":false,\"pos\":{\"x\":-16.6403007507324,\"y\":1.35761606693268,\"z\":-75.7053985595703},\"rot\":{\"x\":0.0208202619105577,\"y\":269.987365722656,\"z\":0.0167635194957256}},\"e4c465\":{\"lock\":false,\"pos\":{\"x\":-16.6260395050049,\"y\":1.35533106327057,\"z\":-83.5289001464844},\"rot\":{\"x\":0.020870653912425,\"y\":269.815185546875,\"z\":0.0167007204145193}},\"e6c6ea\":{\"lock\":false,\"pos\":{\"x\":-22.6138916015625,\"y\":1.33252322673798,\"z\":-53.4379997253418},\"rot\":{\"x\":0.0208101626485586,\"y\":269.99951171875,\"z\":0.0167707949876785}},\"eb67db\":{\"lock\":false,\"pos\":{\"x\":-22.619800567627,\"y\":1.31098866462708,\"z\":-69.0798034667969},\"rot\":{\"x\":0.0208089426159859,\"y\":270,\"z\":0.0167712215334177}},\"ee2ffa\":{\"lock\":false,\"pos\":{\"x\":-22.6136,\"y\":1.3325,\"z\":-53.4377},\"rot\":{\"x\":0.0208,\"y\":270.0079,\"z\":0.0168}},\"f94edc\":{\"lock\":false,\"pos\":{\"x\":-19.3,\"y\":1.3168,\"z\":-53.4358},\"rot\":{\"x\":0.0208,\"y\":270.0001,\"z\":0.0168}},\"f9adc0\":{\"lock\":false,\"pos\":{\"x\":-22.6197929382324,\"y\":1.32563877105713,\"z\":-76.9501953125},\"rot\":{\"x\":0.0208151005208492,\"y\":269.97607421875,\"z\":0.0167624745517969}},\"fed3c5\":{\"lock\":false,\"pos\":{\"x\":-16.523323059082,\"y\":1.35301625728607,\"z\":-91.5646133422852},\"rot\":{\"x\":359.983215332031,\"y\":5.10707141074818E-05,\"z\":0.0208062138408422}},\"ff3f4e\":{\"lock\":false,\"pos\":{\"x\":-22.63450050354,\"y\":1.30471432209015,\"z\":-90.496696472168},\"rot\":{\"x\":0.02080880664289,\"y\":270.000091552734,\"z\":0.0167712885886431}}}}",
@@ -70,9 +66,6 @@
       "CustomMesh": {
         "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/2398822869388458833/B285E3A1C9D074F0ADB62EEB98A3274514BE7588/",
         "DiffuseURL": "https://i.imgur.com/C7wmgTd.pnghttps://i.imgur.com/C7wmgTd.png",
-        "NormalURL": "",
-        "ColliderURL": "",
-        "Convex": true,
         "MaterialIndex": 3,
         "TypeIndex": 4,
         "CustomShader": {
@@ -84,8 +77,7 @@
           "SpecularIntensity": 0.0,
           "SpecularSharpness": 2.0,
           "FresnelStrength": 0.0
-        },
-        "CastShadows": true
+        }
       }
     },
     {
@@ -143,12 +135,8 @@
       "CustomMesh": {
         "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/2398822869388458833/B285E3A1C9D074F0ADB62EEB98A3274514BE7588/",
         "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/952965722516265983/F50A6212D30C442429ED22B8CC8FD24D4CB76A2A/",
-        "NormalURL": "",
-        "ColliderURL": "",
-        "Convex": true,
         "MaterialIndex": 3,
-        "TypeIndex": 4,
-        "CastShadows": true
+        "TypeIndex": 4
       }
     },
     {
@@ -177,24 +165,8 @@
         "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334964971/3078F312706FC974833ECD2A359B87FD4F283509/",
         "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960553/C518D80E31E27DB23EEAC8CF9253E59798865790/",
         "NormalURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960069/E70E4A58A1B7827F1E5E2AF9FF44DF0BD5DA33F7/",
-        "ColliderURL": "",
-        "Convex": true,
         "MaterialIndex": 1,
-        "TypeIndex": 6,
-        "CastShadows": true
-      },
-      "PhysicsMaterial": {
-        "StaticFriction": 0.6,
-        "DynamicFriction": 0.6,
-        "Bounciness": 0.0,
-        "FrictionCombine": 0,
-        "BounceCombine": 0
-      },
-      "Rigidbody": {
-        "Mass": 1.375,
-        "Drag": 5.0,
-        "AngularDrag": 5.0,
-        "UseGravity": true
+        "TypeIndex": 6
       },
       "ContainedObjects": [
         {
@@ -1409,9 +1381,6 @@
       "CustomMesh": {
         "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/2398822869388458833/B285E3A1C9D074F0ADB62EEB98A3274514BE7588/",
         "DiffuseURL": "https://i.imgur.com/C7wmgTd.pnghttps://i.imgur.com/C7wmgTd.png",
-        "NormalURL": "",
-        "ColliderURL": "",
-        "Convex": true,
         "MaterialIndex": 3,
         "TypeIndex": 4,
         "CustomShader": {
@@ -1423,8 +1392,7 @@
           "SpecularIntensity": 0.0,
           "SpecularSharpness": 2.0,
           "FresnelStrength": 0.0
-        },
-        "CastShadows": true
+        }
       }
     },
     {
@@ -1453,12 +1421,8 @@
       "CustomMesh": {
         "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/2398822869388458833/B285E3A1C9D074F0ADB62EEB98A3274514BE7588/",
         "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/952965722515898740/E92441671B056D4CDF99DF9E6C88BE6598AAB50F/",
-        "NormalURL": "",
-        "ColliderURL": "",
-        "Convex": true,
         "MaterialIndex": 3,
-        "TypeIndex": 4,
-        "CastShadows": true
+        "TypeIndex": 4
       }
     },
     {
@@ -1487,12 +1451,8 @@
       "CustomMesh": {
         "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/2398822869388458833/B285E3A1C9D074F0ADB62EEB98A3274514BE7588/",
         "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/952965722516201848/72B3B9E2B59F25FEC82412AC22245D03655A4558/",
-        "NormalURL": "",
-        "ColliderURL": "",
-        "Convex": true,
         "MaterialIndex": 3,
-        "TypeIndex": 4,
-        "CastShadows": true
+        "TypeIndex": 4
       }
     },
     {
@@ -1550,12 +1510,8 @@
       "CustomMesh": {
         "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/2398822869388458833/B285E3A1C9D074F0ADB62EEB98A3274514BE7588/",
         "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/952965722516265983/F50A6212D30C442429ED22B8CC8FD24D4CB76A2A/",
-        "NormalURL": "",
-        "ColliderURL": "",
-        "Convex": true,
         "MaterialIndex": 3,
-        "TypeIndex": 4,
-        "CastShadows": true
+        "TypeIndex": 4
       }
     },
     {
@@ -1613,24 +1569,8 @@
         "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334964971/3078F312706FC974833ECD2A359B87FD4F283509/",
         "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960553/C518D80E31E27DB23EEAC8CF9253E59798865790/",
         "NormalURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960069/E70E4A58A1B7827F1E5E2AF9FF44DF0BD5DA33F7/",
-        "ColliderURL": "",
-        "Convex": true,
         "MaterialIndex": 1,
-        "TypeIndex": 6,
-        "CastShadows": true
-      },
-      "PhysicsMaterial": {
-        "StaticFriction": 0.6,
-        "DynamicFriction": 0.6,
-        "Bounciness": 0.0,
-        "FrictionCombine": 0,
-        "BounceCombine": 0
-      },
-      "Rigidbody": {
-        "Mass": 1.375,
-        "Drag": 5.0,
-        "AngularDrag": 5.0,
-        "UseGravity": true
+        "TypeIndex": 6
       },
       "ContainedObjects": [
         {
@@ -3462,24 +3402,8 @@
         "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334964971/3078F312706FC974833ECD2A359B87FD4F283509/",
         "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960553/C518D80E31E27DB23EEAC8CF9253E59798865790/",
         "NormalURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960069/E70E4A58A1B7827F1E5E2AF9FF44DF0BD5DA33F7/",
-        "ColliderURL": "",
-        "Convex": true,
         "MaterialIndex": 1,
-        "TypeIndex": 6,
-        "CastShadows": true
-      },
-      "PhysicsMaterial": {
-        "StaticFriction": 0.6,
-        "DynamicFriction": 0.6,
-        "Bounciness": 0.0,
-        "FrictionCombine": 0,
-        "BounceCombine": 0
-      },
-      "Rigidbody": {
-        "Mass": 1.375,
-        "Drag": 5.0,
-        "AngularDrag": 5.0,
-        "UseGravity": true
+        "TypeIndex": 6
       },
       "ContainedObjects": [
         {
@@ -4679,24 +4603,8 @@
         "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334964971/3078F312706FC974833ECD2A359B87FD4F283509/",
         "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960553/C518D80E31E27DB23EEAC8CF9253E59798865790/",
         "NormalURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960069/E70E4A58A1B7827F1E5E2AF9FF44DF0BD5DA33F7/",
-        "ColliderURL": "",
-        "Convex": true,
         "MaterialIndex": 1,
-        "TypeIndex": 6,
-        "CastShadows": true
-      },
-      "PhysicsMaterial": {
-        "StaticFriction": 0.6,
-        "DynamicFriction": 0.6,
-        "Bounciness": 0.0,
-        "FrictionCombine": 0,
-        "BounceCombine": 0
-      },
-      "Rigidbody": {
-        "Mass": 1.375,
-        "Drag": 5.0,
-        "AngularDrag": 5.0,
-        "UseGravity": true
+        "TypeIndex": 6
       },
       "ContainedObjects": [
         {
@@ -5822,12 +5730,8 @@
       "CustomMesh": {
         "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/2398822869388458833/B285E3A1C9D074F0ADB62EEB98A3274514BE7588/",
         "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/952965722516557267/757887224F6C37104CDFFE241FAD09B57117D670/",
-        "NormalURL": "",
-        "ColliderURL": "",
-        "Convex": true,
         "MaterialIndex": 3,
-        "TypeIndex": 4,
-        "CastShadows": true
+        "TypeIndex": 4
       }
     },
     {
@@ -5856,9 +5760,6 @@
       "CustomMesh": {
         "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/2398822869388458833/B285E3A1C9D074F0ADB62EEB98A3274514BE7588/",
         "DiffuseURL": "https://i.imgur.com/C7wmgTd.pnghttps://i.imgur.com/C7wmgTd.png",
-        "NormalURL": "",
-        "ColliderURL": "",
-        "Convex": true,
         "MaterialIndex": 3,
         "TypeIndex": 4,
         "CustomShader": {
@@ -5870,8 +5771,7 @@
           "SpecularIntensity": 0.0,
           "SpecularSharpness": 2.0,
           "FresnelStrength": 0.0
-        },
-        "CastShadows": true
+        }
       }
     },
     {
@@ -5900,12 +5800,8 @@
       "CustomMesh": {
         "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/2398822869388458833/B285E3A1C9D074F0ADB62EEB98A3274514BE7588/",
         "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/952965722515898740/E92441671B056D4CDF99DF9E6C88BE6598AAB50F/",
-        "NormalURL": "",
-        "ColliderURL": "",
-        "Convex": true,
         "MaterialIndex": 3,
-        "TypeIndex": 4,
-        "CastShadows": true
+        "TypeIndex": 4
       }
     },
     {
@@ -5934,24 +5830,8 @@
         "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334964971/3078F312706FC974833ECD2A359B87FD4F283509/",
         "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960553/C518D80E31E27DB23EEAC8CF9253E59798865790/",
         "NormalURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960069/E70E4A58A1B7827F1E5E2AF9FF44DF0BD5DA33F7/",
-        "ColliderURL": "",
-        "Convex": true,
         "MaterialIndex": 1,
-        "TypeIndex": 6,
-        "CastShadows": true
-      },
-      "PhysicsMaterial": {
-        "StaticFriction": 0.6,
-        "DynamicFriction": 0.6,
-        "Bounciness": 0.0,
-        "FrictionCombine": 0,
-        "BounceCombine": 0
-      },
-      "Rigidbody": {
-        "Mass": 1.375,
-        "Drag": 5.0,
-        "AngularDrag": 5.0,
-        "UseGravity": true
+        "TypeIndex": 6
       },
       "ContainedObjects": [
         {
@@ -6081,12 +5961,8 @@
       "CustomMesh": {
         "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/2398822869388458833/B285E3A1C9D074F0ADB62EEB98A3274514BE7588/",
         "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/952965722516265983/F50A6212D30C442429ED22B8CC8FD24D4CB76A2A/",
-        "NormalURL": "",
-        "ColliderURL": "",
-        "Convex": true,
         "MaterialIndex": 3,
-        "TypeIndex": 4,
-        "CastShadows": true
+        "TypeIndex": 4
       }
     },
     {
@@ -6115,12 +5991,8 @@
       "CustomMesh": {
         "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/2398822869388458833/B285E3A1C9D074F0ADB62EEB98A3274514BE7588/",
         "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/952965722516557267/757887224F6C37104CDFFE241FAD09B57117D670/",
-        "NormalURL": "",
-        "ColliderURL": "",
-        "Convex": true,
         "MaterialIndex": 3,
-        "TypeIndex": 4,
-        "CastShadows": true
+        "TypeIndex": 4
       }
     },
     {
@@ -6149,12 +6021,8 @@
       "CustomMesh": {
         "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/2398822869388458833/B285E3A1C9D074F0ADB62EEB98A3274514BE7588/",
         "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/952965722516201848/72B3B9E2B59F25FEC82412AC22245D03655A4558/",
-        "NormalURL": "",
-        "ColliderURL": "",
-        "Convex": true,
         "MaterialIndex": 3,
-        "TypeIndex": 4,
-        "CastShadows": true
+        "TypeIndex": 4
       }
     },
     {
@@ -6241,24 +6109,8 @@
         "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334964971/3078F312706FC974833ECD2A359B87FD4F283509/",
         "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960553/C518D80E31E27DB23EEAC8CF9253E59798865790/",
         "NormalURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960069/E70E4A58A1B7827F1E5E2AF9FF44DF0BD5DA33F7/",
-        "ColliderURL": "",
-        "Convex": true,
         "MaterialIndex": 1,
-        "TypeIndex": 6,
-        "CastShadows": true
-      },
-      "PhysicsMaterial": {
-        "StaticFriction": 0.6,
-        "DynamicFriction": 0.6,
-        "Bounciness": 0.0,
-        "FrictionCombine": 0,
-        "BounceCombine": 0
-      },
-      "Rigidbody": {
-        "Mass": 1.375,
-        "Drag": 5.0,
-        "AngularDrag": 5.0,
-        "UseGravity": true
+        "TypeIndex": 6
       },
       "ContainedObjects": [
         {
@@ -7767,12 +7619,8 @@
       "CustomMesh": {
         "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/2398822869388458833/B285E3A1C9D074F0ADB62EEB98A3274514BE7588/",
         "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/952965722516557267/757887224F6C37104CDFFE241FAD09B57117D670/",
-        "NormalURL": "",
-        "ColliderURL": "",
-        "Convex": true,
         "MaterialIndex": 3,
-        "TypeIndex": 4,
-        "CastShadows": true
+        "TypeIndex": 4
       }
     },
     {
@@ -7801,12 +7649,8 @@
       "CustomMesh": {
         "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/2398822869388458833/B285E3A1C9D074F0ADB62EEB98A3274514BE7588/",
         "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/952965722515898740/E92441671B056D4CDF99DF9E6C88BE6598AAB50F/",
-        "NormalURL": "",
-        "ColliderURL": "",
-        "Convex": true,
         "MaterialIndex": 3,
-        "TypeIndex": 4,
-        "CastShadows": true
+        "TypeIndex": 4
       }
     },
     {
@@ -7864,12 +7708,8 @@
       "CustomMesh": {
         "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/2398822869388458833/B285E3A1C9D074F0ADB62EEB98A3274514BE7588/",
         "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/952965722515960460/F43F63452854B10B416FDF3BF9EF3068E6E68F26/",
-        "NormalURL": "",
-        "ColliderURL": "",
-        "Convex": true,
         "MaterialIndex": 3,
-        "TypeIndex": 4,
-        "CastShadows": true
+        "TypeIndex": 4
       }
     },
     {
@@ -7898,12 +7738,8 @@
       "CustomMesh": {
         "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/2398822869388458833/B285E3A1C9D074F0ADB62EEB98A3274514BE7588/",
         "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/952965722515960460/F43F63452854B10B416FDF3BF9EF3068E6E68F26/",
-        "NormalURL": "",
-        "ColliderURL": "",
-        "Convex": true,
         "MaterialIndex": 3,
-        "TypeIndex": 4,
-        "CastShadows": true
+        "TypeIndex": 4
       }
     },
     {
@@ -7961,12 +7797,8 @@
       "CustomMesh": {
         "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/2398822869388458833/B285E3A1C9D074F0ADB62EEB98A3274514BE7588/",
         "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/952965722516201848/72B3B9E2B59F25FEC82412AC22245D03655A4558/",
-        "NormalURL": "",
-        "ColliderURL": "",
-        "Convex": true,
         "MaterialIndex": 3,
-        "TypeIndex": 4,
-        "CastShadows": true
+        "TypeIndex": 4
       }
     },
     {
@@ -7995,12 +7827,8 @@
       "CustomMesh": {
         "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/2398822869388458833/B285E3A1C9D074F0ADB62EEB98A3274514BE7588/",
         "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/952965722515960460/F43F63452854B10B416FDF3BF9EF3068E6E68F26/",
-        "NormalURL": "",
-        "ColliderURL": "",
-        "Convex": true,
         "MaterialIndex": 3,
-        "TypeIndex": 4,
-        "CastShadows": true
+        "TypeIndex": 4
       }
     },
     {
