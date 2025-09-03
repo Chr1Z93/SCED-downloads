@@ -141,8 +141,19 @@ function maybeSetup(region)
 end
 
 function setup(region)
+  broadcastToAll("Moving to " .. region)
+
   function KadathCoroutine()
+    local encounterDeckObjects = MythosAreaApi.getEncounterDeckObjects()
+    if encounterDeckObjects.topCard and encounterDeckObjects.draw then
+      encounterDeckObjects.draw.putObject(encounterDeckObjects.topCard)
+    elseif encounterDeckObjects.topCard then
+      encounterDeckObjects.topCard.setRotation(encounterDeckObjects.topCard.getRotation():setAt("z", 180))
+    end
+    CoroutineLib.yieldSeconds(0.5)
+
     MythosAreaApi.reshuffleEncounterDeck(true)
+
     CoroutineLib.yieldSeconds(0.5)
 
     -- remove clues from players
@@ -164,7 +175,7 @@ function setup(region)
       CoroutineLib.yieldSeconds(0.5)
     end
 
-    local encounterDeckObjects = MythosAreaApi.getEncounterDeckObjects()
+    encounterDeckObjects = MythosAreaApi.getEncounterDeckObjects()
 
     if region == "Timeless Realm" then
       local card = chest.takeObject({ guid = CRAWLING_MIST })
@@ -178,11 +189,6 @@ function setup(region)
     placeLocationsAndEnemies(region)
     CoroutineLib.yieldSeconds(0.5)
 
-    -- shuffle encounter deck
-    if encounterDeckObjects.topCard then
-      encounterDeckObjects.draw.putObject(encounterDeckObjects.topCard)
-      Wait.time(MythosAreaApi.flipTopCardFromDeck, 1)
-    end
     encounterDeckObjects.draw.shuffle()
     CoroutineLib.yieldSeconds(0.5)
   end
@@ -193,16 +199,12 @@ end
 function cleanZone()
   -- clean the encounter deck
   local encounterDeckObjects = MythosAreaApi.getEncounterDeckObjects()
-  if encounterDeckObjects.topCard then
-    encounterDeckObjects.draw.putObject(encounterDeckObjects.topCard)
-  end
-
   removeCardsFromDeck(encounterDeckObjects.draw)
 
   -- clean the play area
   local zone = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "PlayAreaZone")
   for _, obj in ipairs(zone.getObjects()) do
-    CoroutineLib.yieldFrames(3)
+    CoroutineLib.yieldFrames(10)
     local handled = false
 
     -- remove certain cards from game
@@ -221,6 +223,7 @@ function cleanZone()
       local md = getMetadata(obj)
       -- move enemies and treacheries to the encounter deck
       if md.type == "Enemy" or md.type == "Treachery" then
+        encounterDeckObjects = MythosAreaApi.getEncounterDeckObjects()
         encounterDeckObjects.draw.putObject(obj)
       elseif obj.hasTag("Location") then
         -- move locations to victory display or set aside
@@ -269,7 +272,6 @@ function removeCardsFromDeck(deck)
 end
 
 function placeLocationsAndEnemies(region)
-  log("placeLocationsAndEnemies")
   -- take locations from locationDeck if region matches
   for i, loc in ipairs(LOCATIONS) do
     if loc.region == region then
@@ -299,17 +301,14 @@ function placeLocationsAndEnemies(region)
       placeEnemyFromEncounterDeck("06152", "Nightriders", getLocationPositionByName("Nameless Ruins"), LEFT)
     end
     broadcastToAll("Place each investigator at Baharna. Add swarm cards to enemies.")
-
   elseif region == "Mnar" then
     placeEnemyFromContainer("06148", "Beings of Ib", chest, getLocationPositionByName("Ruins of Ib"), RIGHT)
     broadcastToAll("Place each investigator at Kadatheron. Add swarm cards to enemies.")
-
   elseif region == "Forbidden Lands" then
     placeEnemyFromContainer("06146", "Stalking Manticore", chest, getLocationPositionByName("Forbidden Lands"), RIGHT)
     CoroutineLib.yieldSeconds(0.5)
     placeEnemyFromContainer("06147", "Horde of Night", chest, getLocationPositionByName("Zulan-Thek"), RIGHT)
     broadcastToAll("Place each investigator at Ilek-Vad. Add swarm cards to enemies.")
-
   elseif region == "Timeless Realm" then
     placeEnemyFromEncounterDeck("06149", "Priest of a Thousand Masks", getLocationPositionByName("Hazuth-Kleg"), LEFT)
     if PlayAreaApi.getInvestigatorCount() >= 3 then
@@ -327,10 +326,7 @@ function placeEnemyFromEncounterDeck(id, name, position, side)
 end
 
 function placeEnemyFromContainer(id, name, container, position, side)
-  log("placeEnemyFromContainer")
-  log(container)
-
-  if container and container.getData().ContainedObjects then
+  if container ~= nil and container.getData().ContainedObjects then
     side = side or Vector(0, 1, 0)
     for i, card in ipairs(container.getObjects()) do
       local md = getMetadata(card)
@@ -338,7 +334,7 @@ function placeEnemyFromContainer(id, name, container, position, side)
         container.takeObject({
           index    = card.index,
           position = Vector(position) + side,
-          rotation = { 0, 270, 0 },
+          rotation = Vector(0, 270, 0),
           smooth   = false
         })
         return
