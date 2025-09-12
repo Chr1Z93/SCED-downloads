@@ -2,19 +2,18 @@
   "GUID": "0216cd",
   "Name": "Custom_Model_Bag",
   "Transform": {
-    "posX": 40.3820457,
+    "posX": 33.2105255,
     "posY": 1.4814992,
-    "posZ": 2.83761215,
-    "rotX": -1.02269858e-07,
+    "posZ": 11.4360332,
+    "rotX": 3.82076564e-07,
     "rotY": 270.0,
-    "rotZ": 2.3387674e-08,
+    "rotZ": -1.56325967e-07,
     "scaleX": 1.0,
     "scaleY": 0.14,
     "scaleZ": 1.0
   },
   "Nickname": "The Wind of the Pale Moonlight",
   "Description": "By Lost",
-  "GMNotes": "pale_moonlight",
   "ColorDiffuse": {
     "r": 1.0,
     "g": 1.0,
@@ -39,18 +38,18 @@
     }
   },
   "LuaScript": "-- Bundled by luabundle {\"version\":\"1.6.0\"}\nlocal __bundle_require, __bundle_loaded, __bundle_register, __bundle_modules = (function(superRequire)\n\tlocal loadingPlaceholder = {[{}] = true}\n\n\tlocal register\n\tlocal modules = {}\n\n\tlocal require\n\tlocal loaded = {}\n\n\tregister = function(name, body)\n\t\tif not modules[name] then\n\t\t\tmodules[name] = body\n\t\tend\n\tend\n\n\trequire = function(name)\n\t\tlocal loadedModule = loaded[name]\n\n\t\tif loadedModule then\n\t\t\tif loadedModule == loadingPlaceholder then\n\t\t\t\treturn nil\n\t\t\tend\n\t\telse\n\t\t\tif not modules[name] then\n\t\t\t\tif not superRequire then\n\t\t\t\t\tlocal identifier = type(name) == 'string' and '\\\"' .. name .. '\\\"' or tostring(name)\n\t\t\t\t\terror('Tried to require ' .. identifier .. ', but no such module has been registered')\n\t\t\t\telse\n\t\t\t\t\treturn superRequire(name)\n\t\t\t\tend\n\t\t\tend\n\n\t\t\tloaded[name] = loadingPlaceholder\n\t\t\tloadedModule = modules[name](require, loaded, register, modules)\n\t\t\tloaded[name] = loadedModule\n\t\tend\n\n\t\treturn loadedModule\n\tend\n\n\treturn require, loaded, register, modules\nend)(nil)\n__bundle_register(\"MemoryBag\", function(require, _LOADED, __bundle_register, __bundle_modules)\nfunction updateSave()\n  self.script_state = JSON.encode({ ml = memoryList, setupButton = setupButton })\nend\n\nfunction onLoad(savedData)\n  if savedData and savedData ~= \"\" then\n    local loadedData = JSON.decode(savedData)\n    memoryList = loadedData.ml\n    setupButton = loadedData.setupButton\n  end\n\n  memoryList = memoryList or {}\n  self.addContextMenuItem(\"Toggle setup button\", toggleSetupButton)\n\n  -- make sure the model is loaded so that we can use the bounds\n  Wait.condition(function()\n    Wait.frames(function()\n      generateButtonData()\n      createMemoryActionButtons()\n    end, 5)\n  end, function() return not self.loading_custom end)\nend\n\nfunction generateButtonData()\n  local selfScale = self.getScale()\n  local selfBounds = self.getBoundsNormalized()\n  buttonScale = Vector(1 / selfScale.x, 1, 1 / selfScale.z)\n\n  buttonX = math.max(selfBounds.size.x / 5, 1.5) / selfScale.x\n  buttonY = -(selfBounds.size.y / 2 + selfBounds.offset.y) / selfScale.y + 0.5\n  buttonZ = {}\n  for i = 1, 4 do\n    buttonZ[i] = (selfBounds.size.z / 2 + i * 1.15 - 0.15) / selfScale.z\n  end\n\n  local upperButtonMult = 1.1\n  buttonData = {\n    [\"Add\"]       = {\n      tooltip = \"Add highlighted objects to memory\",\n      pos = { buttonX * upperButtonMult, buttonY, -buttonZ[1] },\n      fColor = { 0.25, 1, 0.25 }\n    },\n    [\"Cancel\"]    = {\n      tooltip = \"Abort setup mode\",\n      pos = { -buttonX * upperButtonMult, buttonY, -buttonZ[1] },\n    },\n    [\"Internal\"]    = {\n      tooltip = \"Copy memory from internal bags\",\n      pos = { -buttonX * upperButtonMult, buttonY, -buttonZ[4] },\n    },\n    [\"Place\"]     = {\n      pos = { buttonX, buttonY, buttonZ[1] },\n      fSize = 350,\n      w = 1200\n    },\n    [\"Recall\"]    = {\n      pos = { -buttonX, buttonY, buttonZ[1] },\n      fSize = 350,\n      w = 1200\n    },\n    [\"Remove\"]    = {\n      tooltip = \"Remove highlighted objects from memory\",\n      pos = { buttonX * upperButtonMult, buttonY, -buttonZ[2] },\n      fColor = { 1, 0.25, 0.25 }\n    },\n    [\"Reset\"]     = {\n      tooltip = \"Completely reset memory\",\n      pos = { -buttonX * upperButtonMult, buttonY, -buttonZ[3] },\n    },\n    [\"Selection\"] = {\n      tooltip = \"Add / Remove highlight for selected objects\",\n      pos = { -buttonX * upperButtonMult, buttonY, -buttonZ[2] },\n    },\n    [\"Setup\"]     = {\n      pos = { 0, buttonY, -buttonZ[1] },\n      fSize = 350\n    },\n    [\"Update\"]   = {\n      tooltip = \"Update memory for placed objects\",\n      pos = { buttonX * upperButtonMult, buttonY, -buttonZ[3] },\n      fColor = { 0.75, 0.75, 1 }\n    }\n  }\nend\n\nfunction createButtonByName(label)\n  self.createButton({\n    label = label,\n    tooltip = buttonData[label].tooltip or \"\",\n    position = buttonData[label].pos,\n    height = buttonData[label].h or 500,\n    width = buttonData[label].w or 1500,\n    font_size = buttonData[label].fSize or 325,\n    font_color = buttonData[label].fColor or { 1, 1, 1 },\n    function_owner = self,\n    color = { 0, 0, 0 },\n    scale = buttonScale,\n    click_function = \"buttonClick_\" .. string.lower(string.gsub(label, \"%s+\", \"\"))\n  })\nend\n\n-- context menu function to toggle the setup button visibility\nfunction toggleSetupButton()\n  if setupButton then\n    setupButton = false\n    broadcastToAll(\"Setup button disabled\")\n  else\n    setupButton = true\n    broadcastToAll(\"Setup button enabled\")\n  end\n  updateSave()\n  removeAllHighlights()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_setup()\n  tempList = {}\n  self.clearButtons()\n  createButtonsOnAllObjects()\n  createSetupActionButtons()\nend\n\nfunction broadcastFeedback(str1, count, name, str2, color)\n  local bcStr = count .. \" \" .. name\n  if str1 then\n    bcStr = str1 .. \" \" .. bcStr\n  end\n  if count ~= 1 then\n    bcStr = bcStr .. \"s\"\n  end\n  if str2 then\n    bcStr = bcStr .. \" \" .. str2\n  end\n  broadcastToAll(bcStr, color)\nend\n\nfunction createButtonsOnAllObjects()\n  buttonIndexMap = {}\n\n  local buttonCount = 0\n  for _, obj in ipairs(getObjects()) do\n    if obj ~= self and obj.type ~= \"Scripting\" and obj.type ~= \"Hand\" then\n      local objPos = obj.getPosition()\n      local objBounds = obj.getBounds()\n      local offSet = Vector(0, objBounds.size.y / 2 + 1, 0)\n      local scaleVec = Vector(-1, 1, 1)\n      local buttonPos = self.positionToLocal(objPos + offSet):scale(scaleVec)\n\n      local fName = \"selectButton_\" .. buttonCount\n      _G[fName] = function() buttonClick_selectObject(obj) end\n      self.createButton({\n        click_function = fName,\n        function_owner = self,\n        position = buttonPos,\n        height = 600,\n        width = 600,\n        color = { 0.75, 0.25, 0.25, 0.75 },\n        scale = buttonScale\n      })\n      buttonIndexMap[obj.getGUID()] = buttonCount\n      buttonCount = buttonCount + 1\n    end\n  end\nend\n\nfunction createSetupActionButtons()\n  createButtonByName(\"Cancel\")\n  createButtonByName(\"Selection\")\n  createButtonByName(\"Reset\")\n  createButtonByName(\"Internal\")\n  createButtonByName(\"Add\")\n\n  if next(memoryList) then\n    createButtonByName(\"Remove\")\n    createButtonByName(\"Update\")\n  end\nend\n\nfunction buttonClick_selectObject(obj)\n  local guid = obj.getGUID()\n  local index = buttonIndexMap[guid]\n  if not index then return end\n\n  if tempList[guid] == nil then\n    self.editButton({ index = index, color = { 0, 1, 0, 0.75 } })\n    tempList[guid] = {\n      pos = roundVector(obj.getPosition(), 3),\n      rot = roundVector(obj.getRotation(), 0),\n      lock = obj.getLock()\n    }\n    obj.highlightOn({ 0, 1, 0 })\n  else\n    self.editButton({ index = index, color = { 0.75, 0.25, 0.25, 0.75 } })\n    tempList[guid] = nil\n    obj.highlightOff()\n  end\nend\n\nfunction buttonClick_cancel()\n  broadcastToAll(\"Setup Canceled\")\n  removeAllHighlights()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_selection(_, playerColor)\n  local objList = Player[playerColor].getSelectedObjects()\n\n  if #objList == 0 then\n    broadcastToAll(\"No objects selected!\")\n  else\n    broadcastFeedback(\"Toggled selection for\", #objList, \"object\")\n    for _, obj in ipairs(objList) do\n      buttonClick_selectObject(obj)\n    end\n  end\nend\n\nfunction buttonClick_add()\n  local count = 0\n  for _ in pairs(tempList) do\n    count = count + 1\n  end\n  broadcastFeedback(\"Added\", count, \"Object\", \"from selection\")\n\n  -- copy data from tempList to memoryList\n  for guid, entry in pairs(tempList) do\n    memoryList[guid] = entry\n  end\n\n  updateSave()\n  removeAllHighlights()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_update()\n  local count = 0\n  for guid, entry in pairs(memoryList) do\n    local obj = getObjectFromGUID(guid)\n    if obj ~= nil then\n      count = count + 1\n      memoryList[guid] = {\n        pos = roundVector(obj.getPosition(), 3),\n        rot = roundVector(obj.getRotation(), 0),\n        lock = obj.getLock()\n      }\n    end\n  end\n  broadcastFeedback(\"Updated data for\", count, \"Object\")\n  updateSave()\nend\n\nfunction buttonClick_remove()\n  local count = 0\n  for guid in pairs(tempList) do\n    count = count + 1\n    memoryList[guid] = nil\n  end\n  broadcastFeedback(_, count, \"Object\", \"Removed\", { 1, 1, 1 })\n\n  updateSave()\n  removeAllHighlights()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_setNew()\n  local count = 0\n  for _, obj in ipairs(getObjects()) do\n    if memoryList[obj.guid] then\n      count = count + 1\n      memoryList[obj.guid].pos = roundVector(obj.getPosition(), 3)\n      memoryList[obj.guid].rot = roundVector(obj.getRotation(), 0)\n      memoryList[obj.guid].lock = obj.getLock()\n    end\n  end\n  broadcastFeedback(\"Updated Data for\", count, \"Object\", _, { 1, 1, 1 })\n  updateSave()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_reset()\n  memoryList = {}\n  updateSave()\n  removeAllHighlights()\n  broadcastToAll(\"Tool Reset\", { 1, 1, 1 })\n  self.clearButtons()\n\n  if setupButton then\n    createButtonByName(\"Setup\")\n  end\nend\n\nfunction buttonClick_internal()\n  local count = 0\n  for _, bagObj in ipairs(self.getObjects()) do\n    local data = bagObj.lua_script_state\n    if data ~= nil then\n      local j = JSON.decode(data)\n      if j ~= nil and j.ml ~= nil then\n        count = count + 1\n        for guid, entry in pairs(j.ml) do\n          memoryList[guid] = entry\n        end\n      end\n    end\n  end\n\n  if count > 0 then\n    broadcastFeedback(\"Added\", count, \"internal bag\", \"to existing memory\")\n  end\nend\n\nfunction createMemoryActionButtons()\n  self.clearButtons()\n\n  if next(memoryList) then\n    createButtonByName(\"Place\")\n    createButtonByName(\"Recall\")\n  end\n\n  if setupButton then\n    createButtonByName(\"Setup\")\n  end\nend\n\n-- Sends objects from bag/table to their saved position/rotation\nfunction buttonClick_place()\n  local data = self.getData()\n\n  -- get names of contained objects\n  local guidToName = {}\n  for _, bagObjData in ipairs(data.ContainedObjects or {}) do\n    guidToName[bagObjData[\"GUID\"]] = bagObjData[\"Nickname\"]\n  end\n\n  local updateGuids = {}\n  local placeCount = 0\n  local moveCount = 0\n  for guid, entry in pairs(memoryList) do\n    local obj = getObjectFromGUID(guid)\n    if obj ~= nil and (obj.getName() == guidToName[guid] or guidToName[guid] == nil) then\n      -- If obj is out on the table and has the same name (or there's no contained copy), move it\n      moveCount = moveCount + 1\n      obj.setPositionSmooth(entry.pos)\n      obj.setRotationSmooth(entry.rot)\n      obj.setLock(entry.lock)\n    elseif guidToName[guid] then\n      -- If obj is inside of the bag\n      placeCount = placeCount + 1\n      local item = self.takeObject({\n        guid = guid,\n        position = entry.pos,\n        rotation = entry.rot,\n        smooth = false\n      })\n      item.setLock(entry.lock)\n\n      if obj ~= nil then\n        updateGuids[guid] = item.getGUID()\n      end\n    end\n  end\n\n  -- update memoryList if we placed an item that got a new GUID\n  if next(updateGuids) then\n    for oldGuid, newGuid in pairs(updateGuids) do\n      memoryList[newGuid] = memoryList[oldGuid]\n      memoryList[oldGuid] = nil\n    end\n    updateSave()\n  end\n\n  if placeCount > 0 then\n    broadcastFeedback(_, placeCount, \"Object\", \"Placed\", { 1, 1, 1 })\n  end\n\n  if moveCount > 0 then\n    broadcastFeedback(_, moveCount, \"Object\", \"Moved\", { 1, 1, 1 })\n  end\n\n  if placeCount == 0 and moveCount == 0 then\n    broadcastToAll(\"Bag is empty and no matching objects were found in play\", { 1, 1, 1 })\n  end\nend\n\nfunction buttonClick_recall()\n  local count = 0\n  for guid, _ in pairs(memoryList) do\n    local obj = getObjectFromGUID(guid)\n    if obj ~= nil then\n      self.putObject(obj)\n      count = count + 1\n    end\n  end\n  broadcastFeedback(_, count, \"Object\", \"Recalled\", { 1, 1, 1 })\nend\n\nfunction removeAllHighlights()\n  for _, obj in ipairs(getObjects()) do\n    obj.highlightOff()\n  end\nend\n\n-- Round vector to the Nth decimal\nfunction roundVector(vec, dec)\n  local mult = 10 ^ (dec or 0)\n  local t = {}\n  for _, k in ipairs({ \"x\", \"y\", \"z\" }) do\n    t[k] = math.floor(vec[k] * mult + 0.5) / mult\n  end\n  return t\nend\nend)\n__bundle_register(\"__root\", function(require, _LOADED, __bundle_register, __bundle_modules)\nrequire(\"MemoryBag\")\nend)\nreturn __bundle_require(\"__root\")",
-  "LuaScriptState": "{\"ml\":{\"00de99\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":-23.1502},\"rot\":{\"x\":0,\"y\":270.0038,\"z\":0}},\"1af4c3\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":-31.1502},\"rot\":{\"x\":0,\"y\":270.0216,\"z\":0}},\"388210\":{\"lock\":false,\"pos\":{\"x\":-1.353,\"y\":1.5815,\"z\":-26.603},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"3b06e7\":{\"lock\":false,\"pos\":{\"x\":5.876,\"y\":1.481,\"z\":54.847},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"530ea8\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":16.8498},\"rot\":{\"x\":0,\"y\":270.0097,\"z\":0}},\"7c46b7\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":8.8498},\"rot\":{\"x\":0,\"y\":270.0297,\"z\":0}},\"830eb7\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":24.8498},\"rot\":{\"x\":0,\"y\":270.0056,\"z\":0}},\"8da10a\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":0.8498},\"rot\":{\"x\":0,\"y\":270.0264,\"z\":0}},\"9e9d86\":{\"lock\":false,\"pos\":{\"x\":6.121,\"y\":1.481,\"z\":54.475},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"ba0841\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":-7.1502},\"rot\":{\"x\":0,\"y\":270.0089,\"z\":0}},\"be7507\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.5815,\"z\":32.8498},\"rot\":{\"x\":0,\"y\":270.0125,\"z\":0}},\"c79a80\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":-15.1502},\"rot\":{\"x\":0,\"y\":270.0211,\"z\":0}},\"ecc8ed\":{\"lock\":false,\"pos\":{\"x\":6.102,\"y\":1.481,\"z\":53.366},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"f842c8\":{\"lock\":false,\"pos\":{\"x\":3.8229,\"y\":1.4815,\"z\":52.6843},\"rot\":{\"x\":0,\"y\":270.0007,\"z\":0}}},\"setupButton\":false}",
+  "LuaScriptState": "{\"ml\":{\"00de99\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":-23.1502},\"rot\":{\"x\":0,\"y\":270.0038,\"z\":0}},\"1af4c3\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":-31.1502},\"rot\":{\"x\":0,\"y\":270.0216,\"z\":0}},\"388210\":{\"lock\":false,\"pos\":{\"x\":-1.353,\"y\":1.5815,\"z\":-26.603},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"3b06e7\":{\"lock\":false,\"pos\":{\"x\":5.876,\"y\":1.481,\"z\":54.847},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"530ea8\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":16.8498},\"rot\":{\"x\":0,\"y\":270.0097,\"z\":0}},\"7c46b7\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":8.8498},\"rot\":{\"x\":0,\"y\":270.0297,\"z\":0}},\"830eb7\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":24.8498},\"rot\":{\"x\":0,\"y\":270.0056,\"z\":0}},\"8da10a\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":0.8498},\"rot\":{\"x\":0,\"y\":270.0264,\"z\":0}},\"9e9d86\":{\"lock\":false,\"pos\":{\"x\":6.121,\"y\":1.481,\"z\":54.475},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"ae06b3\":{\"lock\":false,\"pos\":{\"x\":5.203,\"y\":1.481,\"z\":55.76},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"ba0841\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":-7.1502},\"rot\":{\"x\":0,\"y\":270.0089,\"z\":0}},\"be7507\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.5815,\"z\":32.8498},\"rot\":{\"x\":0,\"y\":270.0125,\"z\":0}},\"c79a80\":{\"lock\":false,\"pos\":{\"x\":13.1644,\"y\":1.6619,\"z\":-15.1502},\"rot\":{\"x\":0,\"y\":270.0211,\"z\":0}},\"ecc8ed\":{\"lock\":false,\"pos\":{\"x\":6.102,\"y\":1.481,\"z\":53.366},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"f842c8\":{\"lock\":false,\"pos\":{\"x\":3.8229,\"y\":1.4815,\"z\":52.6843},\"rot\":{\"x\":0,\"y\":270.0007,\"z\":0}}},\"setupButton\":false}",
   "ContainedObjects": [
     {
       "GUID": "00de99",
       "Name": "Custom_Model_Bag",
       "Transform": {
-        "posX": 13.1642265,
+        "posX": 13.1644,
         "posY": 1.66188049,
-        "posZ": -23.1500912,
-        "rotX": -5.08098651e-07,
-        "rotY": 270.020142,
-        "rotZ": -9.54439656e-08,
+        "posZ": -23.1502,
+        "rotX": 5.09130835e-08,
+        "rotY": 270.003845,
+        "rotZ": -3.16182e-08,
         "scaleX": 5.510745,
         "scaleY": 0.360763043,
         "scaleZ": 8.266118
@@ -325,7 +324,7 @@
           "Description": "Your Pride and Joy",
           "Tags": [
             "Asset",
-            "ScenarioCard",
+            "PlayerCard",
             "ScenarioCard"
           ],
           "CardID": 286900,
@@ -391,7 +390,7 @@
           "Nickname": "Police Car",
           "Tags": [
             "Asset",
-            "ScenarioCard",
+            "PlayerCard",
             "ScenarioCard"
           ],
           "CardID": 287000,
@@ -709,7 +708,7 @@
               },
               "Nickname": "Sharon - Deck",
               "Tags": [
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "Hands": false,
               "DeckIDs": [
@@ -777,7 +776,7 @@
                   "Nickname": "Improvised Weapon",
                   "GMNotes": "{\r\n  \"id\": \"04033\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Tactic. Improvised.\",\r\n  \"cycle\": \"The Forgotten Age\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368811,
                   "CustomDeck": {
@@ -809,7 +808,7 @@
                   "Nickname": "Improvised Weapon",
                   "GMNotes": "{\r\n  \"id\": \"04033\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Tactic. Improvised.\",\r\n  \"cycle\": \"The Forgotten Age\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368811,
                   "CustomDeck": {
@@ -842,7 +841,7 @@
                   "Description": "Basic Weakness",
                   "GMNotes": "{\r\n  \"id\": \"51011\",\r\n  \"type\": \"Treachery\",\r\n  \"class\": \"Neutral\",\r\n  \"traits\": \"Pact. Mystery.\",\r\n  \"weakness\": true,\r\n  \"basicWeaknessCount\": 2,\r\n  \"cycle\": \"Return to The Dunwich Legacy\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 527419,
                   "CustomDeck": {
@@ -874,7 +873,7 @@
                   "Nickname": "Elusive",
                   "GMNotes": "{\r\n  \"id\": \"01050\",\r\n  \"alternate_ids\": [\r\n    \"01550\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Rogue\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Tactic.\",\r\n  \"intellectIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368712,
                   "CustomDeck": {
@@ -906,7 +905,7 @@
                   "Nickname": "Unexpected Courage",
                   "GMNotes": "{\r\n  \"id\": \"01593\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Neutral\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"wildIcons\": 2,\r\n  \"cycle\": \"Core\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 587212,
                   "CustomDeck": {
@@ -938,7 +937,7 @@
                   "Nickname": "Lucky!",
                   "GMNotes": "{\r\n  \"id\": \"01080\",\r\n  \"alternate_ids\": [\r\n    \"01580\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Fortune.\",\r\n  \"cycle\": \"Core\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368810,
                   "CustomDeck": {
@@ -970,7 +969,7 @@
                   "Nickname": "Lucky!",
                   "GMNotes": "{\r\n  \"id\": \"01080\",\r\n  \"alternate_ids\": [\r\n    \"01580\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Fortune.\",\r\n  \"cycle\": \"Core\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368810,
                   "CustomDeck": {
@@ -1003,7 +1002,7 @@
               },
               "Nickname": "Sharon - Opening Hand",
               "Tags": [
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "Hands": false,
               "DeckIDs": [
@@ -1059,7 +1058,7 @@
                   "Nickname": "Trial by Fire",
                   "GMNotes": "{\r\n  \"id\": \"05281\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 3,\r\n  \"level\": 0,\r\n  \"traits\": \"Spirit.\",\r\n  \"wildIcons\": 1,\r\n  \"cycle\": \"The Circle Undone\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 374418,
                   "CustomDeck": {
@@ -1092,7 +1091,7 @@
                   "GMNotes": "{\r\n  \"id\": \"08073\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Item.\",\r\n  \"agilityIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 3,\r\n      \"type\": \"Supply\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"Edge of the Earth\"\r\n}\r",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 378902,
                   "CustomDeck": {
@@ -1124,7 +1123,7 @@
                   "Nickname": "Guts",
                   "GMNotes": "{\r\n  \"id\": \"01089\",\r\n  \"alternate_ids\": [\r\n    \"01589\"\r\n  ],\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Neutral\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"willpowerIcons\": 2,\r\n  \"cycle\": \"Core\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368500,
                   "CustomDeck": {
@@ -1157,7 +1156,7 @@
                   "GMNotes": "{\r\n  \"id\": \"08081\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 0,\r\n  \"level\": 3,\r\n  \"traits\": \"Talent. Composure.\",\r\n  \"willpowerIcons\": 2,\r\n  \"intellectIcons\": 2,\r\n  \"cycle\": \"Edge of the Earth\"\r\n}\r",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 378910,
                   "CustomDeck": {
@@ -1191,7 +1190,7 @@
               "Nickname": "Sharon - Start in Play",
               "Tags": [
                 "Asset",
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "Hands": false,
               "DeckIDs": [
@@ -1238,7 +1237,7 @@
                   "GMNotes": "{\r\n  \"id\": \"05036\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 3,\r\n  \"level\": 0,\r\n  \"traits\": \"Item. Clothing. Footwear.\",\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"The Circle Undone\"\r\n}\r",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 274608,
                   "CustomDeck": {
@@ -1271,7 +1270,7 @@
                   "GMNotes": "{\r\n  \"id\": \"60520\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Accessory\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 0,\r\n  \"level\": 1,\r\n  \"traits\": \"Item. Charm.\",\r\n  \"willpowerIcons\": 1,\r\n  \"cycle\": \"Investigator Packs\"\r\n}\r",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 550818,
                   "CustomDeck": {
@@ -1304,7 +1303,7 @@
                   "GMNotes": "{\r\n  \"id\": \"60511\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Talent.\",\r\n  \"combatIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"Investigator Packs\"\r\n}\r",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 550809,
                   "CustomDeck": {
@@ -1378,7 +1377,7 @@
               "GMNotes": "{\n  \"id\": \"01001\",\n  \"type\": \"Investigator\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Assistant. Child.\",\n  \"willpowerIcons\": 4,\n  \"intellectIcons\": 2,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 3,\n  \"cycle\": \"Standalone\",\n  \"extraToken\": \"Reaction\"\n}",
               "Tags": [
                 "Investigator",
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "CardID": 301000,
               "CustomDeck": {
@@ -1434,7 +1433,7 @@
               },
               "Nickname": "Mr Tiddles - deck",
               "Tags": [
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "Hands": false,
               "DeckIDs": [
@@ -1513,7 +1512,7 @@
                   "Nickname": "Run For Your Life",
                   "GMNotes": "{\r\n  \"id\": \"03119\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Neutral\",\r\n  \"level\": 0,\r\n  \"traits\": \"Desperate.\",\r\n  \"agilityIcons\": 4,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368505,
                   "CustomDeck": {
@@ -1545,7 +1544,7 @@
                   "Nickname": "Run For Your Life",
                   "GMNotes": "{\r\n  \"id\": \"03119\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Neutral\",\r\n  \"level\": 0,\r\n  \"traits\": \"Desperate.\",\r\n  \"agilityIcons\": 4,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368505,
                   "CustomDeck": {
@@ -1577,7 +1576,7 @@
                   "Nickname": "The Eye of Truth (5)",
                   "GMNotes": "{\r\n  \"id\": \"06325\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Seeker\",\r\n  \"level\": 5,\r\n  \"traits\": \"Spell. Practiced.\",\r\n  \"wildIcons\": 4,\r\n  \"cycle\": \"The Dream-Eaters\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 448840,
                   "CustomDeck": {
@@ -1609,7 +1608,7 @@
                   "Nickname": "Seal of the Elder Sign (5)",
                   "GMNotes": "{\r\n  \"id\": \"03312\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Mystic\",\r\n  \"level\": 5,\r\n  \"traits\": \"Spell. Expert.\",\r\n  \"wildIcons\": 1,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 230359,
                   "CustomDeck": {
@@ -1641,7 +1640,7 @@
                   "Nickname": "The 13th Vision",
                   "GMNotes": "{\r\n  \"id\": \"05041\",\r\n  \"type\": \"Treachery\",\r\n  \"class\": \"Neutral\",\r\n  \"traits\": \"Omen.\",\r\n  \"weakness\": true,\r\n  \"basicWeaknessCount\": 2,\r\n  \"cycle\": \"The Circle Undone\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 290321,
                   "CustomDeck": {
@@ -1673,7 +1672,7 @@
                   "Nickname": "Guts",
                   "GMNotes": "{\r\n  \"id\": \"01089\",\r\n  \"alternate_ids\": [\r\n    \"01589\"\r\n  ],\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Neutral\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"willpowerIcons\": 2,\r\n  \"cycle\": \"Core\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368500,
                   "CustomDeck": {
@@ -1705,7 +1704,7 @@
                   "Nickname": "Guts",
                   "GMNotes": "{\r\n  \"id\": \"01089\",\r\n  \"alternate_ids\": [\r\n    \"01589\"\r\n  ],\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Neutral\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"willpowerIcons\": 2,\r\n  \"cycle\": \"Core\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368500,
                   "CustomDeck": {
@@ -1737,7 +1736,7 @@
                   "Nickname": "Narrow Escape",
                   "GMNotes": "{\r\n  \"id\": \"03267\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Rogue\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Fortune.\",\r\n  \"agilityIcons\": 2,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368708,
                   "CustomDeck": {
@@ -1769,7 +1768,7 @@
                   "Nickname": "Narrow Escape",
                   "GMNotes": "{\r\n  \"id\": \"03267\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Rogue\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Fortune.\",\r\n  \"agilityIcons\": 2,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368708,
                   "CustomDeck": {
@@ -1802,7 +1801,7 @@
               },
               "Nickname": "Mr Tiddles - Opening Hand",
               "Tags": [
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "Hands": false,
               "DeckIDs": [
@@ -1870,7 +1869,7 @@
                   "Nickname": "Able Bodied",
                   "GMNotes": "{\r\n  \"id\": \"05038\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Survivor\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"combatIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"The Circle Undone\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 274606,
                   "CustomDeck": {
@@ -1902,7 +1901,7 @@
                   "Nickname": "Able Bodied",
                   "GMNotes": "{\r\n  \"id\": \"05038\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Survivor\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"combatIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"The Circle Undone\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 274606,
                   "CustomDeck": {
@@ -1934,7 +1933,7 @@
                   "Nickname": "Think on Your Feet (2)",
                   "GMNotes": "{\r\n  \"id\": \"51006\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Rogue\",\r\n  \"cost\": 0,\r\n  \"level\": 2,\r\n  \"traits\": \"Trick.\",\r\n  \"intellectIcons\": 1,\r\n  \"agilityIcons\": 2,\r\n  \"cycle\": \"Return to The Dunwich Legacy\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 315303,
                   "CustomDeck": {
@@ -1966,7 +1965,7 @@
                   "Nickname": "Helping Hand",
                   "GMNotes": "{\r\n  \"id\": \"09031\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Guardian\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"cycle\": \"The Scarlet Keys\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 917424,
                   "CustomDeck": {
@@ -1998,7 +1997,7 @@
                   "Nickname": "Helping Hand",
                   "GMNotes": "{\r\n  \"id\": \"09031\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Guardian\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"cycle\": \"The Scarlet Keys\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 917424,
                   "CustomDeck": {
@@ -2030,7 +2029,7 @@
                   "Nickname": "Perception",
                   "GMNotes": "{\r\n  \"id\": \"01090\",\r\n  \"alternate_ids\": [\r\n    \"01590\"\r\n  ],\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Neutral\",\r\n  \"level\": 0,\r\n  \"traits\": \"Practiced.\",\r\n  \"intellectIcons\": 2,\r\n  \"cycle\": \"Core\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368506,
                   "CustomDeck": {
@@ -2062,7 +2061,7 @@
                   "Nickname": "Perception",
                   "GMNotes": "{\r\n  \"id\": \"01090\",\r\n  \"alternate_ids\": [\r\n    \"01590\"\r\n  ],\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Neutral\",\r\n  \"level\": 0,\r\n  \"traits\": \"Practiced.\",\r\n  \"intellectIcons\": 2,\r\n  \"cycle\": \"Core\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368506,
                   "CustomDeck": {
@@ -2133,7 +2132,7 @@
               "GMNotes": "{\n  \"id\": \"01001\",\n  \"type\": \"Investigator\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Blessed. Cat.\",\n  \"willpowerIcons\": 4,\n  \"intellectIcons\": 0,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 5,\n  \"cycle\": \"Standalone\",\n  \"extraToken\": \"Neutral\"\n}",
               "Tags": [
                 "Investigator",
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "CardID": 301100,
               "CustomDeck": {
@@ -2197,7 +2196,7 @@
               },
               "Nickname": "Colour of Sound Encounter set",
               "Tags": [
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "Hands": false,
@@ -2304,7 +2303,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 296000,
@@ -2338,7 +2337,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 296300,
@@ -2372,7 +2371,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 295700,
@@ -2406,7 +2405,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 295900,
@@ -2440,7 +2439,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 295600,
@@ -2474,7 +2473,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 296100,
@@ -2508,7 +2507,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 295800,
@@ -2542,7 +2541,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 296200,
@@ -2602,7 +2601,7 @@
               "Nickname": "Madam Holly - Deck",
               "Tags": [
                 "Asset",
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "Hands": false,
               "DeckIDs": [
@@ -2673,7 +2672,7 @@
                   "GMNotes": "{\r\n  \"id\": \"01058\",\r\n  \"alternate_ids\": [\r\n    \"01558\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Talent.\",\r\n  \"intellectIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 4,\r\n      \"type\": \"Secret\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"Core\"\r\n}\r",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 230316,
                   "CustomDeck": {
@@ -2706,7 +2705,7 @@
                   "GMNotes": "{\r\n  \"id\": \"01058\",\r\n  \"alternate_ids\": [\r\n    \"01558\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Talent.\",\r\n  \"intellectIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 4,\r\n      \"type\": \"Secret\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"Core\"\r\n}\r",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 230316,
                   "CustomDeck": {
@@ -2739,7 +2738,7 @@
                   "GMNotes": "{\r\n  \"id\": \"02030\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Arcane\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Spell.\",\r\n  \"willpowerIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 3,\r\n      \"type\": \"Charge\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 230322,
                   "CustomDeck": {
@@ -2771,7 +2770,7 @@
                   "Nickname": "Astral Travel",
                   "GMNotes": "{\r\n  \"id\": \"03034\",\r\n  \"alternate_ids\": [\r\n    \"60413\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 3,\r\n  \"level\": 0,\r\n  \"traits\": \"Spell.\",\r\n  \"willpowerIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 230312,
                   "CustomDeck": {
@@ -2804,7 +2803,7 @@
                   "GMNotes": "{\r\n  \"id\": \"60407\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Arcane\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 3,\r\n  \"level\": 0,\r\n  \"traits\": \"Spell.\",\r\n  \"combatIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 4,\r\n      \"type\": \"Charge\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"Investigator Packs\"\r\n}\r",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 538705,
                   "CustomDeck": {
@@ -2836,7 +2835,7 @@
                   "Nickname": "Drawn to the Flame",
                   "GMNotes": "{\r\n  \"id\": \"01064\",\r\n  \"alternate_ids\": [\r\n    \"01564\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Insight.\",\r\n  \"willpowerIcons\": 1,\r\n  \"intellectIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 230304,
                   "CustomDeck": {
@@ -2869,7 +2868,7 @@
                   "Description": "Enemy",
                   "GMNotes": "{\r\n  \"id\": \"01102\",\r\n  \"alternate_ids\": [\r\n    \"01602\"\r\n  ],\r\n  \"type\": \"Enemy\",\r\n  \"class\": \"Neutral\",\r\n  \"traits\": \"Humanoid. Cultist. Silver Twilight.\",\r\n  \"weakness\": true,\r\n  \"basicWeaknessCount\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 527417,
                   "CustomDeck": {
@@ -2901,7 +2900,7 @@
                   "Nickname": "Knowledge is Power",
                   "GMNotes": "{\r\n  \"id\": \"05231\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Seeker\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Insight.\",\r\n  \"willpowerIcons\": 1,\r\n  \"intellectIcons\": 1,\r\n  \"cycle\": \"The Circle Undone\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 293215,
                   "CustomDeck": {
@@ -2933,7 +2932,7 @@
                   "Nickname": "Knowledge is Power",
                   "GMNotes": "{\r\n  \"id\": \"05231\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Seeker\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Insight.\",\r\n  \"willpowerIcons\": 1,\r\n  \"intellectIcons\": 1,\r\n  \"cycle\": \"The Circle Undone\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 293215,
                   "CustomDeck": {
@@ -2966,7 +2965,7 @@
               },
               "Nickname": "Madam Holly - Opening Hand",
               "Tags": [
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "Hands": false,
               "DeckIDs": [
@@ -3022,7 +3021,7 @@
                   "Nickname": "Parallel Fates (2)",
                   "GMNotes": "{\r\n  \"id\": \"08066\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 0,\r\n  \"level\": 2,\r\n  \"traits\": \"Augury.\",\r\n  \"willpowerIcons\": 1,\r\n  \"wildIcons\": 1,\r\n  \"cycle\": \"Edge of the Earth\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 379056,
                   "CustomDeck": {
@@ -3054,7 +3053,7 @@
                   "Nickname": "Parallel Fates (2)",
                   "GMNotes": "{\r\n  \"id\": \"08066\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 0,\r\n  \"level\": 2,\r\n  \"traits\": \"Augury.\",\r\n  \"willpowerIcons\": 1,\r\n  \"wildIcons\": 1,\r\n  \"cycle\": \"Edge of the Earth\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 379056,
                   "CustomDeck": {
@@ -3086,7 +3085,7 @@
                   "Nickname": "Premonition",
                   "GMNotes": "{\r\n  \"id\": \"04199\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Augury.\",\r\n  \"intellectIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"The Forgotten Age\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 276300,
                   "CustomDeck": {
@@ -3118,7 +3117,7 @@
                   "Nickname": "Ward of Protection (2)",
                   "GMNotes": "{\r\n  \"id\": \"03270\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 1,\r\n  \"level\": 2,\r\n  \"traits\": \"Spell. Spirit.\",\r\n  \"wildIcons\": 1,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 230341,
                   "CustomDeck": {
@@ -3152,7 +3151,7 @@
               "Nickname": "Madam Holly - Start in Play",
               "Tags": [
                 "Asset",
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "Hands": false,
               "DeckIDs": [
@@ -3198,7 +3197,7 @@
                   "GMNotes": "{\r\n  \"id\": \"50007\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 0,\r\n  \"level\": 2,\r\n  \"traits\": \"Talent.\",\r\n  \"willpowerIcons\": 2,\r\n  \"intellectIcons\": 2,\r\n  \"cycle\": \"Return to the Night of the Zealot\"\r\n}\r",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 230340,
                   "CustomDeck": {
@@ -3231,7 +3230,7 @@
                   "GMNotes": "{\r\n  \"id\": \"06158\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Hand\",\r\n  \"class\": \"Seeker\",\r\n  \"cost\": 3,\r\n  \"level\": 2,\r\n  \"traits\": \"Item. Tome.\",\r\n  \"willpowerIcons\": 1,\r\n  \"intellectIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 3,\r\n      \"type\": \"Secret\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"The Dream-Eaters\"\r\n}\r",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 379930,
                   "CustomDeck": {
@@ -3302,7 +3301,7 @@
               "GMNotes": "{\n  \"id\": \"01001\",\n  \"type\": \"Investigator\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Performer. Socialite.\",\n  \"willpowerIcons\": 3,\n  \"intellectIcons\": 4,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 2,\n  \"cycle\": \"Standalone\",\n  \"extraToken\": \"Reaction\"\n}",
               "Tags": [
                 "Investigator",
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "CardID": 301200,
               "CustomDeck": {
@@ -5023,10 +5022,10 @@
       "Transform": {
         "posX": 13.1644,
         "posY": 1.66188049,
-        "posZ": -31.1502018,
-        "rotX": -3.34552759e-08,
+        "posZ": -31.1502,
+        "rotX": -3.88812751e-08,
         "rotY": 270.0216,
-        "rotZ": -4.75574566e-08,
+        "rotZ": 1.20833041e-08,
         "scaleX": 5.510745,
         "scaleY": 0.360763043,
         "scaleZ": 8.266118
@@ -5089,7 +5088,7 @@
               "Nickname": "Madam Holly - Deck",
               "Tags": [
                 "Asset",
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "Hands": false,
               "DeckIDs": [
@@ -5160,7 +5159,7 @@
                   "GMNotes": "{\r\n  \"id\": \"01058\",\r\n  \"alternate_ids\": [\r\n    \"01558\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Talent.\",\r\n  \"intellectIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 4,\r\n      \"type\": \"Secret\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"Core\"\r\n}\r",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 230316,
                   "CustomDeck": {
@@ -5193,7 +5192,7 @@
                   "GMNotes": "{\r\n  \"id\": \"01058\",\r\n  \"alternate_ids\": [\r\n    \"01558\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Talent.\",\r\n  \"intellectIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 4,\r\n      \"type\": \"Secret\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"Core\"\r\n}\r",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 230316,
                   "CustomDeck": {
@@ -5226,7 +5225,7 @@
                   "GMNotes": "{\r\n  \"id\": \"02030\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Arcane\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Spell.\",\r\n  \"willpowerIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 3,\r\n      \"type\": \"Charge\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"The Dunwich Legacy\"\r\n}\r",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 230322,
                   "CustomDeck": {
@@ -5258,7 +5257,7 @@
                   "Nickname": "Astral Travel",
                   "GMNotes": "{\r\n  \"id\": \"03034\",\r\n  \"alternate_ids\": [\r\n    \"60413\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 3,\r\n  \"level\": 0,\r\n  \"traits\": \"Spell.\",\r\n  \"willpowerIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 230312,
                   "CustomDeck": {
@@ -5291,7 +5290,7 @@
                   "GMNotes": "{\r\n  \"id\": \"60407\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Arcane\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 3,\r\n  \"level\": 0,\r\n  \"traits\": \"Spell.\",\r\n  \"combatIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 4,\r\n      \"type\": \"Charge\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"Investigator Packs\"\r\n}\r",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 538705,
                   "CustomDeck": {
@@ -5323,7 +5322,7 @@
                   "Nickname": "Drawn to the Flame",
                   "GMNotes": "{\r\n  \"id\": \"01064\",\r\n  \"alternate_ids\": [\r\n    \"01564\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Insight.\",\r\n  \"willpowerIcons\": 1,\r\n  \"intellectIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 230304,
                   "CustomDeck": {
@@ -5356,7 +5355,7 @@
                   "Description": "Enemy",
                   "GMNotes": "{\r\n  \"id\": \"01102\",\r\n  \"alternate_ids\": [\r\n    \"01602\"\r\n  ],\r\n  \"type\": \"Enemy\",\r\n  \"class\": \"Neutral\",\r\n  \"traits\": \"Humanoid. Cultist. Silver Twilight.\",\r\n  \"weakness\": true,\r\n  \"basicWeaknessCount\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 527417,
                   "CustomDeck": {
@@ -5388,7 +5387,7 @@
                   "Nickname": "Knowledge is Power",
                   "GMNotes": "{\r\n  \"id\": \"05231\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Seeker\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Insight.\",\r\n  \"willpowerIcons\": 1,\r\n  \"intellectIcons\": 1,\r\n  \"cycle\": \"The Circle Undone\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 293215,
                   "CustomDeck": {
@@ -5420,7 +5419,7 @@
                   "Nickname": "Knowledge is Power",
                   "GMNotes": "{\r\n  \"id\": \"05231\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Seeker\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Insight.\",\r\n  \"willpowerIcons\": 1,\r\n  \"intellectIcons\": 1,\r\n  \"cycle\": \"The Circle Undone\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 293215,
                   "CustomDeck": {
@@ -5453,7 +5452,7 @@
               },
               "Nickname": "Madam Holly - Opening Hand",
               "Tags": [
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "Hands": false,
               "DeckIDs": [
@@ -5509,7 +5508,7 @@
                   "Nickname": "Parallel Fates (2)",
                   "GMNotes": "{\r\n  \"id\": \"08066\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 0,\r\n  \"level\": 2,\r\n  \"traits\": \"Augury.\",\r\n  \"willpowerIcons\": 1,\r\n  \"wildIcons\": 1,\r\n  \"cycle\": \"Edge of the Earth\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 379056,
                   "CustomDeck": {
@@ -5541,7 +5540,7 @@
                   "Nickname": "Parallel Fates (2)",
                   "GMNotes": "{\r\n  \"id\": \"08066\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 0,\r\n  \"level\": 2,\r\n  \"traits\": \"Augury.\",\r\n  \"willpowerIcons\": 1,\r\n  \"wildIcons\": 1,\r\n  \"cycle\": \"Edge of the Earth\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 379056,
                   "CustomDeck": {
@@ -5573,7 +5572,7 @@
                   "Nickname": "Premonition",
                   "GMNotes": "{\r\n  \"id\": \"04199\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Augury.\",\r\n  \"intellectIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"The Forgotten Age\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 276300,
                   "CustomDeck": {
@@ -5605,7 +5604,7 @@
                   "Nickname": "Ward of Protection (2)",
                   "GMNotes": "{\r\n  \"id\": \"03270\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 1,\r\n  \"level\": 2,\r\n  \"traits\": \"Spell. Spirit.\",\r\n  \"wildIcons\": 1,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 230341,
                   "CustomDeck": {
@@ -5639,7 +5638,7 @@
               "Nickname": "Madam Holly - Start in Play",
               "Tags": [
                 "Asset",
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "Hands": false,
               "DeckIDs": [
@@ -5685,7 +5684,7 @@
                   "GMNotes": "{\r\n  \"id\": \"50007\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Mystic\",\r\n  \"cost\": 0,\r\n  \"level\": 2,\r\n  \"traits\": \"Talent.\",\r\n  \"willpowerIcons\": 2,\r\n  \"intellectIcons\": 2,\r\n  \"cycle\": \"Return to the Night of the Zealot\"\r\n}\r",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 230340,
                   "CustomDeck": {
@@ -5718,7 +5717,7 @@
                   "GMNotes": "{\r\n  \"id\": \"06158\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Hand\",\r\n  \"class\": \"Seeker\",\r\n  \"cost\": 3,\r\n  \"level\": 2,\r\n  \"traits\": \"Item. Tome.\",\r\n  \"willpowerIcons\": 1,\r\n  \"intellectIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 3,\r\n      \"type\": \"Secret\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"The Dream-Eaters\"\r\n}\r",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 379930,
                   "CustomDeck": {
@@ -5789,7 +5788,7 @@
               "GMNotes": "{\n  \"id\": \"01001\",\n  \"type\": \"Investigator\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Performer. Socialite.\",\n  \"willpowerIcons\": 3,\n  \"intellectIcons\": 4,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 2,\n  \"cycle\": \"Standalone\",\n  \"extraToken\": \"Reaction\"\n}",
               "Tags": [
                 "Investigator",
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "CardID": 301200,
               "CustomDeck": {
@@ -6116,7 +6115,7 @@
               },
               "Nickname": "Sharon - Deck",
               "Tags": [
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "Hands": false,
               "DeckIDs": [
@@ -6184,7 +6183,7 @@
                   "Nickname": "Improvised Weapon",
                   "GMNotes": "{\r\n  \"id\": \"04033\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Tactic. Improvised.\",\r\n  \"cycle\": \"The Forgotten Age\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368811,
                   "CustomDeck": {
@@ -6216,7 +6215,7 @@
                   "Nickname": "Improvised Weapon",
                   "GMNotes": "{\r\n  \"id\": \"04033\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Tactic. Improvised.\",\r\n  \"cycle\": \"The Forgotten Age\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368811,
                   "CustomDeck": {
@@ -6249,7 +6248,7 @@
                   "Description": "Basic Weakness",
                   "GMNotes": "{\r\n  \"id\": \"51011\",\r\n  \"type\": \"Treachery\",\r\n  \"class\": \"Neutral\",\r\n  \"traits\": \"Pact. Mystery.\",\r\n  \"weakness\": true,\r\n  \"basicWeaknessCount\": 2,\r\n  \"cycle\": \"Return to The Dunwich Legacy\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 527419,
                   "CustomDeck": {
@@ -6281,7 +6280,7 @@
                   "Nickname": "Elusive",
                   "GMNotes": "{\r\n  \"id\": \"01050\",\r\n  \"alternate_ids\": [\r\n    \"01550\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Rogue\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Tactic.\",\r\n  \"intellectIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368712,
                   "CustomDeck": {
@@ -6313,7 +6312,7 @@
                   "Nickname": "Unexpected Courage",
                   "GMNotes": "{\r\n  \"id\": \"01593\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Neutral\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"wildIcons\": 2,\r\n  \"cycle\": \"Core\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 587212,
                   "CustomDeck": {
@@ -6345,7 +6344,7 @@
                   "Nickname": "Lucky!",
                   "GMNotes": "{\r\n  \"id\": \"01080\",\r\n  \"alternate_ids\": [\r\n    \"01580\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Fortune.\",\r\n  \"cycle\": \"Core\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368810,
                   "CustomDeck": {
@@ -6377,7 +6376,7 @@
                   "Nickname": "Lucky!",
                   "GMNotes": "{\r\n  \"id\": \"01080\",\r\n  \"alternate_ids\": [\r\n    \"01580\"\r\n  ],\r\n  \"type\": \"Event\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 1,\r\n  \"level\": 0,\r\n  \"traits\": \"Fortune.\",\r\n  \"cycle\": \"Core\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368810,
                   "CustomDeck": {
@@ -6410,7 +6409,7 @@
               },
               "Nickname": "Sharon - Opening Hand",
               "Tags": [
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "Hands": false,
               "DeckIDs": [
@@ -6466,7 +6465,7 @@
                   "Nickname": "Trial by Fire",
                   "GMNotes": "{\r\n  \"id\": \"05281\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 3,\r\n  \"level\": 0,\r\n  \"traits\": \"Spirit.\",\r\n  \"wildIcons\": 1,\r\n  \"cycle\": \"The Circle Undone\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 374418,
                   "CustomDeck": {
@@ -6499,7 +6498,7 @@
                   "GMNotes": "{\r\n  \"id\": \"08073\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Item.\",\r\n  \"agilityIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 3,\r\n      \"type\": \"Supply\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"Edge of the Earth\"\r\n}\r",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 378902,
                   "CustomDeck": {
@@ -6531,7 +6530,7 @@
                   "Nickname": "Guts",
                   "GMNotes": "{\r\n  \"id\": \"01089\",\r\n  \"alternate_ids\": [\r\n    \"01589\"\r\n  ],\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Neutral\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"willpowerIcons\": 2,\r\n  \"cycle\": \"Core\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368500,
                   "CustomDeck": {
@@ -6564,7 +6563,7 @@
                   "GMNotes": "{\r\n  \"id\": \"08081\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 0,\r\n  \"level\": 3,\r\n  \"traits\": \"Talent. Composure.\",\r\n  \"willpowerIcons\": 2,\r\n  \"intellectIcons\": 2,\r\n  \"cycle\": \"Edge of the Earth\"\r\n}\r",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 378910,
                   "CustomDeck": {
@@ -6598,7 +6597,7 @@
               "Nickname": "Sharon - Start in Play",
               "Tags": [
                 "Asset",
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "Hands": false,
               "DeckIDs": [
@@ -6645,7 +6644,7 @@
                   "GMNotes": "{\r\n  \"id\": \"05036\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 3,\r\n  \"level\": 0,\r\n  \"traits\": \"Item. Clothing. Footwear.\",\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"The Circle Undone\"\r\n}\r",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 274608,
                   "CustomDeck": {
@@ -6678,7 +6677,7 @@
                   "GMNotes": "{\r\n  \"id\": \"60520\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Accessory\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 0,\r\n  \"level\": 1,\r\n  \"traits\": \"Item. Charm.\",\r\n  \"willpowerIcons\": 1,\r\n  \"cycle\": \"Investigator Packs\"\r\n}\r",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 550818,
                   "CustomDeck": {
@@ -6711,7 +6710,7 @@
                   "GMNotes": "{\r\n  \"id\": \"60511\",\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Survivor\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Talent.\",\r\n  \"combatIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"Investigator Packs\"\r\n}\r",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 550809,
                   "CustomDeck": {
@@ -6785,7 +6784,7 @@
               "GMNotes": "{\n  \"id\": \"01001\",\n  \"type\": \"Investigator\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Assistant. Child.\",\n  \"willpowerIcons\": 4,\n  \"intellectIcons\": 2,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 3,\n  \"cycle\": \"Standalone\",\n  \"extraToken\": \"Reaction\"\n}",
               "Tags": [
                 "Investigator",
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "CardID": 301000,
               "CustomDeck": {
@@ -6882,7 +6881,7 @@
               "Nickname": "",
               "Tags": [
                 "Asset",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "Hands": false,
@@ -6949,7 +6948,7 @@
                   "GMNotes": "{\n  \"id\": \"LNM1a\",\n  \"type\": \"Asset\",\n  \"traits\": \"Dream. Madness. Mystery.\",\n  \"permanent\": true,\n  \"startsInPlay\": true,\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 291200,
@@ -6983,7 +6982,7 @@
                   "GMNotes": "{\n  \"id\": \"LNM1a\",\n  \"type\": \"Asset\",\n  \"traits\": \"Dream. Madness. Mystery.\",\n  \"permanent\": true,\n  \"startsInPlay\": true,\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 291100,
@@ -7017,7 +7016,7 @@
                   "GMNotes": "{\n  \"id\": \"LNM1a\",\n  \"type\": \"Asset\",\n  \"traits\": \"Dream. Madness. Mystery.\",\n  \"permanent\": true,\n  \"startsInPlay\": true,\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 291300,
@@ -7051,7 +7050,7 @@
                   "GMNotes": "{\n  \"id\": \"LNM1a\",\n  \"type\": \"Asset\",\n  \"traits\": \"Dream. Madness. Mystery.\",\n  \"permanent\": true,\n  \"startsInPlay\": true,\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 291000,
@@ -7142,7 +7141,7 @@
               },
               "Nickname": "Mr Tiddles - deck",
               "Tags": [
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "Hands": false,
               "DeckIDs": [
@@ -7221,7 +7220,7 @@
                   "Nickname": "Run For Your Life",
                   "GMNotes": "{\r\n  \"id\": \"03119\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Neutral\",\r\n  \"level\": 0,\r\n  \"traits\": \"Desperate.\",\r\n  \"agilityIcons\": 4,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368505,
                   "CustomDeck": {
@@ -7253,7 +7252,7 @@
                   "Nickname": "Run For Your Life",
                   "GMNotes": "{\r\n  \"id\": \"03119\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Neutral\",\r\n  \"level\": 0,\r\n  \"traits\": \"Desperate.\",\r\n  \"agilityIcons\": 4,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368505,
                   "CustomDeck": {
@@ -7285,7 +7284,7 @@
                   "Nickname": "The Eye of Truth (5)",
                   "GMNotes": "{\r\n  \"id\": \"06325\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Seeker\",\r\n  \"level\": 5,\r\n  \"traits\": \"Spell. Practiced.\",\r\n  \"wildIcons\": 4,\r\n  \"cycle\": \"The Dream-Eaters\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 448840,
                   "CustomDeck": {
@@ -7317,7 +7316,7 @@
                   "Nickname": "Seal of the Elder Sign (5)",
                   "GMNotes": "{\r\n  \"id\": \"03312\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Mystic\",\r\n  \"level\": 5,\r\n  \"traits\": \"Spell. Expert.\",\r\n  \"wildIcons\": 1,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 230359,
                   "CustomDeck": {
@@ -7349,7 +7348,7 @@
                   "Nickname": "The 13th Vision",
                   "GMNotes": "{\r\n  \"id\": \"05041\",\r\n  \"type\": \"Treachery\",\r\n  \"class\": \"Neutral\",\r\n  \"traits\": \"Omen.\",\r\n  \"weakness\": true,\r\n  \"basicWeaknessCount\": 2,\r\n  \"cycle\": \"The Circle Undone\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 290321,
                   "CustomDeck": {
@@ -7381,7 +7380,7 @@
                   "Nickname": "Guts",
                   "GMNotes": "{\r\n  \"id\": \"01089\",\r\n  \"alternate_ids\": [\r\n    \"01589\"\r\n  ],\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Neutral\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"willpowerIcons\": 2,\r\n  \"cycle\": \"Core\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368500,
                   "CustomDeck": {
@@ -7413,7 +7412,7 @@
                   "Nickname": "Guts",
                   "GMNotes": "{\r\n  \"id\": \"01089\",\r\n  \"alternate_ids\": [\r\n    \"01589\"\r\n  ],\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Neutral\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"willpowerIcons\": 2,\r\n  \"cycle\": \"Core\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368500,
                   "CustomDeck": {
@@ -7445,7 +7444,7 @@
                   "Nickname": "Narrow Escape",
                   "GMNotes": "{\r\n  \"id\": \"03267\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Rogue\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Fortune.\",\r\n  \"agilityIcons\": 2,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368708,
                   "CustomDeck": {
@@ -7477,7 +7476,7 @@
                   "Nickname": "Narrow Escape",
                   "GMNotes": "{\r\n  \"id\": \"03267\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Rogue\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Fortune.\",\r\n  \"agilityIcons\": 2,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368708,
                   "CustomDeck": {
@@ -7510,7 +7509,7 @@
               },
               "Nickname": "Mr Tiddles - Opening Hand",
               "Tags": [
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "Hands": false,
               "DeckIDs": [
@@ -7578,7 +7577,7 @@
                   "Nickname": "Able Bodied",
                   "GMNotes": "{\r\n  \"id\": \"05038\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Survivor\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"combatIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"The Circle Undone\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 274606,
                   "CustomDeck": {
@@ -7610,7 +7609,7 @@
                   "Nickname": "Able Bodied",
                   "GMNotes": "{\r\n  \"id\": \"05038\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Survivor\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"combatIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"The Circle Undone\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 274606,
                   "CustomDeck": {
@@ -7642,7 +7641,7 @@
                   "Nickname": "Think on Your Feet (2)",
                   "GMNotes": "{\r\n  \"id\": \"51006\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Rogue\",\r\n  \"cost\": 0,\r\n  \"level\": 2,\r\n  \"traits\": \"Trick.\",\r\n  \"intellectIcons\": 1,\r\n  \"agilityIcons\": 2,\r\n  \"cycle\": \"Return to The Dunwich Legacy\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 315303,
                   "CustomDeck": {
@@ -7674,7 +7673,7 @@
                   "Nickname": "Helping Hand",
                   "GMNotes": "{\r\n  \"id\": \"09031\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Guardian\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"cycle\": \"The Scarlet Keys\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 917424,
                   "CustomDeck": {
@@ -7706,7 +7705,7 @@
                   "Nickname": "Helping Hand",
                   "GMNotes": "{\r\n  \"id\": \"09031\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Guardian\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"cycle\": \"The Scarlet Keys\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 917424,
                   "CustomDeck": {
@@ -7738,7 +7737,7 @@
                   "Nickname": "Perception",
                   "GMNotes": "{\r\n  \"id\": \"01090\",\r\n  \"alternate_ids\": [\r\n    \"01590\"\r\n  ],\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Neutral\",\r\n  \"level\": 0,\r\n  \"traits\": \"Practiced.\",\r\n  \"intellectIcons\": 2,\r\n  \"cycle\": \"Core\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368506,
                   "CustomDeck": {
@@ -7770,7 +7769,7 @@
                   "Nickname": "Perception",
                   "GMNotes": "{\r\n  \"id\": \"01090\",\r\n  \"alternate_ids\": [\r\n    \"01590\"\r\n  ],\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Neutral\",\r\n  \"level\": 0,\r\n  \"traits\": \"Practiced.\",\r\n  \"intellectIcons\": 2,\r\n  \"cycle\": \"Core\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368506,
                   "CustomDeck": {
@@ -7841,7 +7840,7 @@
               "GMNotes": "{\n  \"id\": \"01001\",\n  \"type\": \"Investigator\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Blessed. Cat.\",\n  \"willpowerIcons\": 4,\n  \"intellectIcons\": 0,\n  \"combatIcons\": 1,\n  \"agilityIcons\": 5,\n  \"cycle\": \"Standalone\",\n  \"extraToken\": \"Neutral\"\n}",
               "Tags": [
                 "Investigator",
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "CardID": 301100,
               "CustomDeck": {
@@ -9197,7 +9196,7 @@
               },
               "Nickname": "Franky Barnes - Deck",
               "Tags": [
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "Hands": false,
               "DeckIDs": [
@@ -9265,7 +9264,7 @@
                   "Nickname": "\"Let me handle this!\"",
                   "GMNotes": "{\r\n  \"id\": \"03022\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Spirit.\",\r\n  \"willpowerIcons\": 1,\r\n  \"combatIcons\": 1,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 226305,
                   "CustomDeck": {
@@ -9297,7 +9296,7 @@
                   "Nickname": "\"Let me handle this!\"",
                   "GMNotes": "{\r\n  \"id\": \"03022\",\r\n  \"type\": \"Event\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 0,\r\n  \"level\": 0,\r\n  \"traits\": \"Spirit.\",\r\n  \"willpowerIcons\": 1,\r\n  \"combatIcons\": 1,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 226305,
                   "CustomDeck": {
@@ -9329,7 +9328,7 @@
                   "Nickname": "Tinker",
                   "GMNotes": "{\n  \"id\": \"10028\",\n  \"type\": \"Event\",\n  \"class\": \"Guardian\",\n  \"cost\": 1,\n  \"level\": 0,\n  \"traits\": \"Insight. Upgrade.\",\n  \"intellectIcons\": 1,\n  \"agilityIcons\": 1,\n  \"cycle\": \"The Feast of Hemlock Vale\"\n}",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 917320,
                   "CustomDeck": {
@@ -9362,7 +9361,7 @@
                   "GMNotes": "{\r\n  \"id\": \"10020\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Accessory\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 3,\r\n  \"level\": 0,\r\n  \"traits\": \"Item. Tool.\",\r\n  \"intellectIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 3,\r\n      \"type\": \"Supply\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"The Feast of Hemlock Vale\"\r\n}\r",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 917312,
                   "CustomDeck": {
@@ -9395,7 +9394,7 @@
                   "Description": "Basic Weakness",
                   "GMNotes": "{\r\n  \"id\": \"60304\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Neutral\",\r\n  \"traits\": \"Flaw.\",\r\n  \"weakness\": true,\r\n  \"basicWeaknessCount\": 1,\r\n  \"cycle\": \"Investigator Packs\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 538602,
                   "CustomDeck": {
@@ -9427,7 +9426,7 @@
                   "Nickname": "\"Not without a fight!\"",
                   "GMNotes": "{\r\n  \"id\": \"03272\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Survivor\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"willpowerIcons\": 1,\r\n  \"combatIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368803,
                   "CustomDeck": {
@@ -9459,7 +9458,7 @@
                   "Nickname": "\"Not without a fight!\"",
                   "GMNotes": "{\r\n  \"id\": \"03272\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Survivor\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"willpowerIcons\": 1,\r\n  \"combatIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"cycle\": \"The Path to Carcosa\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 368803,
                   "CustomDeck": {
@@ -9492,7 +9491,7 @@
               },
               "Nickname": "Franky Barnes - Opening Hand",
               "Tags": [
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "Hands": false,
               "DeckIDs": [
@@ -9548,7 +9547,7 @@
                   "Nickname": "Steadfast",
                   "GMNotes": "{\r\n  \"id\": \"05022\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Guardian\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"willpowerIcons\": 1,\r\n  \"combatIcons\": 1,\r\n  \"cycle\": \"The Circle Undone\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 431006,
                   "CustomDeck": {
@@ -9580,7 +9579,7 @@
                   "Nickname": "Steadfast",
                   "GMNotes": "{\r\n  \"id\": \"05022\",\r\n  \"type\": \"Skill\",\r\n  \"class\": \"Guardian\",\r\n  \"level\": 0,\r\n  \"traits\": \"Innate.\",\r\n  \"willpowerIcons\": 1,\r\n  \"combatIcons\": 1,\r\n  \"cycle\": \"The Circle Undone\"\r\n}\r",
                   "Tags": [
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 431006,
                   "CustomDeck": {
@@ -9613,7 +9612,7 @@
                   "GMNotes": "{\r\n  \"id\": \"01029\",\r\n  \"alternate_ids\": [\r\n    \"01529\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Hand x2\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 5,\r\n  \"level\": 4,\r\n  \"traits\": \"Item. Weapon. Firearm.\",\r\n  \"combatIcons\": 2,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 2,\r\n      \"type\": \"Ammo\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"Core\"\r\n}\r",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 226357,
                   "CustomDeck": {
@@ -9646,7 +9645,7 @@
                   "GMNotes": "{\r\n  \"id\": \"08094\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Hand x2\",\r\n  \"class\": \"Guardian|Survivor\",\r\n  \"cost\": 3,\r\n  \"level\": 0,\r\n  \"traits\": \"Item. Tool. Weapon. Melee.\",\r\n  \"combatIcons\": 1,\r\n  \"cycle\": \"Edge of the Earth\"\r\n}\r",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 378923,
                   "CustomDeck": {
@@ -9680,7 +9679,7 @@
               "Nickname": "Franky Barnes - Start in Play",
               "Tags": [
                 "Asset",
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "Hands": false,
               "DeckIDs": [
@@ -9727,7 +9726,7 @@
                   "GMNotes": "{\r\n  \"id\": \"09122\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Hand\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 2,\r\n  \"level\": 3,\r\n  \"traits\": \"Item. Tool.\",\r\n  \"intellectIcons\": 1,\r\n  \"agilityIcons\": 1,\r\n  \"uses\": [\r\n    {\r\n      \"count\": 4,\r\n      \"type\": \"Supply\",\r\n      \"token\": \"resource\"\r\n    }\r\n  ],\r\n  \"cycle\": \"The Scarlet Keys\"\r\n}\r",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 379146,
                   "CustomDeck": {
@@ -9760,7 +9759,7 @@
                   "GMNotes": "{\r\n  \"id\": \"09120\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Body\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Item. Clothing.\",\r\n  \"willpowerIcons\": 1,\r\n  \"cycle\": \"The Scarlet Keys\"\r\n}\r",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 379144,
                   "CustomDeck": {
@@ -9793,7 +9792,7 @@
                   "GMNotes": "{\r\n  \"id\": \"01017\",\r\n  \"alternate_ids\": [\r\n    \"60108\",\r\n    \"01517\"\r\n  ],\r\n  \"type\": \"Asset\",\r\n  \"class\": \"Guardian\",\r\n  \"cost\": 2,\r\n  \"level\": 0,\r\n  \"traits\": \"Talent.\",\r\n  \"willpowerIcons\": 1,\r\n  \"combatIcons\": 1,\r\n  \"cycle\": \"Core\"\r\n}\r",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 226323,
                   "CustomDeck": {
@@ -9864,7 +9863,7 @@
               "GMNotes": "{\n  \"id\": \"01001\",\n  \"type\": \"Investigator\",\n  \"class\": \"Neutral\",\n  \"traits\": \"Entrepreneur.\",\n  \"willpowerIcons\": 2,\n  \"intellectIcons\": 3,\n  \"combatIcons\": 3,\n  \"agilityIcons\": 2,\n  \"cycle\": \"Standalone\",\n  \"extraToken\": \"Reaction\"\n}",
               "Tags": [
                 "Investigator",
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "CardID": 301300,
               "CustomDeck": {
@@ -9898,7 +9897,7 @@
           "Nickname": "Repair Deck",
           "Tags": [
             "Asset",
-            "ScenarioCard",
+            "PlayerCard",
             "ScenarioCard"
           ],
           "Hands": false,
@@ -9984,7 +9983,7 @@
               "Nickname": "Spare Tools",
               "Tags": [
                 "Asset",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 292200,
@@ -10018,7 +10017,7 @@
               "GMNotes": "{\n    \"victory\": 1\n}",
               "Tags": [
                 "Asset",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 300400,
@@ -10052,7 +10051,7 @@
               "GMNotes": "{\n    \"victory\": 1\n}",
               "Tags": [
                 "Asset",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 300500,
@@ -10086,7 +10085,7 @@
               "GMNotes": "{\n    \"victory\": 1\n}",
               "Tags": [
                 "Asset",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 300200,
@@ -10120,7 +10119,7 @@
               "GMNotes": "{\n    \"victory\": 1\n}",
               "Tags": [
                 "Asset",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 300300,
@@ -10153,7 +10152,7 @@
               "Nickname": "Spare Tools",
               "Tags": [
                 "Asset",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 292100,
@@ -10313,12 +10312,12 @@
       "GUID": "388210",
       "Name": "Custom_Token",
       "Transform": {
-        "posX": -1.35300314,
+        "posX": -1.35300088,
         "posY": 1.581499,
         "posZ": -26.603,
-        "rotX": 7.10906036e-08,
+        "rotX": -1.74012371e-07,
         "rotY": 270.0,
-        "rotZ": 2.34555685e-07,
+        "rotZ": 2.01702264e-07,
         "scaleX": 3.1194644,
         "scaleY": 1.0,
         "scaleZ": 3.1194644
@@ -10347,44 +10346,15 @@
       "LuaScriptState": "{\"checks\":[],\"decals\":[],\"fields\":[{\"align\":3,\"array\":{\"x\":1,\"y\":1},\"distance\":{\"x\":1,\"y\":1},\"fieldColor\":{\"a\":1,\"b\":0.749004423618317,\"g\":0.749004423618317,\"r\":0.806620121002197},\"font\":\"100\",\"locked\":false,\"name\":\"\",\"pos\":{\"x\":-1.9,\"y\":2.9},\"role\":\"Normal Field\",\"size\":{\"x\":\"2000\",\"y\":\"2400\"},\"textColor\":{\"a\":1,\"b\":0,\"g\":0,\"r\":0},\"tooltip\":\"None\",\"value\":[\"Enter your campaign notes here...\"]},{\"align\":3,\"array\":{\"x\":1,\"y\":1},\"distance\":{\"x\":1,\"y\":1},\"fieldColor\":{\"a\":1,\"b\":0.749004423618317,\"g\":0.749004423618317,\"r\":0.806620121002197},\"font\":\"100\",\"locked\":false,\"name\":\"\",\"pos\":{\"x\":\"3.1\",\"y\":1.4},\"role\":\"Normal Field\",\"size\":{\"x\":\"1100\",\"y\":\"900\"},\"textColor\":{\"a\":1,\"b\":0,\"g\":0,\"r\":0},\"tooltip\":\"None\",\"value\":[\"\\nSkull x 2\\nCultist x 3\\nTablet x 0\\nElder Thing x 0\\n\\n(Blue) Elder Sign x 1\\n(Red)Tentacle x 1\"]},{\"align\":3,\"array\":{\"x\":1,\"y\":1},\"distance\":{\"x\":1,\"y\":1},\"fieldColor\":{\"a\":1,\"b\":0.749004423618317,\"g\":0.749004423618317,\"r\":0.806620121002197},\"font\":\"100\",\"locked\":false,\"name\":\"\",\"pos\":{\"x\":3.2,\"y\":4},\"role\":\"Normal Field\",\"size\":{\"x\":\"1500\",\"y\":\"500\"},\"textColor\":{\"a\":1,\"b\":0,\"g\":0,\"r\":0},\"tooltip\":\"None\",\"value\":[\"Those who have fallen...\"]},{\"align\":3,\"array\":{\"x\":1,\"y\":1},\"distance\":{\"x\":1,\"y\":1},\"fieldColor\":{\"a\":1,\"b\":0.749004423618317,\"g\":0.749004423618317,\"r\":0.806620121002197},\"font\":\"600\",\"locked\":false,\"name\":\"\",\"pos\":{\"x\":2.4,\"y\":5.9},\"role\":\"Normal Field\",\"size\":{\"x\":\"600\",\"y\":\"550\"},\"textColor\":{\"a\":1,\"b\":0,\"g\":0,\"r\":0},\"tooltip\":\"None\",\"value\":[\"0\"],\"vsum\":\"False\"},{\"align\":3,\"array\":{\"x\":\"4\",\"y\":\"2\"},\"distance\":{\"x\":\"2.2\",\"y\":\"0.5\"},\"fieldColor\":{\"a\":1,\"b\":0.749004423618317,\"g\":0.749004423618317,\"r\":0.806620121002197},\"font\":\"100\",\"locked\":false,\"name\":\"\",\"pos\":{\"x\":-3.4,\"y\":-5.3},\"role\":\"Normal Field\",\"size\":{\"x\":\"900\",\"y\":\"180\"},\"textColor\":{\"a\":1,\"b\":0,\"g\":0,\"r\":0},\"tooltip\":\"None\",\"value\":[\"Player...\",\"Player...\",\"Player...\",\"Player...\",\"Investigator...\",\"Investigator...\",\"Investigator...\",\"Investigator...\"]},{\"align\":3,\"array\":{\"x\":\"8\",\"y\":\"1\"},\"distance\":{\"x\":\"1.1\",\"y\":\"1\"},\"fieldColor\":{\"a\":1,\"b\":0.749004423618317,\"g\":0.749004423618317,\"r\":0.806620121002197},\"font\":\"150\",\"locked\":false,\"name\":\"\",\"pos\":{\"x\":\"-3.9\",\"y\":-3.4},\"role\":\"Normal Field\",\"size\":{\"x\":\"150\",\"y\":\"150\"},\"textColor\":{\"a\":1,\"b\":0,\"g\":0,\"r\":0},\"tooltip\":\"None\",\"value\":[\"0\",\"0\",\"0\",\"0\",\"0\",\"0\",\"0\",\"0\"]},{\"align\":3,\"array\":{\"x\":\"4\",\"y\":1},\"distance\":{\"x\":\"2.25\",\"y\":\"1\"},\"fieldColor\":{\"a\":1,\"b\":0.749004423618317,\"g\":0.749004423618317,\"r\":0.806620121002197},\"font\":\"100\",\"locked\":false,\"name\":\"\",\"pos\":{\"x\":-3.48,\"y\":-1.8},\"role\":\"Normal Field\",\"size\":{\"x\":\"900\",\"y\":\"900\"},\"textColor\":{\"a\":1,\"b\":0,\"g\":0,\"r\":0},\"tooltip\":\"None\",\"value\":[\"Campaign cards...\",\"Campaign cards...\",\"Campaign cards...\",\"Campaign cards...\"]},{\"align\":3,\"array\":{\"x\":\"4\",\"y\":1},\"distance\":{\"x\":\"2.3\",\"y\":1},\"fieldColor\":{\"a\":1,\"b\":0.749004423618317,\"g\":0.749004423618317,\"r\":0.806620121002197},\"font\":150,\"locked\":false,\"name\":\"\",\"pos\":{\"x\":-3.5,\"y\":-4.2},\"role\":\"Normal Field\",\"size\":{\"x\":\"300\",\"y\":\"150\"},\"textColor\":{\"a\":1,\"b\":0,\"g\":0,\"r\":0},\"tooltip\":\"None\",\"value\":[\"0\",\"0\",\"0\",\"0\"]}],\"flip\":\"False\",\"height\":\"0.1\",\"locks\":{\"checks\":false,\"decals\":false,\"fields\":false},\"scale\":{\"x\":0.32,\"y\":0.32},\"sheetLocked\":false}"
     },
     {
-      "GUID": "3b06e7",
-      "Name": "Custom_PDF",
-      "Transform": {
-        "posX": 5.875998,
-        "posY": 1.48149931,
-        "posZ": 54.847,
-        "rotX": 2.21343655e-08,
-        "rotY": 270.0,
-        "rotZ": -5.50505241e-08,
-        "scaleX": 3.97412038,
-        "scaleY": 1.0,
-        "scaleZ": 3.97412038
-      },
-      "Nickname": "",
-      "ColorDiffuse": {
-        "r": 1.0,
-        "g": 1.0,
-        "b": 1.0
-      },
-      "HideWhenFaceDown": false,
-      "Hands": false,
-      "CustomPDF": {
-        "PDFUrl": "https://steamusercontent-a.akamaihd.net/ugc/11687219403013096757/575CE5257C274E623A873A3D2FB9AFBFF323374B/",
-        "PDFPassword": "",
-        "PDFPage": 0,
-        "PDFPageOffset": 0
-      }
-    },
-    {
       "GUID": "530ea8",
       "Name": "Custom_Model_Bag",
       "Transform": {
         "posX": 13.1644,
         "posY": 1.66188049,
         "posZ": 16.8498,
-        "rotX": -1.96015044e-08,
+        "rotX": 2.42901645e-08,
         "rotY": 270.0097,
-        "rotZ": -4.60519356e-09,
+        "rotZ": 6.8231345e-09,
         "scaleX": 5.510745,
         "scaleY": 0.360763043,
         "scaleZ": 8.266118
@@ -10482,7 +10452,7 @@
               "GMNotes": "{\n  \"id\": \"PKSm1a\",\n  \"type\": \"Asset\",\n  \"class\": \"Neutral\",\n  \"cost\": 3,\n  \"traits\": \"Ally. Police.\",\n  \"combatIcons\": 2,\n  \"cycle\": \"Standalone\"\n}",
               "Tags": [
                 "Asset",
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "CardID": 270500,
               "CustomDeck": {
@@ -12084,12 +12054,12 @@
       "GUID": "7c46b7",
       "Name": "Custom_Model_Bag",
       "Transform": {
-        "posX": 13.1643715,
+        "posX": 13.1644,
         "posY": 1.66188049,
-        "posZ": 8.84982,
-        "rotX": 3.92266131e-08,
-        "rotY": 270.0314,
-        "rotZ": -9.19896053e-08,
+        "posZ": 8.8498,
+        "rotX": 2.397926e-07,
+        "rotY": 270.0297,
+        "rotZ": -1.1081368e-07,
         "scaleX": 5.510746,
         "scaleY": 0.3607631,
         "scaleZ": 8.266122
@@ -14228,7 +14198,7 @@
               },
               "Nickname": "Colour of Sound Encounter set",
               "Tags": [
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "Hands": false,
@@ -14335,7 +14305,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 296000,
@@ -14369,7 +14339,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 296300,
@@ -14403,7 +14373,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 295700,
@@ -14437,7 +14407,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 295900,
@@ -14471,7 +14441,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 295600,
@@ -14505,7 +14475,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 296100,
@@ -14539,7 +14509,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 295800,
@@ -14573,7 +14543,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 296200,
@@ -15072,9 +15042,9 @@
         "posX": 13.1644,
         "posY": 1.66188037,
         "posZ": 24.8498,
-        "rotX": -1.73340347e-08,
+        "rotX": -9.180698e-08,
         "rotY": 270.0056,
-        "rotZ": -4.87841e-08,
+        "rotZ": 9.121704e-08,
         "scaleX": 5.51074648,
         "scaleY": 0.3607629,
         "scaleZ": 8.266118
@@ -17173,10 +17143,10 @@
       "Transform": {
         "posX": 13.1644,
         "posY": 1.66188049,
-        "posZ": 0.849799931,
-        "rotX": -3.38482877e-08,
+        "posZ": 0.8498,
+        "rotX": 9.30290653e-08,
         "rotY": 270.0264,
-        "rotZ": 4.9387876e-09,
+        "rotZ": 6.0258e-08,
         "scaleX": 5.510747,
         "scaleY": 0.360763043,
         "scaleZ": 8.266117
@@ -17773,7 +17743,7 @@
           "Description": "Out for Blood",
           "Tags": [
             "Asset",
-            "ScenarioCard"
+            "PlayerCard"
           ],
           "CardID": 276300,
           "CustomDeck": {
@@ -18094,7 +18064,7 @@
           "GMNotes": "{\r\n  \"id\": \"Mn1a\",\r\n  \"type\": \"Asset\",\r\n  \"slot\": \"Ally\",\r\n  \"class\": \"Neutral\",\r\n  \"cost\": 6,\r\n  \"traits\": \"Ally. Veteran.\",\r\n  \"combatIcons\": 1,\r\n  \"wildIcons\": 1\n}",
           "Tags": [
             "Asset",
-            "ScenarioCard"
+            "PlayerCard"
           ],
           "CardID": 276200,
           "CustomDeck": {
@@ -19361,7 +19331,7 @@
               "Nickname": "",
               "Tags": [
                 "Asset",
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "Hands": false,
               "DeckIDs": [
@@ -19428,7 +19398,7 @@
                   "GMNotes": "{\n  \"id\": \"Scrd1a\",\n  \"type\": \"Asset\",\n  \"traits\": \"Injury.\",\n  \"permanent\": true,\n  \"startsInPlay\": true,\n  \"weakness\": true\n}",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 276100,
                   "CustomDeck": {
@@ -19462,7 +19432,7 @@
                   "GMNotes": "{\n  \"id\": \"Scrd1a\",\n  \"type\": \"Asset\",\n  \"traits\": \"Injury.\",\n  \"permanent\": true,\n  \"startsInPlay\": true,\n  \"weakness\": true\n}",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 276000,
                   "CustomDeck": {
@@ -19496,7 +19466,7 @@
                   "GMNotes": "{\n  \"id\": \"Scrd1a\",\n  \"type\": \"Asset\",\n  \"traits\": \"Injury.\",\n  \"permanent\": true,\n  \"startsInPlay\": true,\n  \"weakness\": true\n}",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 275900,
                   "CustomDeck": {
@@ -19530,7 +19500,7 @@
                   "GMNotes": "{\n  \"id\": \"Scrd1a\",\n  \"type\": \"Asset\",\n  \"traits\": \"Injury.\",\n  \"permanent\": true,\n  \"startsInPlay\": true,\n  \"weakness\": true\n}",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 275800,
                   "CustomDeck": {
@@ -19985,7 +19955,7 @@
           "Description": "Roughed Up",
           "Tags": [
             "Asset",
-            "ScenarioCard"
+            "PlayerCard"
           ],
           "CardID": 276400,
           "CustomDeck": {
@@ -20044,12 +20014,12 @@
       "GUID": "ba0841",
       "Name": "Custom_Model_Bag",
       "Transform": {
-        "posX": 13.1644011,
+        "posX": 13.1644,
         "posY": 1.66188037,
         "posZ": -7.1502,
-        "rotX": -6.881956e-08,
+        "rotX": 4.437545e-08,
         "rotY": 270.0089,
-        "rotZ": 1.751532e-08,
+        "rotZ": 3.631024e-08,
         "scaleX": 5.51074648,
         "scaleY": 0.3607629,
         "scaleZ": 8.266118
@@ -20153,7 +20123,7 @@
               },
               "Nickname": "Colour of Sound Encounter set",
               "Tags": [
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "Hands": false,
@@ -20260,7 +20230,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 296000,
@@ -20294,7 +20264,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 296300,
@@ -20328,7 +20298,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 295700,
@@ -20362,7 +20332,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 295900,
@@ -20396,7 +20366,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 295600,
@@ -20430,7 +20400,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 296100,
@@ -20464,7 +20434,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 295800,
@@ -20498,7 +20468,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 296200,
@@ -20535,7 +20505,7 @@
               "GMNotes": "{\n  \"id\": \"PKSm1a\",\n  \"type\": \"Asset\",\n  \"class\": \"Neutral\",\n  \"cost\": 3,\n  \"traits\": \"Ally. Police.\",\n  \"combatIcons\": 2,\n  \"cycle\": \"Standalone\"\n}",
               "Tags": [
                 "Asset",
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "CardID": 270500,
               "CustomDeck": {
@@ -20569,7 +20539,7 @@
               "GMNotes": "{\n  \"id\": \"ShnMnW1a\",\n  \"traits\": \"Bystander.\",\n  \"victory\": 2,\n  \"cycle\": \"Standalone\"\n}",
               "Tags": [
                 "Asset",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 278600,
@@ -23070,9 +23040,9 @@
         "posX": 13.1644,
         "posY": 1.581499,
         "posZ": 32.8498,
-        "rotX": 6.33153752e-09,
+        "rotX": 1.678506e-08,
         "rotY": 270.0125,
-        "rotZ": -4.629422e-09,
+        "rotZ": 5.37895423e-11,
         "scaleX": 5.542862,
         "scaleY": 0.199999988,
         "scaleZ": 8.314293
@@ -23167,7 +23137,7 @@
               "Nickname": "",
               "Tags": [
                 "Asset",
-                "ScenarioCard"
+                "PlayerCard"
               ],
               "Hands": false,
               "DeckIDs": [
@@ -23244,7 +23214,7 @@
                   "GMNotes": "{\n  \"id\": \"ST5\",\n  \"type\": \"Asset\",\n  \"class\": \"Neutral\",\n  \"cost\": 0,\n  \"traits\": \"Item. Fated.\",\n  \"wildIcons\": 3,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 266700,
                   "CustomDeck": {
@@ -23278,7 +23248,7 @@
                   "GMNotes": "{\n  \"id\": \"ST4\",\n  \"type\": \"Asset\",\n  \"class\": \"Neutral\",\n  \"cost\": 0,\n  \"traits\": \"Item. Fated.\",\n  \"wildIcons\": 3,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 266800,
                   "CustomDeck": {
@@ -23312,7 +23282,7 @@
                   "GMNotes": "{\n  \"id\": \"ST3\",\n  \"type\": \"Asset\",\n  \"class\": \"Neutral\",\n  \"cost\": 0,\n  \"traits\": \"Item. Fated.\",\n  \"wildIcons\": 3,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 266600,
                   "CustomDeck": {
@@ -23346,7 +23316,7 @@
                   "GMNotes": "{\n  \"id\": \"ST2\",\n  \"type\": \"Asset\",\n  \"class\": \"Neutral\",\n  \"cost\": 0,\n  \"traits\": \"Item. Fated.\",\n  \"wildIcons\": 3,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 266500,
                   "CustomDeck": {
@@ -23380,7 +23350,7 @@
                   "GMNotes": "{\n  \"id\": \"ST1\",\n  \"type\": \"Asset\",\n  \"class\": \"Neutral\",\n  \"cost\": 0,\n  \"traits\": \"Item. Fated.\",\n  \"wildIcons\": 3,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
                     "Asset",
-                    "ScenarioCard"
+                    "PlayerCard"
                   ],
                   "CardID": 266400,
                   "CustomDeck": {
@@ -23494,9 +23464,9 @@
         "posX": 13.1644,
         "posY": 1.66188049,
         "posZ": -15.1502,
-        "rotX": -2.75751866e-08,
+        "rotX": 1.6822975e-08,
         "rotY": 270.0211,
-        "rotZ": -5.22149923e-09,
+        "rotZ": 1.04095967e-07,
         "scaleX": 5.510747,
         "scaleY": 0.360763043,
         "scaleZ": 8.266117
@@ -23569,7 +23539,7 @@
           "Nickname": "Mausolean Deck",
           "Tags": [
             "Location",
-            "ScenarioCard",
+            "PlayerCard",
             "ScenarioCard"
           ],
           "Hands": false,
@@ -23717,7 +23687,7 @@
               "GMNotes": "{\n  \"id\": \"02133\",\n  \"type\": \"Location\",\n  \"traits\": \"Ancient Mausolean. Dreamlands.\",\n  \"cycle\": \"Standalone\",\n  \"locationFront\": {\n    \"victory\": 1,\n    \"icons\": \"Star\",\n    \"connections\": \"Tilde|Heart|Tshape\",\n    \"uses\": [\n      {\n        \"count\": 2,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
               "Tags": [
                 "Location",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 286700,
@@ -23752,7 +23722,7 @@
               "GMNotes": "{\n  \"id\": \"02133\",\n  \"type\": \"Location\",\n  \"traits\": \"Ancient Mausolean. Dreamlands.\",\n  \"cycle\": \"Standalone\",\n  \"locationFront\": {\n    \"victory\": 1,\n    \"icons\": \"Star\",\n    \"connections\": \"Tilde|Heart|Tshape\",\n    \"uses\": [\n      {\n        \"count\": 2,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
               "Tags": [
                 "Location",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 286600,
@@ -23787,7 +23757,7 @@
               "GMNotes": "{\n  \"id\": \"02133\",\n  \"type\": \"Location\",\n  \"traits\": \"Ancient Mausolean. Dreamlands.\",\n  \"cycle\": \"Standalone\",\n  \"locationFront\": {\n    \"victory\": 1,\n    \"icons\": \"Star\",\n    \"connections\": \"Tilde|Heart|Tshape\",\n    \"uses\": [\n      {\n        \"count\": 2,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
               "Tags": [
                 "Location",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 286500,
@@ -23822,7 +23792,7 @@
               "GMNotes": "{\n  \"id\": \"02133\",\n  \"type\": \"Location\",\n  \"traits\": \"Ancient Mausolean. Dreamlands.\",\n  \"cycle\": \"Standalone\",\n  \"locationFront\": {\n    \"victory\": 1,\n    \"icons\": \"Halfmoon\",\n    \"connections\": \"Tilde|Diamond\",\n    \"uses\": [\n      {\n        \"count\": 1,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
               "Tags": [
                 "Location",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 286100,
@@ -23857,7 +23827,7 @@
               "GMNotes": "{\n  \"id\": \"02133\",\n  \"type\": \"Location\",\n  \"traits\": \"Ancient Mausolean. Dreamlands.\",\n  \"cycle\": \"Standalone\",\n  \"locationFront\": {\n    \"victory\": 1,\n    \"icons\": \"Heart\",\n    \"connections\": \"Hourglass|Tilde|Star\",\n    \"uses\": [\n      {\n        \"countPerInvestigator\": 3,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
               "Tags": [
                 "Location",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 286400,
@@ -23892,7 +23862,7 @@
               "GMNotes": "{\n  \"id\": \"02133\",\n  \"type\": \"Location\",\n  \"traits\": \"Ancient Mausolean. Dreamlands.\",\n  \"cycle\": \"Standalone\",\n  \"locationFront\": {\n    \"victory\": 1,\n    \"icons\": \"Halfmoon\",\n    \"connections\": \"Tilde|Diamond\",\n    \"uses\": [\n      {\n        \"count\": 1,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
               "Tags": [
                 "Location",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 286200,
@@ -23927,7 +23897,7 @@
               "GMNotes": "{\n  \"id\": \"02133\",\n  \"type\": \"Location\",\n  \"traits\": \"Ancient Mausolean. Dreamlands.\",\n  \"cycle\": \"Standalone\",\n  \"locationFront\": {\n    \"icons\": \"Hourglass\",\n    \"connections\": \"Heart|Diamond\",\n    \"uses\": [\n      {\n        \"count\": 1,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
               "Tags": [
                 "Location",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 285900,
@@ -23962,7 +23932,7 @@
               "GMNotes": "{\n  \"id\": \"02133\",\n  \"type\": \"Location\",\n  \"traits\": \"Ancient Mausolean. Dreamlands.\",\n  \"cycle\": \"Standalone\",\n  \"locationFront\": {\n    \"icons\": \"Hourglass\",\n    \"connections\": \"Heart|Diamond\",\n    \"uses\": [\n      {\n        \"count\": 1,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
               "Tags": [
                 "Location",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 285800,
@@ -23997,7 +23967,7 @@
               "GMNotes": "{\n  \"id\": \"02133\",\n  \"type\": \"Location\",\n  \"traits\": \"Ancient Mausolean. Dreamlands.\",\n  \"cycle\": \"Standalone\",\n  \"locationFront\": {\n    \"icons\": \"Hourglass\",\n    \"connections\": \"Heart|Diamond\",\n    \"uses\": [\n      {\n        \"count\": 1,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
               "Tags": [
                 "Location",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 285700,
@@ -24032,7 +24002,7 @@
               "GMNotes": "{\n  \"id\": \"02133\",\n  \"type\": \"Location\",\n  \"traits\": \"Ancient Mausolean. Dreamlands.\",\n  \"cycle\": \"Standalone\",\n  \"locationFront\": {\n    \"victory\": 1,\n    \"icons\": \"Tilde\",\n    \"connections\": \"Halfmoon|Heart|Star\",\n    \"uses\": [\n      {\n        \"countPerInvestigator\": 2,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
               "Tags": [
                 "Location",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 285600,
@@ -24067,7 +24037,7 @@
               "GMNotes": "{\n  \"id\": \"02133\",\n  \"type\": \"Location\",\n  \"traits\": \"Ancient Mausolean. Dreamlands.\",\n  \"cycle\": \"Standalone\",\n  \"locationFront\": {\n    \"victory\": 1,\n    \"icons\": \"Halfmoon\",\n    \"connections\": \"Tilde|Diamond\",\n    \"uses\": [\n      {\n        \"count\": 1,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
               "Tags": [
                 "Location",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 286300,
@@ -24102,7 +24072,7 @@
               "GMNotes": "{\n  \"id\": \"02133\",\n  \"type\": \"Location\",\n  \"traits\": \"Ancient Mausolean. Dreamlands.\",\n  \"cycle\": \"Standalone\",\n  \"locationFront\": {\n    \"icons\": \"Dash\",\n    \"connections\": \"Heart|Tilde|Diamond\",\n    \"uses\": [\n      {\n        \"count\": 0,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
               "Tags": [
                 "Location",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 286000,
@@ -24566,7 +24536,7 @@
           "Nickname": "Emerald Zar Deck",
           "Tags": [
             "Location",
-            "ScenarioCard",
+            "PlayerCard",
             "ScenarioCard"
           ],
           "Hands": false,
@@ -24714,7 +24684,7 @@
               "GMNotes": "{\n  \"id\": \"02133\",\n  \"type\": \"Location\",\n  \"traits\": \"Dreamlands. Emerald Zar.\",\n  \"cycle\": \"Standalone\",\n  \"locationFront\": {\n    \"icons\": \"Zar\",\n    \"connections\": \"Zar\",\n    \"uses\": [\n      {\n        \"countPerInvestigator\": 1,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
               "Tags": [
                 "Location",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 285500,
@@ -24749,7 +24719,7 @@
               "GMNotes": "{\n  \"id\": \"02133\",\n  \"type\": \"Location\",\n  \"traits\": \"Dreamlands. Emerald Zar.\",\n  \"cycle\": \"Standalone\",\n  \"locationFront\": {\n    \"icons\": \"Zar\",\n    \"connections\": \"Zar\",\n    \"uses\": [\n      {\n        \"count\": 1,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
               "Tags": [
                 "Location",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 284800,
@@ -24784,7 +24754,7 @@
               "GMNotes": "{\n  \"id\": \"02133\",\n  \"type\": \"Location\",\n  \"traits\": \"Dreamlands. Emerald Zar.\",\n  \"cycle\": \"Standalone\",\n  \"locationFront\": {\n    \"icons\": \"Zar\",\n    \"connections\": \"Zar\",\n    \"uses\": [\n      {\n        \"count\": 1,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
               "Tags": [
                 "Location",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 284900,
@@ -24819,7 +24789,7 @@
               "GMNotes": "{\n  \"id\": \"02133\",\n  \"type\": \"Location\",\n  \"traits\": \"Dreamlands. Emerald Zar.\",\n  \"cycle\": \"Standalone\",\n  \"locationFront\": {\n    \"icons\": \"Zar\",\n    \"connections\": \"Zar\",\n    \"uses\": [\n      {\n        \"count\": 1,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
               "Tags": [
                 "Location",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 285000,
@@ -24854,7 +24824,7 @@
               "GMNotes": "{\n  \"id\": \"02133\",\n  \"type\": \"Location\",\n  \"traits\": \"Dreamlands. Emerald Zar.\",\n  \"cycle\": \"Standalone\",\n  \"locationFront\": {\n    \"icons\": \"Zar\",\n    \"connections\": \"Zar\",\n    \"uses\": [\n      {\n        \"countPerInvestigator\": 1,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
               "Tags": [
                 "Location",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 284600,
@@ -24889,7 +24859,7 @@
               "GMNotes": "{\n  \"id\": \"02133\",\n  \"type\": \"Location\",\n  \"traits\": \"Dreamlands. Emerald Zar.\",\n  \"cycle\": \"Standalone\",\n  \"locationFront\": {\n    \"icons\": \"Zar\",\n    \"connections\": \"Zar\",\n    \"uses\": [\n      {\n        \"count\": 1,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
               "Tags": [
                 "Location",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 285100,
@@ -24924,7 +24894,7 @@
               "GMNotes": "{\n  \"id\": \"02133\",\n  \"type\": \"Location\",\n  \"traits\": \"Dreamlands. Emerald Zar.\",\n  \"cycle\": \"Standalone\",\n  \"locationFront\": {\n    \"icons\": \"Zar\",\n    \"connections\": \"Zar\",\n    \"uses\": [\n      {\n        \"countPerInvestigator\": 1,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
               "Tags": [
                 "Location",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 285300,
@@ -24959,7 +24929,7 @@
               "GMNotes": "{\n  \"id\": \"02133\",\n  \"type\": \"Location\",\n  \"traits\": \"Dreamlands. Emerald Zar.\",\n  \"cycle\": \"Standalone\",\n  \"locationFront\": {\n    \"icons\": \"Zar\",\n    \"connections\": \"Zar\",\n    \"uses\": [\n      {\n        \"countPerInvestigator\": 1,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
               "Tags": [
                 "Location",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 285400,
@@ -24994,7 +24964,7 @@
               "GMNotes": "{\n  \"id\": \"02133\",\n  \"type\": \"Location\",\n  \"traits\": \"Dreamlands. Emerald Zar.\",\n  \"cycle\": \"Standalone\",\n  \"locationFront\": {\n    \"icons\": \"Zar\",\n    \"connections\": \"Zar\",\n    \"uses\": [\n      {\n        \"count\": 1,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
               "Tags": [
                 "Location",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 284500,
@@ -25029,7 +24999,7 @@
               "GMNotes": "{\n  \"id\": \"02133\",\n  \"type\": \"Location\",\n  \"traits\": \"Dreamlands. Emerald Zar.\",\n  \"cycle\": \"Standalone\",\n  \"locationFront\": {\n    \"icons\": \"Zar\",\n    \"connections\": \"Zar\",\n    \"uses\": [\n      {\n        \"count\": 1,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
               "Tags": [
                 "Location",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 285200,
@@ -25064,7 +25034,7 @@
               "GMNotes": "{\n  \"id\": \"02133\",\n  \"type\": \"Location\",\n  \"traits\": \"Dreamlands. Emerald Zar.\",\n  \"cycle\": \"Standalone\",\n  \"locationFront\": {\n    \"icons\": \"Zar\",\n    \"connections\": \"Zar\",\n    \"uses\": [\n      {\n        \"count\": 1,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
               "Tags": [
                 "Location",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 284400,
@@ -25099,7 +25069,7 @@
               "GMNotes": "{\n  \"id\": \"02133\",\n  \"type\": \"Location\",\n  \"traits\": \"Dreamlands. Emerald Zar.\",\n  \"cycle\": \"Standalone\",\n  \"locationFront\": {\n    \"icons\": \"Zar\",\n    \"connections\": \"Zar\",\n    \"uses\": [\n      {\n        \"countPerInvestigator\": 1,\n        \"type\": \"Clue\",\n        \"token\": \"clue\"\n      }\n    ]\n  }\n}",
               "Tags": [
                 "Location",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 284700,
@@ -26527,7 +26497,7 @@
               },
               "Nickname": "Colour of Sound Encounter set",
               "Tags": [
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "Hands": false,
@@ -26634,7 +26604,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 296000,
@@ -26668,7 +26638,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 296300,
@@ -26702,7 +26672,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 295700,
@@ -26736,7 +26706,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 295900,
@@ -26770,7 +26740,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 295600,
@@ -26804,7 +26774,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 296100,
@@ -26838,7 +26808,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 295800,
@@ -26872,7 +26842,7 @@
                   "Description": "Madness. Terror.",
                   "GMNotes": "{\n  \"id\": \"DoT1a\",\n  \"type\": \"Treachery\",\r\n  \"traits\": \"Madness. Terror.\",\n  \"weakness\": true,\n  \"cycle\": \"Standalone\"\n}",
                   "Tags": [
-                    "ScenarioCard",
+                    "PlayerCard",
                     "ScenarioCard"
                   ],
                   "CardID": 296200,
@@ -26907,7 +26877,7 @@
               "Nickname": "Sleeping Thomas",
               "Tags": [
                 "Asset",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 282200,
@@ -26942,7 +26912,7 @@
               "GMNotes": "{\n  \"id\": \"ShnMnW1a\",\n  \"traits\": \"Bystander.\",\n  \"victory\": 2,\n  \"cycle\": \"Standalone\"\n}",
               "Tags": [
                 "Asset",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 278600,
@@ -26975,7 +26945,7 @@
               "Nickname": "Electric Amulet",
               "Tags": [
                 "Asset",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 282400,
@@ -27008,7 +26978,7 @@
               "Nickname": "Occult Prayer",
               "Tags": [
                 "Asset",
-                "ScenarioCard",
+                "PlayerCard",
                 "ScenarioCard"
               ],
               "CardID": 282300,
@@ -27460,6 +27430,38 @@
           }
         }
       ]
+    },
+    {
+      "GUID": "ae06b3",
+      "Name": "Custom_PDF",
+      "Transform": {
+        "posX": 5.203012,
+        "posY": 1.48149943,
+        "posZ": 55.7599869,
+        "rotX": -3.553532e-08,
+        "rotY": 270.000061,
+        "rotZ": -6.110454e-08,
+        "scaleX": 4.03906155,
+        "scaleY": 1.0,
+        "scaleZ": 4.03906155
+      },
+      "Nickname": "",
+      "ColorDiffuse": {
+        "r": 1.0,
+        "g": 1.0,
+        "b": 1.0
+      },
+      "Tags": [
+        "CampaignGuide"
+      ],
+      "HideWhenFaceDown": false,
+      "Hands": false,
+      "CustomPDF": {
+        "PDFUrl": "https://steamusercontent-a.akamaihd.net/ugc/15567337983242809919/F728CF623C06F51E2034926767458889F7AC1E9F/",
+        "PDFPassword": "",
+        "PDFPage": 0,
+        "PDFPageOffset": 0
+      }
     }
   ]
 }
