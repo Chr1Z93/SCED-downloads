@@ -1,6 +1,12 @@
+local CoroutineLib         = require("util/CoroutineLib")
+local GUIDReferenceApi     = require("core/GUIDReferenceApi")
 local MythosAreaApi        = require("mythos/MythosAreaApi")
 local PlayAreaApi          = require("playarea/PlayAreaApi")
+local SearchLib            = require("util/SearchLib")
 local TokenSpawnTrackerApi = require("tokens/TokenSpawnTrackerApi")
+local VictoryDisplayApi    = require("mythos/VictoryDisplayApi")
+
+local trash                 = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
 
 FLOOD_BAG_GUID             = "fe6f38"
 FLOOD_OFFSET               = Vector(2, 0.2, -0.6)
@@ -106,108 +112,110 @@ function setup()
     deck.takeObject({
       index    = i,
       position = PlayAreaApi.gridToWorld(TT_POSITIONS[i]),
-      smooth   = false
+      smooth   = true
     })
   end
 
   completeSetup()
 end
 
-function setup_2(_, color, alt_click)
-  if DISABLED_2 then return end
-  if not alt_click and not WARNED then
-    broadcastToColor("Clean up first (see Act 1b), then click the Act 2 " ..
-      "Set Up button again. Right-click this button in the future to " ..
-      "skip this message.", color)
-    WARNED = true
-    return
+function setup_2()
+  function setup_2Coroutine()
+    CoroutineLib.yieldSeconds(0.5) -- slight delay after clicking
+    if DISABLED_2 then return end
+    cleanZone()
+    CoroutineLib.yieldSeconds(0.5)
+    DISABLED_2 = true
+
+    local numPlayers = PlayAreaApi.getInvestigatorCount()
+    local dagonPosition, hydraPosition
+    local lines = {}
+
+    if numPlayers == 4 then
+      dagonPosition = "F3"
+      hydraPosition = "D3"
+      sanctumPositions = { "B1", "H1", "C2", "G2" }
+      yhanthleiPositions = { "C1", "D1", "E1", "F1", "G1", "E2", "E3" }
+      drawConnection("B1", "H1", lines)
+      drawConnection("gateway", "E3", lines)
+      drawConnection("D3", "F3", lines)
+      drawConnection("C1", "C2", lines)
+      drawConnection("G1", "G2", lines)
+    elseif numPlayers == 3 then
+      dagonPosition = "F2"
+      hydraPosition = "D2"
+      sanctumPositions = { "B1", "H1", "C2", "G2" }
+      yhanthleiPositions = { "C1", "D1", "E1", "F1", "G1", "E2" }
+      drawConnection("B1", "H1", lines)
+      drawConnection("gateway", "E2", lines)
+      drawConnection("C2", "G2", lines)
+      drawConnection("C1", "C2", lines)
+      drawConnection("D1", "D2", lines)
+      drawConnection("F1", "F2", lines)
+      drawConnection("G1", "G2", lines)
+    elseif numPlayers == 2 then
+      dagonPosition = "G3"
+      hydraPosition = "C3"
+      sanctumPositions = { "A1", "I1", "C2", "G2" }
+      yhanthleiPositions = { "C1", "E1", "G1", "E2", "E3" }
+      drawConnection("gateway", "E3", lines)
+      drawConnection("A1", "I1", lines)
+      drawConnection("C2", "G2", lines)
+      drawConnection("C3", "G3", lines)
+      drawConnection("C1", "C3", lines)
+      drawConnection("G1", "G3", lines)
+    else
+      dagonPosition = "G2"
+      hydraPosition = "C2"
+      sanctumPositions = { "A1", "I1", "A2", "I2" }
+      yhanthleiPositions = { "C1", "E1", "G1", "E2" }
+      drawConnection("gateway", "E2", lines)
+      drawConnection("A1", "I1", lines)
+      drawConnection("A2", "I2", lines)
+      drawConnection("A1", "A2", lines)
+      drawConnection("C1", "C2", lines)
+      drawConnection("G1", "G2", lines)
+      drawConnection("I1", "I2", lines)
+    end
+
+    local chest = MythosAreaApi.getSetAsideChest()
+
+    chest.takeObject({
+      guid     = DAGON_GUID,
+      position = YP[dagonPosition],
+      rotation = ROTATION,
+      smooth   = true
+    })
+
+    chest.takeObject({
+      guid     = HYDRA_GUID,
+      position = YP[hydraPosition],
+      rotation = ROTATION,
+      smooth   = true
+    })
+
+    local sanctums = chest.takeObject({
+      guid     = SANCTUM_DECK_GUID,
+      position = { -10.70, 1.64, 4.63 },
+      rotation = ROTATION,
+      smooth   = false
+    })
+    CoroutineLib.yieldSeconds(1)
+    placeSanctumLocations(sanctums)
+
+    local yhanthlei = chest.takeObject({
+      guid     = YHANTHLEI_DECK_GUID,
+      position = { -10.70, 1.65, 7.99 },
+      rotation = ROTATION,
+      smooth   = false
+    })
+    CoroutineLib.yieldSeconds(1)
+    placeYhanthleiLocations(yhanthlei)
+
+    Global.setVectorLines(lines)
+    trash.putObject(self)
   end
-  DISABLED_2 = true
-
-  local numPlayers = PlayAreaApi.getInvestigatorCount()
-  local dagonPosition, hydraPosition
-  local lines = {}
-
-  if numPlayers == 4 then
-    dagonPosition = "F3"
-    hydraPosition = "D3"
-    sanctumPositions = { "B1", "H1", "C2", "G2" }
-    yhanthleiPositions = { "C1", "D1", "E1", "F1", "G1", "E2", "E3" }
-    drawConnection("B1", "H1", lines)
-    drawConnection("gateway", "E3", lines)
-    drawConnection("D3", "F3", lines)
-    drawConnection("C1", "C2", lines)
-    drawConnection("G1", "G2", lines)
-  elseif numPlayers == 3 then
-    dagonPosition = "F2"
-    hydraPosition = "D2"
-    sanctumPositions = { "B1", "H1", "C2", "G2" }
-    yhanthleiPositions = { "C1", "D1", "E1", "F1", "G1", "E2" }
-    drawConnection("B1", "H1", lines)
-    drawConnection("gateway", "E2", lines)
-    drawConnection("C2", "G2", lines)
-    drawConnection("C1", "C2", lines)
-    drawConnection("D1", "D2", lines)
-    drawConnection("F1", "F2", lines)
-    drawConnection("G1", "G2", lines)
-  elseif numPlayers == 2 then
-    dagonPosition = "G3"
-    hydraPosition = "C3"
-    sanctumPositions = { "A1", "I1", "C2", "G2" }
-    yhanthleiPositions = { "C1", "E1", "G1", "E2", "E3" }
-    drawConnection("gateway", "E3", lines)
-    drawConnection("A1", "I1", lines)
-    drawConnection("C2", "G2", lines)
-    drawConnection("C3", "G3", lines)
-    drawConnection("C1", "C3", lines)
-    drawConnection("G1", "G3", lines)
-  else
-    dagonPosition = "G2"
-    hydraPosition = "C2"
-    sanctumPositions = { "A1", "I1", "A2", "I2" }
-    yhanthleiPositions = { "C1", "E1", "G1", "E2" }
-    drawConnection("gateway", "E2", lines)
-    drawConnection("A1", "I1", lines)
-    drawConnection("A2", "I2", lines)
-    drawConnection("A1", "A2", lines)
-    drawConnection("C1", "C2", lines)
-    drawConnection("G1", "G2", lines)
-    drawConnection("I1", "I2", lines)
-  end
-
-  local chest = MythosAreaApi.getSetAsideChest()
-
-  chest.takeObject({
-    guid     = DAGON_GUID,
-    position = YP[dagonPosition],
-    rotation = ROTATION,
-    smooth   = false
-  })
-
-  chest.takeObject({
-    guid     = HYDRA_GUID,
-    position = YP[hydraPosition],
-    rotation = ROTATION,
-    smooth   = false
-  })
-
-  local sanctums = chest.takeObject({
-    guid     = SANCTUM_DECK_GUID,
-    position = { -10.70, 1.64, 4.63 },
-    rotation = ROTATION,
-    smooth   = false
-  })
-  Wait.frames(function() placeSanctumLocations(sanctums) end, 10)
-
-  local yhanthlei = chest.takeObject({
-    guid     = YHANTHLEI_DECK_GUID,
-    position = { -10.70, 1.65, 7.99 },
-    rotation = ROTATION,
-    smooth   = false
-  })
-  Wait.frames(function() placeYhanthleiLocations(yhanthlei) end, 10)
-
-  Global.setVectorLines(lines)
+  CoroutineLib.start(setup_2Coroutine)
 end
 
 function placeSanctumLocations(deck)
@@ -219,7 +227,7 @@ function placeSanctumLocations(deck)
       deck.takeObject({
         position = YP[coord],
         rotation = ROTATION,
-        smooth   = false
+        smooth   = true
       })
     end
     addFloodToken(YP[coord], "full")
@@ -235,11 +243,13 @@ function placeYhanthleiLocations(deck)
       deck.takeObject({
         position = YP[coord],
         rotation = ROTATION,
-        smooth   = false
+        smooth   = true
       })
     end
     addFloodToken(YP[coord], "partial")
   end
+  -- put remainder in the trash
+  trash.putObject(deck)
 end
 
 function addFloodToken(position, level)
@@ -248,7 +258,7 @@ function addFloodToken(position, level)
   bag.takeObject({
     position = position,
     rotation = { 0, 270, (level == "partial") and 0 or 180 },
-    smooth   = false
+    smooth   = true
   })
 end
 
@@ -256,4 +266,71 @@ function drawConnection(origin, target, lines)
   -- make sure lines are below cards
   offset = offset or Vector(0, 0.035, 0)
   table.insert(lines, { points = { YP[origin] - offset, YP[target] - offset } })
+end
+
+function cleanZone()
+  local gateway = getObjectFromGUID(GATEWAY_GUID)
+  local bounds = gateway.getBounds()
+
+  -- define the area "near" the central location
+  local bufferAround = 2
+  areaNearCenter = {}
+  areaNearCenter.minX = bounds.center.x - bounds.size.x / 2 - bufferAround
+  areaNearCenter.maxX = bounds.center.x + bounds.size.x / 2 + bufferAround
+  areaNearCenter.minZ = bounds.center.z - bounds.size.z / 2 - bufferAround
+  areaNearCenter.maxZ = bounds.center.z + bounds.size.z / 2 + bufferAround
+
+  -- clean the play area
+  local zone = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "PlayAreaZone")
+  for _, obj in ipairs(zone.getObjects()) do
+    if not inArea(obj.getPosition(), areaNearCenter) then -- keep cards that are "at" the Grand Entryway
+      if obj.type == "Card" and obj.hasTag("ScenarioCard") then
+        -- move enemies and treacheries to the encounter discard pile
+        if not obj.hasTag("Location") and not inArea(obj.getPosition(), areaNearCenter) then
+          obj.setPosition(MythosAreaApi.getEncounterDiscardPosition())
+        else
+          -- move locations to victory display or set aside
+          local md = getMetadata(obj)
+          if md.locationBack and md.locationBack.victory and obj.is_face_down and not cardHasClues(obj) then
+            PlayAreaApi.maybeUntrackLocation(obj)
+            VictoryDisplayApi.placeCard(obj)
+            CoroutineLib.yieldSeconds(0.5)
+          else
+            trash.putObject(obj)
+          end
+        end
+      elseif obj.memo == "clueDoom" then -- delete clues and doom tokens
+        obj.destruct()
+      end
+    end
+  end
+end
+
+-- Checks if a card has clues on it
+---@param card tts__Object Card to check for clues
+---@return boolean hasClues True if card has clues on it
+function cardHasClues(card)
+  local searchResult = SearchLib.onObject(card, "isClue")
+  return #searchResult > 0
+end
+
+function getMetadata(objectOrNotes)
+  if objectOrNotes == nil then return {} end
+  if type(objectOrNotes) == "string" then
+    return JSON.decode(objectOrNotes) or {}
+  elseif type(objectOrNotes) == "table" then
+    return JSON.decode(objectOrNotes["GMNotes"] or objectOrNotes["gm_notes"]) or {}
+  else
+    return JSON.decode(objectOrNotes.getGMNotes()) or {}
+  end
+end
+
+-- Simple method to check if the given point is in a specified area
+---@param point tts__Vector Point to check, only x and z values are relevant
+---@param bounds table Defined area to see if the point is within
+function inArea(point, bounds)
+  return (point.x > bounds.minX
+    and point.x < bounds.maxX
+    and point.z > bounds.minZ
+    and point.z < bounds.maxZ)
 end
