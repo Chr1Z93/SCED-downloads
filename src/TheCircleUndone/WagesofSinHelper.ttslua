@@ -82,26 +82,43 @@ function setup()
   local deck = getObjectFromGUID(HANGMANS_BROOK)
   if deck ~= nil then
     deck.shuffle()
-    deck.takeObject({
-      position = SET_ASIDE.position,
-      rotation = { 0, 270, 180 },
-      smooth   = false
-    })
+    local card = deck.takeObject()
+    trash.putObject(card)
   end
 end
 
-function spawnHeretics()
-  if HERETIC_DONE then return end
+function spawnHeretics(_, playerColor)
   heretics = getObjectFromGUID(HERETICS_GUID)
+  local deckSize = heretics.getQuantity()
+  if deckSize > 6 then
+    Player[playerColor].showOptionsDialog("Choose setup", {
+      "Eryn wants to meet",
+      "Eryn does not want to meet"
+      },
+      function(_, index)
+        if index == 1 then
+          addClues(2)
+        else
+          addClues(1)
+        end
+      end
+    )
+  else
+    addClues(1)
+  end
+
   heretics.shuffle()
   for i = 1, 4 do
     heretics.takeObject({
       position = PlayAreaApi.gridToWorld(LOCATIONS[i].mapPosition) + HERETIC_OFFSET,
       rotation = { 0, 270, 0 },
-      smooth   = false
+      smooth   = true
     })
   end
+  trash.putObject(heretics)
+end
 
+function addClues(extraClues)
   local count = PlayAreaApi.getInvestigatorCount()
   for i, guid in ipairs(usedLocations) do
     local card = getObjectFromGUID(guid)
@@ -113,8 +130,8 @@ function spawnHeretics()
   for i, guid in ipairs(OTHER_LOCATION_GUIDS) do
     local card = getObjectFromGUID(guid)
     if card ~= nil then
-      TokenManagerApi.addUseToCard(card, "clue", count)
+      TokenManagerApi.addUseToCard(card, "clue", extraClues * count)
     end
   end
-  HERETIC_DONE = true
+  trash.putObject(self)
 end
