@@ -1,4 +1,5 @@
 ---@diagnostic disable: undefined-global
+local PlayermatApi = require("playermat/PlayermatApi")
 
 -- returns the trauma values for the investigators from left to right (4x physical, 4x mental)
 function returnTrauma()
@@ -111,6 +112,7 @@ function createButtonsAndBoxes()
   createCheckboxes()
   createCounters()
   createTextboxes()
+  createContextMenu()
 end
 
 function createCheckboxes()
@@ -173,4 +175,79 @@ function createTextboxes()
       value          = data.value or ""
     })
   end
+end
+
+function createContextMenu()
+  if math.abs(self.getStateId()) ~= 1 then return end
+
+  self.addContextMenuItem("Fill players", fillPlayers)
+  self.addContextMenuItem("Fill investigators", fillInvestigators)
+  self.addContextMenuItem("Fill trauma", fillTrauma)
+  self.addContextMenuItem("Fill all", fillAll)
+end
+
+-- Context menu functions
+
+-- textbox 1, 4, 7, 10
+function fillPlayers(data)
+  local count = 0
+  for matColor, card in pairs(data or PlayermatApi.getUsedInvestigatorCards()) do
+    count = count + 1
+
+    local id = 3*count - 2
+    local playerColor = PlayermatApi.getPlayerColor(matColor)
+    local value = playerColor
+
+    if Player[playerColor].steam_name then
+      value = Player[playerColor].steam_name
+    end
+
+    ref_buttonData.textbox[id].value = value
+    self.editInput({ index = id - 1, value = value })
+  end
+
+  updateSave()
+end
+
+-- textbox 2, 5, 8, 11
+function fillInvestigators(data)
+  local count = 0
+  for matColor, card in pairs(data or PlayermatApi.getUsedInvestigatorCards()) do
+    count = count + 1
+
+    local id = 3*count - 1
+    local value = card.getName()
+    ref_buttonData.textbox[id].value = value
+    self.editInput({ index = id - 1, value = value })
+  end
+
+  updateSave()
+end
+
+-- physical: counter 1, 4, 7, 10
+-- mental: counter 2, 5, 8, 11
+function fillTrauma(data)
+  local checkboxCount = #ref_buttonData.checkbox
+  local count = 0
+  for matColor, card in pairs(data or PlayermatApi.getUsedInvestigatorCards()) do
+    count = count + 1
+
+    local pid = 3*count - 2
+    local mid = 3*count - 1
+    local pvalue = PlayermatApi.getCounterValue(matColor, "DamageCounter")
+    local mvalue = PlayermatApi.getCounterValue(matColor, "HorrorCounter")
+    ref_buttonData.counter[pid].value = pvalue
+    ref_buttonData.counter[mid].value = mvalue
+    self.editButton({ index = checkboxCount + pid - 1, label = pvalue })
+    self.editButton({ index = checkboxCount + mid - 1, label = mvalue })
+  end
+
+  updateSave()
+end
+
+function fillAll()
+  local data = PlayermatApi.getUsedInvestigatorCards()
+  fillPlayers(data)
+  fillInvestigators(data)
+  fillTrauma(data)
 end
