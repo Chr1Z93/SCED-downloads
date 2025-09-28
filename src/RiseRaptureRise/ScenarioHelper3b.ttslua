@@ -1,0 +1,80 @@
+local PlayAreaApi          = require("playarea/PlayAreaApi")
+local SearchLib            = require("util/SearchLib")
+
+local LITTLE_SISTER_GRID   = { x = 0, y = 1 }
+local LITTLE_SISTER_OFFSET = Vector(1.3, 0, -2)
+
+function onLoad()
+  self.createButton({
+    label          = "Place Little\nSister mini-cards",
+    click_function = "setup",
+    function_owner = self,
+    scale          = Vector(0.2, 1, 0.2),
+    position       = Vector(0, 0.11, 0),
+    height         = 1400,
+    width          = 3750,
+    font_size      = 475
+  })
+end
+
+function setup()
+  local searchPosition = PlayAreaApi.gridToWorld(LITTLE_SISTER_GRID)
+
+  -- find little sisters
+  local searchResult = SearchLib.atPosition(searchPosition, "isDeck")
+  if #searchResult == 0 then
+    printToAll("Couldn't find Littlr Sisters.", "Red")
+    return
+  end
+
+  local deck = searchResult[1]
+
+  -- find walls (6)
+  local walls = {}
+  for _, obj in ipairs(getObjects()) do
+    if obj.type == "Card" and obj.getName() == "The Walls" then
+      table.insert(walls, obj)
+    end
+  end
+
+  if #walls ~= 6 then
+    printToAll("Couldn't find exactly 6 walls.", "Red")
+    return
+  end
+
+  -- sort walls by x, then by z
+  table.sort(walls, sortByTwoAxes)
+
+  -- place sisters
+  deck.shuffle()
+
+  printToAll("Placing Little Sisters at 'The Walls' locations at random.")
+
+  local card
+  for i, wall in ipairs(walls) do
+    Wait.time(function()
+      if card then
+        card.setPositionSmooth(wall.getPosition() + LITTLE_SISTER_OFFSET)
+      else
+        deck.takeObject({ position = wall.getPosition() + LITTLE_SISTER_OFFSET })
+        card = deck.remainder
+      end
+    end, 0.1 + i * 0.4)
+  end
+end
+
+function sortByTwoAxes(objectA, objectB)
+  local posA = objectA.getPosition()
+  local posB = objectB.getPosition()
+
+  -- Check the absolute difference in X positions
+  local xDiff = math.abs(posA.x - posB.x)
+
+  if xDiff > 0.1 then
+    -- X difference is significant: Sort primarily by X
+    return posA.x > posB.x
+  else
+    -- X difference is small/negligible: Fall back to Z
+    return posA.z > posB.z
+  end
+end
