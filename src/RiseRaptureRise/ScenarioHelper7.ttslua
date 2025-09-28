@@ -1,0 +1,82 @@
+local PlayAreaApi       = require("playarea/PlayAreaApi")
+
+local RUINS_RESULT_GRID = { x = -1, y = 2.75 }
+
+function onLoad()
+  self.createButton({
+    label          = "Randomize\nRuins",
+    click_function = "setup",
+    function_owner = self,
+    scale          = Vector(0.2, 1, 0.2),
+    position       = Vector(0, 0.11, 0),
+    height         = 1400,
+    width          = 3750,
+    font_size      = 475
+  })
+end
+
+function setup()
+  -- find ruin pairs
+  local ruins = {}
+  for _, obj in ipairs(getObjects()) do
+    local name = obj.getName()
+    if obj.type == "Card" and obj.hasTag("Location") and obj.hasTag("ScenarioCard") and string.match(name, " Ruins") then
+      ruins[name] = ruins[name] or {}
+      table.insert(ruins[name], obj)
+    end
+  end
+
+  local count = 0
+  for name, objects in pairs(ruins) do
+    count = count + 1
+    if #objects ~= 2 then
+      printToAll("Didn't find two copies of " .. name .. ".", "Red")
+      return
+    end
+    table.sort(objects, sortByTwoAxes)
+  end
+
+  if count ~= 5 then
+    printToAll("Didn't find 5 pairs of Ruins.", "Red")
+    return
+  end
+
+  -- get result position
+  local position = PlayAreaApi.gridToWorld(RUINS_RESULT_GRID)
+
+  -- randomly move one of the copies to the deck position
+  printToAll("Randomly choosing one of each Ruin location.")
+
+  local i = 0
+  for name, objects in pairs(ruins) do
+    i = i + 1
+    Wait.time(function()
+      local correctPosition = objects[2].getPosition()
+      local index = math.random(2)
+      objects[index].setPositionSmooth(position)
+
+      -- set proper position for other location
+      if index == 1 then
+        objects[2].setPositionSmooth(correctPosition)
+      else
+        objects[1].setPositionSmooth(correctPosition)
+      end
+    end, 0.5 * i)
+  end
+end
+
+function sortByTwoAxes(objectA, objectB)
+  local posA = objectA.getPosition()
+  local posB = objectB.getPosition()
+
+  -- Check the absolute difference in X positions
+  local xDiff = math.abs(posA.x - posB.x)
+
+  if xDiff > 0.1 then
+    -- X difference is significant: Sort primarily by X
+    return posA.x > posB.x
+  else
+    -- X difference is small/negligible: Fall back to Z
+    return posA.z > posB.z
+  end
+end
