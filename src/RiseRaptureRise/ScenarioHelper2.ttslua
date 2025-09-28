@@ -1,0 +1,77 @@
+local DeckLib        = require("util/DeckLib")
+local PlayAreaApi    = require("playarea/PlayAreaApi")
+local SearchLib      = require("util/SearchLib")
+
+local ORPHANAGE_GRID = { x = -1.5, y = 1.5 }
+
+function onLoad()
+  self.createButton({
+    label          = "Contruct\nOrphanage Deck",
+    click_function = "setup",
+    function_owner = self,
+    scale          = Vector(0.2, 1, 0.2),
+    position       = Vector(0, 0.11, 0),
+    height         = 1400,
+    width          = 3750,
+    font_size      = 475
+  })
+end
+
+function setup(_, playerColor, isRightClick)
+  local searchPosition = PlayAreaApi.gridToWorld(ORPHANAGE_GRID)
+
+  -- find sanctum locations (11)
+  local searchResult = SearchLib.atPosition(searchPosition, "isDeck")
+  if #searchResult == 0 then
+    printToAll("Couldn't find Sanctum locations.", "Red")
+    return
+  end
+
+  local deck = searchResult[1]
+
+  -- find Tenenbaum's Office
+  local office = getObjectByName("Tenenbaum's Office")
+  if not office then
+    printToAll("Couldn't find Tenenbaum's Office.", "Red")
+    return
+  end
+
+  -- find Elevator Shaft
+  local shaft = getObjectByName("Elevator Shaft")
+  if not shaft then
+    printToAll("Couldn't find Elevator Shaft.", "Red")
+    return
+  end
+
+  local shaftGrid = PlayAreaApi.worldToGrid(shaft.getPosition())
+
+  -- place the top 4 cards in play near the Elevator Shaft
+  printToAll("Placing 4 sanctum locations in play around the Elevator Shaft.")
+
+  deck.shuffle()
+
+  for i, offset in ipairs({ { x = 1, y = 0 }, { x = 0, y = 1 }, { x = -1, y = 0 }, { x = 0, y = -1 } }) do
+    Wait.time(function()
+      deck.takeObject({
+        position = PlayAreaApi.gridToWorld({
+          x = shaftGrid.x + offset.x,
+          y = shaftGrid.y + offset.y
+        })
+      })
+    end, 0.1 + i * 0.25)
+  end
+
+  -- shuffle Tenenbaum's Office into the bottom 3 cards
+  Wait.time(function()
+    printToAll("Shuffled Tenenbaum's Office into the bottom 3 cards to create the Orphanage deck.")
+    DeckLib.shuffleIntoTopOrBottomX(office, deck, true, 3)
+  end, 1.5)
+end
+
+function getObjectByName(name)
+  for _, obj in ipairs(getObjects()) do
+    if obj.getName() == name then
+      return obj
+    end
+  end
+end
