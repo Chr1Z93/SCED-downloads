@@ -1,0 +1,227 @@
+local GUIDReferenceApi = require("core/GUIDReferenceApi")
+local MythosAreaApi    = require("mythos/MythosAreaApi")
+local PlayAreaApi      = require("playarea/PlayAreaApi")
+local TableLib         = require("util/TableLib")
+
+local REMOVED_POSITION = Vector(3.3, 2, 19.25)
+local PRISONER_OFFSET  = Vector(0, 0, -2.5)
+
+function onLoad()
+  self.createButton({
+    label          = "Construct\nPrisoner Deck",
+    click_function = "setup",
+    function_owner = self,
+    scale          = Vector(0.2, 1, 0.2),
+    position       = Vector(0, 0.11, 0),
+    height         = 1400,
+    width          = 3750,
+    font_size      = 475
+  })
+end
+
+function setup(_, playerColor)
+  prisonCells = {}
+
+  -- get prison cells
+  local zone = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "PlayAreaZone")
+  if not zone then
+    printToAll("Can't get play area zone.", "Red")
+    return
+  end
+
+  local prisonCellsDeck
+  for _, obj in ipairs(zone.getObjects()) do
+    if prisonCellsDeck then break end
+    if obj.type == "Deck" then
+      for _, cardData in ipairs(obj.getData().ContainedObjects) do
+        if cardData.Nickname == "Prison Cell" then
+          prisonCellsDeck = obj
+          break
+        end
+      end
+    end
+  end
+
+  if not prisonCellsDeck then
+    printToAll("Can't find Prison Cells.", "Red")
+    return
+  end
+
+  -- get prisoner deck
+  local prisonerDeck = getObjectByName("Prisoner Deck")
+  if not prisonerDeck then
+    printToAll("Can't find Prisoner Deck.", "Red")
+    return
+  end
+
+  -- get encounter deck
+  local encounterDeck = MythosAreaApi.getEncounterDeckObjects().draw
+  if not encounterDeck then
+    printToAll("Can't get encounter deck.", "Red")
+    return
+  end
+
+  -- get big daddies
+  local bigDaddies = getObjectByName("Big Daddies Encounter Set")
+  if not bigDaddies then
+    printToAll("Can't find Big Daddies.", "Red")
+    return
+  end
+
+  -- place prison cells
+  prisonCellsDeck.shuffle()
+  for _, grid in ipairs({ { x = 0, y = 2 }, { x = -1, y = 0 }, { x = 1, y = 0 } }) do
+    table.insert(prisonCells, prisonCellsDeck.takeObject({ position = PlayAreaApi.gridToWorld(grid) }))
+  end
+  prisonCellsDeck.remainder.setPositionSmooth(REMOVED_POSITION)
+
+  -- shuffle 4 prisoners into the encounter deck
+  prisonerDeck.shuffle()
+
+  for i = 1, 4 do
+    Wait.time(function()
+      encounterDeck.putObject(prisonerDeck.takeObject())
+    end, 0.25 * i)
+  end
+
+  Wait.time(function()
+    encounterDeck.shuffle()
+
+    -- put one big daddy into the prisoner deck bag
+    bigDaddies.shuffle()
+
+    -- create bag
+    local bagPosition = prisonerDeck.getPosition() + Vector(0, 0, -3.825)
+    local bagData = {
+      Name             = "Bag",
+      Nickname         = "Prisoner Deck Assembly",
+      ColorDiffuse     = { r = 1, g = 1, b = 1 },
+      Bag              = { Order = 2 },
+      Transform        = {
+        posX = bagPosition.x,
+        posY = bagPosition.y,
+        posZ = bagPosition.z,
+        rotX = 0,
+        rotY = 270,
+        rotZ = 0,
+        scaleX = 1,
+        scaleY = 1,
+        scaleZ = 1
+      },
+      -- include the prisoners
+      ContainedObjects = prisonerDeck.getData().ContainedObjects
+    }
+
+    -- add one big daddy
+    local randomDaddy = TableLib.pickRandom(bigDaddies.getData().ContainedObjects)
+    table.insert(bagData.ContainedObjects, randomDaddy)
+
+    -- shuffle, remove prisoner deck and spawn bag
+    TableLib.shuffle(bagData.ContainedObjects)
+    prisonerDeck.destruct()
+    spawnObjectData({ data = bagData })
+
+    -- remove big daddies from the game
+    bigDaddies.setPosition(REMOVED_POSITION)
+
+    -- ask for player input
+    Player[playerColor].pingTable(bagPosition)
+    Player[playerColor].showConfirmDialog(
+      "Add each unique ally from each investigator's deck to the prisoner deck bag (as single cards) and then proceed.",
+      setupContinued)
+  end, 1.25)
+end
+
+function setupContinued()
+  -- get prisoner deck
+  local prisonerDeckBag = getObjectByName("Prisoner Deck Assembly")
+  if not prisonerDeckBag then
+    printToAll("Can't find Prisoner Deck Bag.", "Red")
+    return
+  end
+
+  prisonerDeckBag.shuffle()
+
+  local data = prisonerDeckBag.getData()
+  data.GUID = nil
+  data.Nickname = ""
+
+  -- split into three parts
+  local parts = splitTable(data.ContainedObjects, 3)
+  TableLib.shuffle(prisonCells)
+  prisonerDeckBag.destruct()
+
+  for i = 1, 3 do
+    local position = prisonCells[i].getPosition() + PRISONER_OFFSET
+    data.Transform = {
+      posX = position.x,
+      posY = position.y,
+      posZ = position.z,
+      rotX = 0,
+      rotY = 270,
+      rotZ = 0,
+      scaleX = 1,
+      scaleY = 1,
+      scaleZ = 1
+    }
+    data.ContainedObjects = parts[i]
+    spawnObjectData({ data = data })
+  end
+
+  printToAll("Successfully created the prison cell decks.", "Green")
+end
+
+function getObjectByName(name)
+  for _, obj in ipairs(getObjects()) do
+    if obj.getName() == name then
+      return obj
+    end
+  end
+end
+
+--- Divides a numerically-indexed table into 'n' approximately equal parts.
+---@param tbl table The table to be split (must be numerically indexed, starting from 1).
+---@param n number The number of parts to split the table into (must be a positive integer).
+---@return table: A new table containing 'n' sub-tables.
+function splitTable(tbl, n)
+  local len = #tbl -- Get the length of the table
+  if len == 0 then
+    return {}      -- Return an empty table of splits for an empty input table
+  end
+
+  -- If n is greater than the table length, we'll get 'len' sub-tables of size 1
+  -- followed by 'n - len' empty sub-tables.
+  if n > len then
+    n = len -- Optimizing: Max splits needed is the length of the table
+  end
+
+  local parts = {}                      -- The table to hold the resulting sub-tables
+  local base_size = math.floor(len / n) -- Minimum size of each part
+  local remainder = len % n             -- Number of parts that will be one element larger
+
+  local current_index = 1               -- Index in the original table
+
+  for i = 1, n do
+    -- Determine the size of the current part
+    local part_size = base_size
+    if i <= remainder then
+      part_size = part_size + 1 -- Distribute the remainder elements one-by-one
+    end
+
+    -- If the table was shorter than the original 'n', we might have remaining
+    -- splits to create that will be empty.
+    if part_size == 0 then
+      parts[i] = {}
+    else
+      -- Create the sub-table by slicing the original table
+      local sub_tbl = {}
+      for j = 1, part_size do
+        sub_tbl[j] = tbl[current_index]
+        current_index = current_index + 1
+      end
+      parts[i] = sub_tbl
+    end
+  end
+
+  return parts
+end
