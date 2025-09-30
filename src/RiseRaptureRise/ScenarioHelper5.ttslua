@@ -1,0 +1,90 @@
+local GUIDReferenceApi = require("core/GUIDReferenceApi")
+local MythosAreaApi    = require("mythos/MythosAreaApi")
+local PlayAreaApi      = require("playarea/PlayAreaApi")
+
+local REMOVED_POSITION = Vector(3.3, 2, 19.25)
+
+function onLoad()
+  self.createButton({
+    label          = "Randomize\nLocations",
+    click_function = "setup",
+    function_owner = self,
+    scale          = Vector(0.2, 1, 0.2),
+    position       = Vector(0, 0.11, 0),
+    height         = 1400,
+    width          = 3750,
+    font_size      = 475
+  })
+end
+
+function setup()
+  -- get dead ends / passageways
+  local deadEndsDeck, passagewaysDeck, lowerLevelsDeck
+  local zone = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "PlayAreaZone")
+  if not zone then
+    printToAll("Can't get play area zone.", "Red")
+    return
+  end
+
+  for _, obj in ipairs(zone.getObjects()) do
+    if deadEndsDeck and passagewaysDeck and lowerLevelsDeck then break end
+    if obj.type == "Deck" then
+      for _, cardData in ipairs(obj.getData().ContainedObjects) do
+        local md = JSON.decode(cardData.GMNotes) or {}
+        local traits = md.traits or ""
+        if string.match(traits, "Passageway") then
+          passagewaysDeck = obj
+          break
+        elseif string.match(traits, "Dead End") then
+          deadEndsDeck = obj
+          break
+        elseif string.match(traits, "Lower Level") then
+          lowerLevelsDeck = obj
+          break
+        end
+      end
+    end
+  end
+
+  if not deadEndsDeck or not passagewaysDeck then
+    printToAll("Can't find Dead Ends and Passageways.", "Red")
+    return
+  end
+
+  -- remove one dead end
+  deadEndsDeck.shuffle()
+  local removedName = deadEndsDeck.takeObject({ position = REMOVED_POSITION }).getName()
+
+  -- get non-matching passageway
+  local deckInfoList = passagewaysDeck.getObjects()
+  for i = #deckInfoList, 1, -1 do
+    local deckInfo = deckInfoList[i]
+    if deckInfo.name ~= removedName then
+      passagewaysDeck.takeObject({ index = deckInfo.index, position = REMOVED_POSITION })
+    end
+  end
+
+  deadEndsDeck.putObject(passagewaysDeck.remainder)
+  Wait.time(function() deadEndsDeck.shuffle() end, 0.5)
+
+  -- put lower level location in play
+  if lowerLevelsDeck then
+    local note = getObjectFromGUID("e1c595")
+    if note then
+      note.setPositionSmooth(PlayAreaApi.gridToWorld({ x = -1.75, y = 0 }))
+    end
+
+    lowerLevelsDeck.shuffle()
+
+    for i = 1, 3 do
+      lowerLevelsDeck.takeObject({ position = PlayAreaApi.gridToWorld({ x = 0, y = i - 1 }) })
+    end
+
+    local chest = MythosAreaApi.getSetAsideChest()
+    if not chest then
+      lowerLevelsDeck.setPositionSmooth(Vector(1.69, 1.6, 14.24))
+    else
+      chest.putObject(lowerLevelsDeck)
+    end
+  end
+end
