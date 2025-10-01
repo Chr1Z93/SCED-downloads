@@ -1,0 +1,2517 @@
+{
+  "GUID": "b46db2",
+  "Name": "Custom_Model_Bag",
+  "Transform": {
+    "posX": 34.202755,
+    "posY": 1.4814992,
+    "posZ": -21.6517887,
+    "rotX": 6.411044e-09,
+    "rotY": 270.01886,
+    "rotZ": -1.72433289e-07,
+    "scaleX": 2.21,
+    "scaleY": 0.46,
+    "scaleZ": 2.42
+  },
+  "Nickname": "And Then There Were None",
+  "ColorDiffuse": {
+    "r": 1.0,
+    "g": 1.0,
+    "b": 1.0
+  },
+  "HideWhenFaceDown": false,
+  "Hands": false,
+  "CustomMesh": {
+    "MeshURL": "https://raw.githubusercontent.com/RobMayer/TTSLibrary/master/advboxes/tuckbox_h_MSH.obj",
+    "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/10954994060507488984/92B4D06DA521C68C488583554D38975DFA526680/",
+    "MaterialIndex": 3,
+    "TypeIndex": 6,
+    "CustomShader": {
+      "SpecularColor": {
+        "r": 1.0,
+        "g": 1.0,
+        "b": 1.0
+      },
+      "SpecularIntensity": 0.0,
+      "SpecularSharpness": 2.0,
+      "FresnelStrength": 0.0
+    }
+  },
+  "LuaScript": "-- Utility memory bag by Directsun\r\n-- Version 2.5.2\r\n-- Fork of Memory Bag 2.0 by MrStump\r\n\r\nfunction updateSave()\r\n    local data_to_save = {[\"ml\"]=memoryList}\r\n    saved_data = JSON.encode(data_to_save)\r\n    self.script_state = saved_data\r\nend\r\n\r\nfunction combineMemoryFromBagsWithin()\r\n  local bagObjList = self.getObjects()\r\n  for _, bagObj in ipairs(bagObjList) do\r\n    local data = bagObj.lua_script_state\r\n      if data ~= nil then\r\n        local j = JSON.decode(data)\r\n        if j ~= nil and j.ml ~= nil then\r\n          for guid, entry in pairs(j.ml) do\r\n            memoryList[guid] = entry\r\n          end\r\n        end\r\n      end\r\n    end\r\nend\r\n\r\nfunction updateMemoryWithMoves()\r\n    memoryList = memoryListBackup\r\n    --get the first transposed object's coordinates\r\n    local obj = getObjectFromGUID(moveGuid)\r\n\r\n    -- p1 is where needs to go, p2 is where it was\r\n    local refObjPos = memoryList[moveGuid].pos\r\n    local deltaPos = findOffsetDistance(obj.getPosition(), refObjPos, nil)\r\n    local movedRotation = obj.getRotation()\r\n    for guid, entry in pairs(memoryList) do\r\n        memoryList[guid].pos.x = entry.pos.x - deltaPos.x\r\n        memoryList[guid].pos.y = entry.pos.y - deltaPos.y\r\n        memoryList[guid].pos.z = entry.pos.z - deltaPos.z\r\n        -- memoryList[guid].rot.x = movedRotation.x\r\n        -- memoryList[guid].rot.y = movedRotation.y\r\n        -- memoryList[guid].rot.z = movedRotation.z\r\n    end\r\n\r\n    --theList[obj.getGUID()] = {\r\n    --    pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\r\n    --    rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\r\n    --    lock=obj.getLock()\r\n    --}\r\n    moveList = {}\r\nend\r\n\r\nfunction onload(saved_data)\r\n    fresh = true\r\n    if saved_data ~= \"\" then\r\n        local loaded_data = JSON.decode(saved_data)\r\n        --Set up information off of loaded_data\r\n        memoryList = loaded_data.ml\r\n    else\r\n        --Set up information for if there is no saved saved data\r\n        memoryList = {}\r\n    end\r\n\r\n    moveList = {}\r\n    moveGuid = nil\r\n\r\n    if next(memoryList) == nil then\r\n        createSetupButton()\r\n    else\r\n        fresh = false\r\n        createMemoryActionButtons()\r\n    end\r\nend\r\n\r\n\r\n--Beginning Setup\r\n\r\n\r\n--Make setup button\r\nfunction createSetupButton()\r\n    self.createButton({\r\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\r\n        position={0,0.1,-2.1}, rotation={0,0,0}, height=220, width=500,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\nend\r\n\r\n--Triggered by Transpose button\r\nfunction buttonClick_transpose()\r\n    moveGuid = nil\r\n    broadcastToAll(\"Select one object and move it- all objects will move relative to the new location\", {0.75, 0.75, 1})\r\n    memoryListBackup = duplicateTable(memoryList)\r\n    memoryList = {}\r\n    moveList = {}\r\n    self.clearButtons()\r\n    createButtonsOnAllObjects(true)\r\n    createSetupActionButtons(true)\r\nend\r\n\r\n--Triggered by setup button,\r\nfunction buttonClick_setup()\r\n    memoryListBackup = duplicateTable(memoryList)\r\n    memoryList = {}\r\n    self.clearButtons()\r\n    createButtonsOnAllObjects(false)\r\n    createSetupActionButtons(false)\r\nend\r\n\r\nfunction getAllObjectsInMemory()\r\n  local objTable = {}\r\n  local curObj = {}\r\n\r\n  for guid in pairs(memoryListBackup) do\r\n    curObj = getObjectFromGUID(guid)\r\n    table.insert(objTable, curObj)\r\n  end\r\n\r\n  return objTable\r\n  -- return getAllObjects()\r\nend\r\n\r\n--Creates selection buttons on objects\r\nfunction createButtonsOnAllObjects(move)\r\n    local howManyButtons = 0\r\n\r\n    local objsToHaveButtons = {}\r\n    if move == true then\r\n      objsToHaveButtons = getAllObjectsInMemory()\r\n    else\r\n      objsToHaveButtons = getAllObjects()\r\n    end\r\n\r\n    for _, obj in ipairs(objsToHaveButtons) do\r\n        if obj ~= self then\r\n            local dummyIndex = howManyButtons\r\n            --On a normal bag, the button positions aren't the same size as the bag.\r\n            globalScaleFactor = 1 * 1/self.getScale().x\r\n            --Super sweet math to set button positions\r\n            local selfPos = self.getPosition()\r\n            local objPos = obj.getPosition()\r\n            local deltaPos = findOffsetDistance(selfPos, objPos, obj)\r\n            local objPos = rotateLocalCoordinates(deltaPos, self)\r\n            objPos.x = -objPos.x * globalScaleFactor\r\n            objPos.y = objPos.y * globalScaleFactor + 2\r\n            objPos.z = objPos.z * globalScaleFactor * 0.9\r\n            --Offset rotation of bag\r\n            local rot = self.getRotation()\r\n            rot.y = -rot.y + 180\r\n            --Create function\r\n            local funcName = \"selectButton_\" .. howManyButtons\r\n            local func = function() buttonClick_selection(dummyIndex, obj, move) end\r\n            local color = {0.75,0.25,0.25,0.6}\r\n            local colorMove = {0,0,1,0.6}\r\n            if move == true then\r\n              color = colorMove\r\n            end\r\n            self.setVar(funcName, func)\r\n            self.createButton({\r\n                click_function=funcName, function_owner=self,\r\n                position=objPos, rotation=rot, height=500, width=500,\r\n                color=color,\r\n            })\r\n            howManyButtons = howManyButtons + 1\r\n        end\r\n    end\r\nend\r\n\r\n--Creates submit and cancel buttons\r\nfunction createSetupActionButtons(move)\r\n    self.createButton({\r\n        label=\"Cancel\", click_function=\"buttonClick_cancel\", function_owner=self,\r\n      position={-0.6,0.1,-2.1}, rotation={0,0,0}, height=220, width=550,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n\r\n    self.createButton({\r\n        label=\"Submit\", click_function=\"buttonClick_submit\", function_owner=self,\r\n        position={-0.6,0.3,-2.5}, rotation={0,0,0}, height=220, width=550,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n\r\n    if move == false then\r\n      self.createButton({\r\n          label=\"Add\", click_function=\"buttonClick_add\", function_owner=self,\r\n          position={0.6,0.3,-2.1}, rotation={0,0,0}, height=220, width=550,\r\n          font_size=130, color={0,0,0}, font_color={0.25,1,0.25}\r\n      })\r\n\r\n        if fresh == false then\r\n            self.createButton({\r\n                label=\"Set New\", click_function=\"buttonClick_setNew\", function_owner=self,\r\n                position={0.6,0.3,-2.9}, rotation={0,0,0}, height=220, width=550,\r\n                font_size=130, color={0,0,0}, font_color={0.75,0.75,1}\r\n            })\r\n            self.createButton({\r\n                label=\"Remove\", click_function=\"buttonClick_remove\", function_owner=self,\r\n                position={0.6,0.3,-2.5}, rotation={0,0,0}, height=220, width=550,\r\n                font_size=130, color={0,0,0}, font_color={1,0.25,0.25}\r\n            })\r\n        end\r\n    end\r\n\r\n    self.createButton({\r\n        label=\"Reset\", click_function=\"buttonClick_reset\", function_owner=self,\r\n        position={-0.6,0.3,-2.9}, rotation={0,0,0}, height=220, width=550,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\nend\r\n\r\n\r\n--During Setup\r\n\r\n\r\n--Checks or unchecks buttons\r\nfunction buttonClick_selection(index, obj, move)\r\n    local colorMove = {0,0,1,0.6}\r\n    local color = {0,1,0,0.6}\r\n\r\n    previousGuid = selectedGuid\r\n    selectedGuid = obj.getGUID()\r\n\r\n    theList = memoryList\r\n    if move == true then\r\n       theList = moveList\r\n       if previousGuid ~= nil and previousGuid ~= selectedGuid then\r\n         local prevObj = getObjectFromGUID(previousGuid)\r\n         prevObj.highlightOff()\r\n         self.editButton({index=previousIndex, color=colorMove})\r\n         theList[previousGuid] = nil\r\n       end\r\n       previousIndex = index\r\n    end\r\n\r\n    if theList[selectedGuid] == nil then\r\n        self.editButton({index=index, color=color})\r\n        --Adding pos/rot to memory table\r\n        local pos, rot = obj.getPosition(), obj.getRotation()\r\n        --I need to add it like this or it won't save due to indexing issue\r\n        theList[obj.getGUID()] = {\r\n            pos={x=round(pos.x,4), y=round(pos.y,4), z=round(pos.z,4)},\r\n            rot={x=round(rot.x,4), y=round(rot.y,4), z=round(rot.z,4)},\r\n            lock=obj.getLock()\r\n        }\r\n        obj.highlightOn({0,1,0})\r\n    else\r\n      color = {0.75,0.25,0.25,0.6}\r\n      if move == true then\r\n        color = colorMove\r\n      end\r\n        self.editButton({index=index, color=color})\r\n        theList[obj.getGUID()] = nil\r\n        obj.highlightOff()\r\n    end\r\nend\r\n\r\n--Cancels selection process\r\nfunction buttonClick_cancel()\r\n    memoryList = memoryListBackup\r\n    moveList = {}\r\n    self.clearButtons()\r\n    if next(memoryList) == nil then\r\n        createSetupButton()\r\n    else\r\n        createMemoryActionButtons()\r\n    end\r\n    removeAllHighlights()\r\n    broadcastToAll(\"Selection Canceled\", {1,1,1})\r\n    moveGuid = nil\r\nend\r\n\r\n--Saves selections\r\nfunction buttonClick_submit()\r\n    fresh = false\r\n    if next(moveList) ~= nil then\r\n        for guid in pairs(moveList) do\r\n            moveGuid = guid\r\n        end\r\n        if memoryListBackup[moveGuid] == nil then\r\n            broadcastToAll(\"Item selected for moving is not already in memory\", {1, 0.25, 0.25})\r\n        else\r\n            broadcastToAll(\"Moving all items in memory relative to new objects position!\", {0.75, 0.75, 1})\r\n            self.clearButtons()\r\n            createMemoryActionButtons()\r\n            local count = 0\r\n            for guid in pairs(moveList) do\r\n                moveGuid = guid\r\n                count = count + 1\r\n                local obj = getObjectFromGUID(guid)\r\n                if obj ~= nil then obj.highlightOff() end\r\n            end\r\n            updateMemoryWithMoves()\r\n            updateSave()\r\n            buttonClick_place()\r\n        end\r\n    elseif next(memoryList) == nil and moveGuid == nil then\r\n      memoryList = memoryListBackup\r\n      broadcastToAll(\"No selections made.\", {0.75, 0.25, 0.25})\r\n    end\r\n    combineMemoryFromBagsWithin()\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for guid in pairs(memoryList) do\r\n        count = count + 1\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then obj.highlightOff() end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    updateSave()\r\n    moveGuid = nil\r\nend\r\n\r\nfunction combineTables(first_table, second_table)\r\n  for k,v in pairs(second_table) do first_table[k] = v end\r\nend\r\n\r\nfunction buttonClick_add()\r\n    fresh = false\r\n    combineTables(memoryList, memoryListBackup)\r\n    broadcastToAll(\"Adding internal bags and selections to existing memory\", {0.25, 0.75, 0.25})\r\n    combineMemoryFromBagsWithin()\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for guid in pairs(memoryList) do\r\n        count = count + 1\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then obj.highlightOff() end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    updateSave()\r\nend\r\n\r\nfunction buttonClick_remove()\r\n        broadcastToAll(\"Removing Selected Entries From Memory\", {1.0, 0.25, 0.25})\r\n        self.clearButtons()\r\n        createMemoryActionButtons()\r\n        local count = 0\r\n        for guid in pairs(memoryList) do\r\n            count = count + 1\r\n            memoryListBackup[guid] = nil\r\n            local obj = getObjectFromGUID(guid)\r\n            if obj ~= nil then obj.highlightOff() end\r\n        end\r\n        broadcastToAll(count..\" Objects Removed\", {1,1,1})\r\n        memoryList = memoryListBackup\r\n        updateSave()\r\nend\r\n\r\nfunction buttonClick_setNew()\r\n    broadcastToAll(\"Setting new position relative to items in memory\", {0.75, 0.75, 1})\r\n    self.clearButtons()\r\n    createMemoryActionButtons()\r\n    local count = 0\r\n    for _, obj in ipairs(getAllObjects()) do\r\n        guid = obj.guid\r\n        if memoryListBackup[guid] ~= nil then\r\n            count = count + 1\r\n            memoryListBackup[guid].pos = obj.getPosition()\r\n            memoryListBackup[guid].rot = obj.getRotation()\r\n            memoryListBackup[guid].lock = obj.getLock()\r\n        end\r\n    end\r\n    broadcastToAll(count..\" Objects Saved\", {1,1,1})\r\n    memoryList = memoryListBackup\r\n    updateSave()\r\nend\r\n\r\n--Resets bag to starting status\r\nfunction buttonClick_reset()\r\n    fresh = true\r\n    memoryList = {}\r\n    self.clearButtons()\r\n    createSetupButton()\r\n    removeAllHighlights()\r\n    broadcastToAll(\"Tool Reset\", {1,1,1})\r\n    updateSave()\r\nend\r\n\r\n\r\n--After Setup\r\n\r\n\r\n--Creates recall and place buttons\r\nfunction createMemoryActionButtons()\r\n    self.createButton({\r\n        label=\"Place\", click_function=\"buttonClick_place\", function_owner=self,\r\n        position={0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n    self.createButton({\r\n        label=\"Recall\", click_function=\"buttonClick_recall\", function_owner=self,\r\n        position={-0.6,0.1,2.1}, rotation={0,0,0}, height=220, width=500,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n    self.createButton({\r\n        label=\"Setup\", click_function=\"buttonClick_setup\", function_owner=self,\r\n        position={0,0.1,-2.1}, rotation={0,0,0}, height=220, width=500,\r\n        font_size=130, color={0,0,0}, font_color={1,1,1}\r\n    })\r\n---    self.createButton({\r\n---      label=\"Move\", click_function=\"buttonClick_transpose\", function_owner=self,\r\n---      position={-2.8,0.3,0}, rotation={0,0,0}, height=350, width=800,\r\n---      font_size=250, color={0,0,0}, font_color={0.75,0.75,1}\r\n---    })\r\nend\r\n\r\n--Sends objects from bag/table to their saved position/rotation\r\nfunction buttonClick_place()\r\n    local bagObjList = self.getObjects()\r\n    for guid, entry in pairs(memoryList) do\r\n        local obj = getObjectFromGUID(guid)\r\n        --If obj is out on the table, move it to the saved pos/rot\r\n        if obj ~= nil then\r\n            obj.setPositionSmooth(entry.pos)\r\n            obj.setRotationSmooth(entry.rot)\r\n            obj.setLock(entry.lock)\r\n        else\r\n            --If obj is inside of the bag\r\n            for _, bagObj in ipairs(bagObjList) do\r\n                if bagObj.guid == guid then\r\n                    local item = self.takeObject({\r\n                        guid=guid, position=entry.pos, rotation=entry.rot, smooth=false\r\n                    })\r\n                    item.setLock(entry.lock)\r\n                    break\r\n                end\r\n            end\r\n        end\r\n    end\r\n    broadcastToAll(\"Objects Placed\", {1,1,1})\r\nend\r\n\r\n--Recalls objects to bag from table\r\nfunction buttonClick_recall()\r\n    for guid, entry in pairs(memoryList) do\r\n        local obj = getObjectFromGUID(guid)\r\n        if obj ~= nil then self.putObject(obj) end\r\n    end\r\n    broadcastToAll(\"Objects Recalled\", {1,1,1})\r\nend\r\n\r\n\r\n--Utility functions\r\n\r\n\r\n--Find delta (difference) between 2 x/y/z coordinates\r\nfunction findOffsetDistance(p1, p2, obj)\r\n    local yOffset = 0\r\n    if obj ~= nil then\r\n        local bounds = obj.getBounds()\r\n        yOffset = (bounds.size.y - bounds.offset.y)\r\n    end\r\n    local deltaPos = {}\r\n    deltaPos.x = (p2.x-p1.x)\r\n    deltaPos.y = (p2.y-p1.y) + yOffset\r\n    deltaPos.z = (p2.z-p1.z)\r\n    return deltaPos\r\nend\r\n\r\n--Used to rotate a set of coordinates by an angle\r\nfunction rotateLocalCoordinates(desiredPos, obj)\r\n\tlocal objPos, objRot = obj.getPosition(), obj.getRotation()\r\n    local angle = math.rad(objRot.y)\r\n\tlocal x = desiredPos.x * math.cos(angle) - desiredPos.z * math.sin(angle)\r\n\tlocal z = desiredPos.x * math.sin(angle) + desiredPos.z * math.cos(angle)\r\n\t--return {x=objPos.x+x, y=objPos.y+desiredPos.y, z=objPos.z+z}\r\n    return {x=x, y=desiredPos.y, z=z}\r\nend\r\n\r\nfunction rotateMyCoordinates(desiredPos, obj)\r\n\tlocal angle = math.rad(obj.getRotation().y)\r\n  local x = desiredPos.x * math.sin(angle)\r\n\tlocal z = desiredPos.z * math.cos(angle)\r\n    return {x=x, y=desiredPos.y, z=z}\r\nend\r\n\r\n--Coroutine delay, in seconds\r\nfunction wait(time)\r\n    local start = os.time()\r\n    repeat coroutine.yield(0) until os.time() > start + time\r\nend\r\n\r\n--Duplicates a table (needed to prevent it making reference to the same objects)\r\nfunction duplicateTable(oldTable)\r\n    local newTable = {}\r\n    for k, v in pairs(oldTable) do\r\n        newTable[k] = v\r\n    end\r\n    return newTable\r\nend\r\n\r\n--Moves scripted highlight from all objects\r\nfunction removeAllHighlights()\r\n    for _, obj in ipairs(getAllObjects()) do\r\n        obj.highlightOff()\r\n    end\r\nend\r\n\r\n--Round number (num) to the Nth decimal (dec)\r\nfunction round(num, dec)\r\n  local mult = 10^(dec or 0)\r\n  return math.floor(num * mult + 0.5) / mult\r\nend\r\n",
+  "LuaScriptState": "{\"ml\":{\"1efa29\":{\"lock\":false,\"pos\":{\"x\":-2.9415,\"y\":1.6136,\"z\":-5.0505},\"rot\":{\"x\":0,\"y\":180.0068,\"z\":0}},\"2d4b27\":{\"lock\":false,\"pos\":{\"x\":-9.32,\"y\":1.5653,\"z\":-2.2583},\"rot\":{\"x\":1.1875,\"y\":269.9999,\"z\":180.0015}},\"3c3077\":{\"lock\":false,\"pos\":{\"x\":-9.8373,\"y\":1.6218,\"z\":11.2564},\"rot\":{\"x\":359.1176,\"y\":89.988,\"z\":0}},\"52fd0d\":{\"lock\":false,\"pos\":{\"x\":-11.5074,\"y\":1.5891,\"z\":-9.8791},\"rot\":{\"x\":0,\"y\":270.0002,\"z\":0}},\"57a083\":{\"lock\":false,\"pos\":{\"x\":-36.84,\"y\":1.5336,\"z\":-7.65},\"rot\":{\"x\":0,\"y\":270.0005,\"z\":180}},\"60b93e\":{\"lock\":false,\"pos\":{\"x\":-3.8515,\"y\":1.6761,\"z\":5.72},\"rot\":{\"x\":0,\"y\":269.9997,\"z\":180}},\"77b34e\":{\"lock\":false,\"pos\":{\"x\":-30.24,\"y\":1.5336,\"z\":0},\"rot\":{\"x\":0,\"y\":270.0005,\"z\":180}},\"7a167a\":{\"lock\":false,\"pos\":{\"x\":1.6965,\"y\":1.558,\"z\":14.2492},\"rot\":{\"x\":0,\"y\":224.775,\"z\":0}},\"7e42a2\":{\"lock\":false,\"pos\":{\"x\":-9.32,\"y\":1.5653,\"z\":2.3172},\"rot\":{\"x\":1.1873,\"y\":270.0054,\"z\":0.0014}},\"8112ff\":{\"lock\":false,\"pos\":{\"x\":-4.1173,\"y\":1.583,\"z\":-14.5646},\"rot\":{\"x\":0,\"y\":269.9942,\"z\":0}},\"9b6e6e\":{\"lock\":false,\"pos\":{\"x\":-17.04,\"y\":1.5336,\"z\":0},\"rot\":{\"x\":0,\"y\":270.0002,\"z\":180}},\"9fba50\":{\"lock\":false,\"pos\":{\"x\":-9.32,\"y\":1.5653,\"z\":0.0296},\"rot\":{\"x\":1.1873,\"y\":270.0055,\"z\":0.0014}},\"a21a54\":{\"lock\":false,\"pos\":{\"x\":-36.84,\"y\":1.5336,\"z\":7.65},\"rot\":{\"x\":0,\"y\":269.9998,\"z\":180}},\"a2845b\":{\"lock\":false,\"pos\":{\"x\":-23.64,\"y\":1.5336,\"z\":-7.65},\"rot\":{\"x\":0,\"y\":270,\"z\":180}},\"bd95b7\":{\"lock\":false,\"pos\":{\"x\":-23.64,\"y\":1.5336,\"z\":7.65},\"rot\":{\"x\":0,\"y\":270.0006,\"z\":180}},\"d5a5ab\":{\"lock\":false,\"pos\":{\"x\":-9.32,\"y\":1.5653,\"z\":-4.5454},\"rot\":{\"x\":1.1873,\"y\":270.0014,\"z\":0.0013}},\"e4ab0b\":{\"lock\":false,\"pos\":{\"x\":-9.3198,\"y\":1.5653,\"z\":4.6043},\"rot\":{\"x\":1.1876,\"y\":269.9998,\"z\":180.0015}},\"e4defb\":{\"lock\":false,\"pos\":{\"x\":-2.9415,\"y\":1.5966,\"z\":0.364},\"rot\":{\"x\":0,\"y\":180.0001,\"z\":0}},\"e742fd\":{\"lock\":false,\"pos\":{\"x\":-3.715,\"y\":1.5966,\"z\":-10.4},\"rot\":{\"x\":0,\"y\":269.9998,\"z\":0}},\"f36b35\":{\"lock\":false,\"pos\":{\"x\":-13.5527,\"y\":1.335,\"z\":11.2513},\"rot\":{\"x\":0,\"y\":0.0002,\"z\":0}}}}",
+  "ContainedObjects": [
+    {
+      "GUID": "7a167a",
+      "Name": "Custom_Model_Bag",
+      "Transform": {
+        "posX": 1.69650066,
+        "posY": 1.55803609,
+        "posZ": 14.2492037,
+        "rotX": 1.560021e-06,
+        "rotY": 224.775,
+        "rotZ": 3.59047974e-08,
+        "scaleX": 2.0,
+        "scaleY": 2.0,
+        "scaleZ": 2.0
+      },
+      "Nickname": "Set-aside",
+      "ColorDiffuse": {
+        "r": 0.02148666,
+        "g": 0.00100758043,
+        "b": 0.02148666
+      },
+      "HideWhenFaceDown": false,
+      "Hands": false,
+      "CustomMesh": {
+        "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334964971/3078F312706FC974833ECD2A359B87FD4F283509/",
+        "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960553/C518D80E31E27DB23EEAC8CF9253E59798865790/",
+        "NormalURL": "https://steamusercontent-a.akamaihd.net/ugc/764975951334960069/E70E4A58A1B7827F1E5E2AF9FF44DF0BD5DA33F7/",
+        "MaterialIndex": 1,
+        "TypeIndex": 6
+      },
+      "ContainedObjects": [
+        {
+          "GUID": "53a843",
+          "Name": "CardCustom",
+          "Transform": {
+            "posX": 30.763176,
+            "posY": 2.504885,
+            "posZ": -65.33763,
+            "rotX": 1.12049591e-07,
+            "rotY": 269.992157,
+            "rotZ": 3.0258002e-07,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Spectral Conduit",
+          "Description": "Whispers of the Lost",
+          "GMNotes": "{\"TtsZoopGuid\":\"9d308f8b-dc2f-4a1a-b892-45c1393f0dd7\",\"id\":\"9d308f8b-dc2f-4a1a-b892-45c1393f0dd7\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Augury.  Ritual.\",\"cost\":2,\"intellectIcons\":1,\"willpowerIcons\":1,\"wildIcons\":1,\"uses\":[{\"count\":4,\"token\":\"resource\",\"type\":\"Offering\"}]}",
+          "Tags": [
+            "PlayerCard",
+            "Asset"
+          ],
+          "CardID": 267200,
+          "CustomDeck": {
+            "2672": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12244332890223428583/3466C1BC461B09B85B843C6AEDA1A6F64CEC0647/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2477628251808018937/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "2d32a2",
+          "Name": "Deck",
+          "Transform": {
+            "posX": 35.3768425,
+            "posY": 2.53173375,
+            "posZ": -62.3194771,
+            "rotX": -6.293809e-07,
+            "rotY": 269.99942,
+            "rotZ": 6.3079176e-07,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "copies of Antediluvian Sigils",
+          "Hands": false,
+          "DeckIDs": [
+            267116,
+            267115,
+            267117,
+            267118
+          ],
+          "CustomDeck": {
+            "2671": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 9,
+              "NumHeight": 4,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "ContainedObjects": [
+            {
+              "GUID": "41cf93",
+              "Name": "Card",
+              "Transform": {
+                "posX": 16.9519863,
+                "posY": 1.49508965,
+                "posZ": -35.3088951,
+                "rotX": 0.000148536186,
+                "rotY": 269.9994,
+                "rotZ": -0.0009526998,
+                "scaleX": 1.0,
+                "scaleY": 1.0,
+                "scaleZ": 1.0
+              },
+              "Nickname": "Antediluvian Sigils",
+              "GMNotes": "{\"TtsZoopGuid\":\"b499e1d5-4c28-448e-8989-fdaacce22e6c\",\"id\":\"b499e1d5-4c28-448e-8989-fdaacce22e6c\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Ritual.  Cursed.\",\"uses\":[{\"count\":2,\"token\":\"resource\",\"type\":\"Offering\"}]}",
+              "Tags": [
+                "PlayerCard",
+                "Asset"
+              ],
+              "CardID": 267116,
+              "CustomDeck": {
+                "2671": {
+                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+                  "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+                  "NumWidth": 9,
+                  "NumHeight": 4,
+                  "BackIsHidden": true,
+                  "UniqueBack": false,
+                  "Type": 0
+                }
+              }
+            },
+            {
+              "GUID": "03e308",
+              "Name": "Card",
+              "Transform": {
+                "posX": 16.890173,
+                "posY": 1.53670037,
+                "posZ": -35.1505,
+                "rotX": 0.00414729165,
+                "rotY": 269.9997,
+                "rotZ": 359.993958,
+                "scaleX": 1.0,
+                "scaleY": 1.0,
+                "scaleZ": 1.0
+              },
+              "Nickname": "Antediluvian Sigils",
+              "GMNotes": "{\"TtsZoopGuid\":\"b499e1d5-4c28-448e-8989-fdaacce22e6c\",\"id\":\"b499e1d5-4c28-448e-8989-fdaacce22e6c\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Ritual.  Cursed.\",\"uses\":[{\"count\":2,\"token\":\"resource\",\"type\":\"Offering\"}]}",
+              "Tags": [
+                "PlayerCard",
+                "Asset"
+              ],
+              "CardID": 267115,
+              "CustomDeck": {
+                "2671": {
+                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+                  "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+                  "NumWidth": 9,
+                  "NumHeight": 4,
+                  "BackIsHidden": true,
+                  "UniqueBack": false,
+                  "Type": 0
+                }
+              }
+            },
+            {
+              "GUID": "b716e2",
+              "Name": "Card",
+              "Transform": {
+                "posX": 16.5877514,
+                "posY": 1.57074356,
+                "posZ": -35.0052,
+                "rotX": -0.000220213318,
+                "rotY": 269.999573,
+                "rotZ": -0.0006172755,
+                "scaleX": 1.0,
+                "scaleY": 1.0,
+                "scaleZ": 1.0
+              },
+              "Nickname": "Antediluvian Sigils",
+              "GMNotes": "{\"TtsZoopGuid\":\"b499e1d5-4c28-448e-8989-fdaacce22e6c\",\"id\":\"b499e1d5-4c28-448e-8989-fdaacce22e6c\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Ritual.  Cursed.\",\"uses\":[{\"count\":2,\"token\":\"resource\",\"type\":\"Offering\"}]}",
+              "Tags": [
+                "PlayerCard",
+                "Asset"
+              ],
+              "CardID": 267117,
+              "CustomDeck": {
+                "2671": {
+                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+                  "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+                  "NumWidth": 9,
+                  "NumHeight": 4,
+                  "BackIsHidden": true,
+                  "UniqueBack": false,
+                  "Type": 0
+                }
+              }
+            },
+            {
+              "GUID": "114fcb",
+              "Name": "Card",
+              "Transform": {
+                "posX": 16.7204514,
+                "posY": 1.580332,
+                "posZ": -36.0246925,
+                "rotX": 0.000298407424,
+                "rotY": 269.997467,
+                "rotZ": -0.00115151308,
+                "scaleX": 1.0,
+                "scaleY": 1.0,
+                "scaleZ": 1.0
+              },
+              "Nickname": "Antediluvian Sigils",
+              "GMNotes": "{\"TtsZoopGuid\":\"b499e1d5-4c28-448e-8989-fdaacce22e6c\",\"id\":\"b499e1d5-4c28-448e-8989-fdaacce22e6c\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Ritual.  Cursed.\",\"uses\":[{\"count\":2,\"token\":\"resource\",\"type\":\"Offering\"}]}",
+              "Tags": [
+                "PlayerCard",
+                "Asset"
+              ],
+              "CardID": 267118,
+              "CustomDeck": {
+                "2671": {
+                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+                  "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+                  "NumWidth": 9,
+                  "NumHeight": 4,
+                  "BackIsHidden": true,
+                  "UniqueBack": false,
+                  "Type": 0
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "GUID": "60b93e",
+      "Name": "Deck",
+      "Transform": {
+        "posX": -3.85150838,
+        "posY": 1.67614138,
+        "posZ": 5.7200284,
+        "rotX": -6.887331e-08,
+        "rotY": 269.999664,
+        "rotZ": 180.0,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "",
+      "Hands": false,
+      "DeckIDs": [
+        267119,
+        267120,
+        267121,
+        267122,
+        267123,
+        267124,
+        267125,
+        267126,
+        267127,
+        267128,
+        267129,
+        267130,
+        267131,
+        267132,
+        267133
+      ],
+      "CustomDeck": {
+        "2671": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+          "NumWidth": 9,
+          "NumHeight": 4,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "ContainedObjects": [
+        {
+          "GUID": "4a5255",
+          "Name": "Card",
+          "Transform": {
+            "posX": 22.4327755,
+            "posY": 1.7017976,
+            "posZ": -3.65684175,
+            "rotX": -1.45675131e-05,
+            "rotY": 270.0,
+            "rotZ": 179.151718,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Treacherous Darkness",
+          "GMNotes": "{\"TtsZoopGuid\":\"70668591-1deb-41f9-95d8-6936d90e5834\",\"id\":\"70668591-1deb-41f9-95d8-6936d90e5834\",\"type\":\"Treachery\",\"class\":\"Mythos\",\"traits\":\"Hazard.\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 267119,
+          "CustomDeck": {
+            "2671": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 9,
+              "NumHeight": 4,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "42d168",
+          "Name": "Card",
+          "Transform": {
+            "posX": 22.4088879,
+            "posY": 1.68985534,
+            "posZ": -3.68784451,
+            "rotX": -8.457695e-06,
+            "rotY": 270.0,
+            "rotZ": 179.252121,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "The Looming Dead",
+          "GMNotes": "{\"TtsZoopGuid\":\"5e83f23a-6bc2-49d3-9a06-c0e8dbd5f762\",\"id\":\"5e83f23a-6bc2-49d3-9a06-c0e8dbd5f762\",\"type\":\"Treachery\",\"class\":\"Mythos\",\"traits\":\"Terror.\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 267120,
+          "CustomDeck": {
+            "2671": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 9,
+              "NumHeight": 4,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "509ba8",
+          "Name": "Card",
+          "Transform": {
+            "posX": 22.2982979,
+            "posY": 1.67785358,
+            "posZ": -3.61395,
+            "rotX": -6.80350877e-06,
+            "rotY": 270.0,
+            "rotZ": 179.361664,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Thanatophobia",
+          "GMNotes": "{\"TtsZoopGuid\":\"188331f1-1318-483e-8fdb-f8cdee32c80c\",\"id\":\"188331f1-1318-483e-8fdb-f8cdee32c80c\",\"type\":\"Treachery\",\"class\":\"Mythos\",\"traits\":\"Terror.  Madness.\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 267121,
+          "CustomDeck": {
+            "2671": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 9,
+              "NumHeight": 4,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "bbeb40",
+          "Name": "Card",
+          "Transform": {
+            "posX": 10.9745474,
+            "posY": 2.70460558,
+            "posZ": -43.5408249,
+            "rotX": -8.69771e-09,
+            "rotY": 269.999634,
+            "rotZ": 180.0,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Restless Spirit",
+          "GMNotes": "{\"TtsZoopGuid\":\"859b5b23-9f0c-4aba-91c9-0a50ed6f1dba\",\"id\":\"859b5b23-9f0c-4aba-91c9-0a50ed6f1dba\",\"type\":\"Enemy\",\"class\":\"Mythos\",\"traits\":\"Monster.  Geist.\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 267122,
+          "CustomDeck": {
+            "2671": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 9,
+              "NumHeight": 4,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "4bb23c",
+          "Name": "Card",
+          "Transform": {
+            "posX": 8.766442,
+            "posY": 2.50510454,
+            "posZ": -36.4938354,
+            "rotX": -6.709514e-08,
+            "rotY": 269.999634,
+            "rotZ": 180.0,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Restless Spirit",
+          "GMNotes": "{\"TtsZoopGuid\":\"3b93c7cb-a0bc-48dd-88a1-89a0a4d78c62\",\"id\":\"3b93c7cb-a0bc-48dd-88a1-89a0a4d78c62\",\"type\":\"Enemy\",\"class\":\"Mythos\",\"traits\":\"Monster.  Geist.\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 267123,
+          "CustomDeck": {
+            "2671": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 9,
+              "NumHeight": 4,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "75b7ec",
+          "Name": "Card",
+          "Transform": {
+            "posX": 8.202673,
+            "posY": 2.518924,
+            "posZ": -37.95699,
+            "rotX": -1.97435165e-05,
+            "rotY": 270.0003,
+            "rotZ": 180.724,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Restless Spirit",
+          "GMNotes": "{\"TtsZoopGuid\":\"5dcdcccd-004c-4578-a9a3-7dc86494b46f\",\"id\":\"5dcdcccd-004c-4578-a9a3-7dc86494b46f\",\"type\":\"Enemy\",\"class\":\"Mythos\",\"traits\":\"Monster.  Geist.\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 267124,
+          "CustomDeck": {
+            "2671": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 9,
+              "NumHeight": 4,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "703951",
+          "Name": "Card",
+          "Transform": {
+            "posX": 8.287799,
+            "posY": 2.57359767,
+            "posZ": -39.49576,
+            "rotX": -3.06660525e-07,
+            "rotY": 269.998718,
+            "rotZ": 180.0,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Restless Spirit",
+          "GMNotes": "{\"TtsZoopGuid\":\"e21b7c1e-0be2-42e1-82aa-ad33d93a7857\",\"id\":\"e21b7c1e-0be2-42e1-82aa-ad33d93a7857\",\"type\":\"Enemy\",\"class\":\"Mythos\",\"traits\":\"Monster.  Geist.\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 267125,
+          "CustomDeck": {
+            "2671": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 9,
+              "NumHeight": 4,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "b14551",
+          "Name": "Card",
+          "Transform": {
+            "posX": 8.390766,
+            "posY": 2.70457554,
+            "posZ": -42.2330322,
+            "rotX": 6.12019164e-08,
+            "rotY": 269.999634,
+            "rotZ": 180.0,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Restless Spirit",
+          "GMNotes": "{\"TtsZoopGuid\":\"e33e79cf-4683-4476-ac54-2c25815a1776\",\"id\":\"e33e79cf-4683-4476-ac54-2c25815a1776\",\"type\":\"Enemy\",\"class\":\"Mythos\",\"traits\":\"Monster.  Geist.\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 267126,
+          "CustomDeck": {
+            "2671": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 9,
+              "NumHeight": 4,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "a33b9a",
+          "Name": "Card",
+          "Transform": {
+            "posX": 21.8474522,
+            "posY": 1.62131739,
+            "posZ": -3.08872867,
+            "rotX": 0.000102186037,
+            "rotY": 270.0,
+            "rotZ": 178.999481,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Reenactment",
+          "GMNotes": "{\"TtsZoopGuid\":\"9cf5d57c-5493-42ab-a3af-7b7005c0c7ac\",\"id\":\"9cf5d57c-5493-42ab-a3af-7b7005c0c7ac\",\"type\":\"Treachery\",\"class\":\"Mythos\",\"traits\":\"Omen.  Terror.\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 267127,
+          "CustomDeck": {
+            "2671": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 9,
+              "NumHeight": 4,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "307e6b",
+          "Name": "Card",
+          "Transform": {
+            "posX": 21.8508224,
+            "posY": 1.6014061,
+            "posZ": -3.93260217,
+            "rotX": -0.00015858846,
+            "rotY": 270.0,
+            "rotZ": 179.8237,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Phantom Hands",
+          "GMNotes": "{\"TtsZoopGuid\":\"db189f4c-24c9-4943-95e6-24fd2c642588\",\"id\":\"db189f4c-24c9-4943-95e6-24fd2c642588\",\"type\":\"Treachery\",\"class\":\"Mythos\",\"traits\":\"Hazard.\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 267128,
+          "CustomDeck": {
+            "2671": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 9,
+              "NumHeight": 4,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "626c83",
+          "Name": "Card",
+          "Transform": {
+            "posX": 22.2022514,
+            "posY": 1.601104,
+            "posZ": -3.4913888,
+            "rotX": 2.28651261e-05,
+            "rotY": 270.0,
+            "rotZ": 179.326111,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Lingering Hatred",
+          "GMNotes": "{\"TtsZoopGuid\":\"1579c5bf-054c-4925-9d45-1c9a862c5941\",\"id\":\"1579c5bf-054c-4925-9d45-1c9a862c5941\",\"type\":\"Treachery\",\"class\":\"Mythos\",\"traits\":\"Power.\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 267129,
+          "CustomDeck": {
+            "2671": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 9,
+              "NumHeight": 4,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "02cd35",
+          "Name": "Card",
+          "Transform": {
+            "posX": 22.54616,
+            "posY": 1.58413315,
+            "posZ": -3.58438277,
+            "rotX": -5.184007e-05,
+            "rotY": 270.0,
+            "rotZ": 179.71199,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Haunting Noises",
+          "GMNotes": "{\"TtsZoopGuid\":\"0795962e-1215-4079-8e6e-42244993ad46\",\"id\":\"0795962e-1215-4079-8e6e-42244993ad46\",\"type\":\"Treachery\",\"class\":\"Mythos\",\"traits\":\"Terror.\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 267130,
+          "CustomDeck": {
+            "2671": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 9,
+              "NumHeight": 4,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "eedcb5",
+          "Name": "Card",
+          "Transform": {
+            "posX": 21.8687344,
+            "posY": 1.58835888,
+            "posZ": -3.75397229,
+            "rotX": 8.537737e-06,
+            "rotY": 270.0,
+            "rotZ": 179.068787,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Grim Implications",
+          "GMNotes": "{\"TtsZoopGuid\":\"3bb3ffed-beaf-4b26-9686-b1ff6058e338\",\"id\":\"3bb3ffed-beaf-4b26-9686-b1ff6058e338\",\"type\":\"Treachery\",\"class\":\"Mythos\",\"traits\":\"Mystery.  Omen.\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 267131,
+          "CustomDeck": {
+            "2671": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 9,
+              "NumHeight": 4,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "ee8a17",
+          "Name": "Card",
+          "Transform": {
+            "posX": 22.2459736,
+            "posY": 1.53885174,
+            "posZ": -3.576888,
+            "rotX": 359.986023,
+            "rotY": 269.999969,
+            "rotZ": 179.818665,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Dark Presence",
+          "GMNotes": "{\"TtsZoopGuid\":\"9fa85c0e-3b0f-488a-be63-1071b465f3cc\",\"id\":\"9fa85c0e-3b0f-488a-be63-1071b465f3cc\",\"type\":\"Treachery\",\"class\":\"Mythos\",\"traits\":\"Curse.  Omen.\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 267132,
+          "CustomDeck": {
+            "2671": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 9,
+              "NumHeight": 4,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "99dbec",
+          "Name": "Card",
+          "Transform": {
+            "posX": 22.02395,
+            "posY": 1.49509585,
+            "posZ": -3.56839871,
+            "rotX": 0.000118286836,
+            "rotY": 270.0,
+            "rotZ": 180.00058,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Cryptic Message",
+          "GMNotes": "{\"TtsZoopGuid\":\"1638c362-3adf-4200-b90b-4d4f7688a5f3\",\"id\":\"1638c362-3adf-4200-b90b-4d4f7688a5f3\",\"type\":\"Treachery\",\"class\":\"Mythos\",\"traits\":\"Mystery.  Omen.\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 267133,
+          "CustomDeck": {
+            "2671": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 9,
+              "NumHeight": 4,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "GUID": "e4defb",
+      "Name": "Card",
+      "Transform": {
+        "posX": -2.94150233,
+        "posY": 1.59660506,
+        "posZ": 0.364001572,
+        "rotX": 3.841446e-08,
+        "rotY": 180.000122,
+        "rotZ": 1.32272637e-09,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Agenda 1 - Soldiering On",
+      "GMNotes": "{\"TtsZoopGuid\":\"92f8c0d1-d12b-45aa-9aa3-d2a3f0793a56\",\"id\":\"92f8c0d1-d12b-45aa-9aa3-d2a3f0793a56\",\"type\":\"Agenda\",\"class\":\"Mythos\",\"doomThreshold\":16}",
+      "Tags": [
+        "ScenarioCard"
+      ],
+      "HideWhenFaceDown": false,
+      "CardID": 266902,
+      "SidewaysCard": true,
+      "CustomDeck": {
+        "2669": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15671653691353939036/F21A227CA97D04035F7CAE7BCE34CAF130A940C3/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/17498980545531009034/18FEFC9F012C341EFFDD7C0E0E769C68ABC100AF/",
+          "NumWidth": 2,
+          "NumHeight": 2,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "1efa29",
+      "Name": "Deck",
+      "Transform": {
+        "posX": -2.94150281,
+        "posY": 1.61355889,
+        "posZ": -5.050509,
+        "rotX": 2.80077135e-08,
+        "rotY": 180.006836,
+        "rotZ": 4.36888463e-08,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Act Deck",
+      "Hands": false,
+      "SidewaysCard": true,
+      "DeckIDs": [
+        266900,
+        266901
+      ],
+      "CustomDeck": {
+        "2669": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15671653691353939036/F21A227CA97D04035F7CAE7BCE34CAF130A940C3/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/17498980545531009034/18FEFC9F012C341EFFDD7C0E0E769C68ABC100AF/",
+          "NumWidth": 2,
+          "NumHeight": 2,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "ContainedObjects": [
+        {
+          "GUID": "208889",
+          "Name": "Card",
+          "Transform": {
+            "posX": 12.433444,
+            "posY": 1.49487948,
+            "posZ": -9.554872,
+            "rotX": 0.00221052463,
+            "rotY": 180.006683,
+            "rotZ": 359.985138,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Act 2 - Best Laid Plans",
+          "GMNotes": "{\"TtsZoopGuid\":\"d6fb9e30-7f20-41fa-9c05-ab7250d100dc\",\"id\":\"d6fb9e30-7f20-41fa-9c05-ab7250d100dc\",\"type\":\"Act\",\"class\":\"Mythos\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "HideWhenFaceDown": false,
+          "CardID": 266900,
+          "SidewaysCard": true,
+          "CustomDeck": {
+            "2669": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15671653691353939036/F21A227CA97D04035F7CAE7BCE34CAF130A940C3/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/17498980545531009034/18FEFC9F012C341EFFDD7C0E0E769C68ABC100AF/",
+              "NumWidth": 2,
+              "NumHeight": 2,
+              "BackIsHidden": false,
+              "UniqueBack": true,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "e977f5",
+          "Name": "Card",
+          "Transform": {
+            "posX": 12.7872372,
+            "posY": 1.53039682,
+            "posZ": -9.5949955,
+            "rotX": 0.0228454154,
+            "rotY": 180.000366,
+            "rotZ": 0.00410240842,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Act 1 - Cause U. N. Owen",
+          "GMNotes": "{\"TtsZoopGuid\":\"17229d65-e7a1-451b-9659-b916431374a2\",\"id\":\"17229d65-e7a1-451b-9659-b916431374a2\",\"type\":\"Act\",\"class\":\"Mythos\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "HideWhenFaceDown": false,
+          "CardID": 266901,
+          "SidewaysCard": true,
+          "CustomDeck": {
+            "2669": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15671653691353939036/F21A227CA97D04035F7CAE7BCE34CAF130A940C3/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/17498980545531009034/18FEFC9F012C341EFFDD7C0E0E769C68ABC100AF/",
+              "NumWidth": 2,
+              "NumHeight": 2,
+              "BackIsHidden": false,
+              "UniqueBack": true,
+              "Type": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "GUID": "e742fd",
+      "Name": "Card",
+      "Transform": {
+        "posX": -3.71500349,
+        "posY": 1.59660506,
+        "posZ": -10.4000235,
+        "rotX": -6.62698056e-08,
+        "rotY": 269.999756,
+        "rotZ": -1.10295471e-08,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Scenario",
+      "Description": "And Then There Were None",
+      "GMNotes": "{\"TtsZoopGuid\":\"4b72c1b2-64b4-44a0-b8c3-60c364d84334\",\"id\":\"4b72c1b2-64b4-44a0-b8c3-60c364d84334\",\"type\":\"ScenarioReference\",\"class\":\"Mythos\",\"tokens\":{\"front\":{\"Cultist\":{\"modifier\":-2,\"description\":\"-2.  If you control more than 1<per> clues, take 1 horror.\"},\"Skull\":{\"modifier\":-999,\"description\":\"-X.  X is the number of locations without encounter cards beneath them (max -4).\"},\"Tablet\":{\"modifier\":-2,\"description\":\"-2.  If there is an icon on a <t>Method</t> card at your location that matches the skill for this test, take 1 damage.\"},\"Elder Thing\":{\"modifier\":-2,\"description\":\"-2.  -4 instead if this is a test against a <t>Geist</t> enemy.\"}},\"back\":{\"Cultist\":{\"modifier\":-4,\"description\":\"-4.  If you control more than 1<per> clues, take 1 horror.\"},\"Skull\":{\"modifier\":-999,\"description\":\"-X.  X is the number of locations without encounter cards beneath them.\"},\"Tablet\":{\"modifier\":-4,\"description\":\"-4.  If there is an icon on a <t>Method</t> card at your location that matches the skill for this test, take 1 damage.\"},\"Elder Thing\":{\"modifier\":-4,\"description\":\"-4.  -6 instead if this is a test against a <t>Geist</t> enemy.\"}}}}",
+      "Tags": [
+        "ScenarioCard"
+      ],
+      "HideWhenFaceDown": false,
+      "CardID": 267021,
+      "CustomDeck": {
+        "2670": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12242732159275532641/24D1AB0EADA1CDEE3DC45B740FF2DDF3742F24D2/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13861358155440805126/0F2043795BA9B9AD26CB0ED82A6798C5508E1CB2/",
+          "NumWidth": 6,
+          "NumHeight": 4,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "8112ff",
+      "Name": "Custom_Tile",
+      "Transform": {
+        "posX": -4.117301,
+        "posY": 1.58300042,
+        "posZ": -14.5646038,
+        "rotX": 2.584922e-08,
+        "rotY": 269.9942,
+        "rotZ": -3.601253e-08,
+        "scaleX": 2.2,
+        "scaleY": 1.0,
+        "scaleZ": 2.2
+      },
+      "Nickname": "And Then There Were None Difficulty Selector",
+      "Description": "Define difficulties in this object's script.",
+      "ColorDiffuse": {
+        "r": 1.0,
+        "g": 1.0,
+        "b": 1.0
+      },
+      "HideWhenFaceDown": false,
+      "Hands": false,
+      "CustomImage": {
+        "ImageURL": "https://steamusercontent-a.akamaihd.net/ugc/965354846165100486/3DC8FCEF364B30758B09EF96AF9458F2B8E64D56/",
+        "ImageSecondaryURL": "https://i.imgur.com/EcbhVuh.jpg/",
+        "ImageScalar": 1.0,
+        "WidthScale": 0.0,
+        "CustomTile": {
+          "Type": 3,
+          "Thickness": 0.1,
+          "Stackable": false,
+          "Stretch": true
+        }
+      },
+      "LuaScript": "-- edit the \"tokenData\" table to change the preset difficulties\r\n-- list of valid ids: 'p1', '0', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8',\r\n--   'skull', 'cultist', 'tablet', 'elder', 'red', 'blue', 'bless', 'curse', 'frost'\r\n\r\nlocal tokenData = {\r\n  Standard = { 'p1', '0', 'm1', 'm1', 'm2', 'm3', 'm3', 'm4', 'skull', 'skull', 'cultist', 'tablet', 'elder', 'red', 'blue' },\r\n  Hard = { '0', 'm1', 'm2', 'm3', 'm4', 'm4', 'm5', 'm6', 'skull', 'skull', 'cultist', 'tablet', 'elder', 'red', 'blue' }\r\n}\r\n\r\n-- create buttons on startup\r\nfunction onLoad()\r\n  local z_offset = -0.15\r\n  for difficulty, _ in pairs(tokenData) do\r\n    local clickFunction = difficulty:lower() .. \"Click\"\r\n    self.setVar(clickFunction, function() clickFun(difficulty) end)\r\n\r\n    self.createButton({\r\n      label = difficulty,\r\n      function_owner = self,\r\n      click_function = clickFunction,\r\n      position = { 0, 0.1, z_offset },\r\n      rotation = { 0, 0, 0 },\r\n      scale = { 0.47, 1, 0.47 },\r\n      height = 200,\r\n      width = 1150,\r\n      font_size = 100,\r\n      color = { 0.87, 0.8, 0.70 },\r\n      font_color = { 0, 0, 0 }\r\n    })\r\n    z_offset = z_offset + 0.20\r\n  end\r\nend\r\n\r\nfunction clickFun(difficulty)\r\n  Global.call(\"setChaosBagState\", tokenData[difficulty])\r\nend"
+    },
+    {
+      "GUID": "3c3077",
+      "Name": "Notecard",
+      "Transform": {
+        "posX": -9.837298,
+        "posY": 1.62179339,
+        "posZ": 11.256402,
+        "rotX": 359.117584,
+        "rotY": 89.9879761,
+        "rotZ": 3.5222336e-05,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Scenario Setup",
+      "Description": "1. Randomly put 2 Victim assets into play at each non-Central location\n2. Shuffle the red bag\n3. Take out each method pile\n4. Take 2 cards from 2 piles and 1 card from 1 other pile and remove them from the game\n5. Shuffle the remaining cards together and place 2 facedown beneath each non-Central location\n***Do not look at any cards while doing this***",
+      "ColorDiffuse": {
+        "r": 1.0,
+        "g": 1.0,
+        "b": 1.0
+      },
+      "HideWhenFaceDown": false,
+      "Hands": false
+    },
+    {
+      "GUID": "f36b35",
+      "Name": "Bag",
+      "Transform": {
+        "posX": -13.5526962,
+        "posY": 1.33496547,
+        "posZ": 11.2513018,
+        "rotX": 1.02953109e-05,
+        "rotY": 0.0002105686,
+        "rotZ": -7.320253e-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "",
+      "ColorDiffuse": {
+        "r": 0.961672366,
+        "g": 0.306595653,
+        "b": 0.306595653
+      },
+      "HideWhenFaceDown": false,
+      "Hands": false,
+      "ContainedObjects": [
+        {
+          "GUID": "0bdb91",
+          "Name": "Deck",
+          "Transform": {
+            "posX": 5.209375,
+            "posY": 2.526684,
+            "posZ": -58.9382935,
+            "rotX": -1.484082e-07,
+            "rotY": 269.993073,
+            "rotZ": 180.0,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Method pile",
+          "Hands": false,
+          "DeckIDs": [
+            267105,
+            267106,
+            267108
+          ],
+          "CustomDeck": {
+            "2671": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 9,
+              "NumHeight": 4,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "ContainedObjects": [
+            {
+              "GUID": "436965",
+              "Name": "Card",
+              "Transform": {
+                "posX": 3.08987713,
+                "posY": 1.59222162,
+                "posZ": -33.28977,
+                "rotX": -0.000262748828,
+                "rotY": 269.99115,
+                "rotZ": 181.531113,
+                "scaleX": 1.0,
+                "scaleY": 1.0,
+                "scaleZ": 1.0
+              },
+              "Nickname": "Knife",
+              "GMNotes": "{\"TtsZoopGuid\":\"8d214942-4e16-443d-8380-47b7bbf4f8ff\",\"id\":\"8d214942-4e16-443d-8380-47b7bbf4f8ff\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Method.\",\"wildIcons\":1}",
+              "Tags": [
+                "PlayerCard",
+                "Asset"
+              ],
+              "CardID": 267105,
+              "CustomDeck": {
+                "2671": {
+                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+                  "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+                  "NumWidth": 9,
+                  "NumHeight": 4,
+                  "BackIsHidden": true,
+                  "UniqueBack": false,
+                  "Type": 0
+                }
+              }
+            },
+            {
+              "GUID": "7be2aa",
+              "Name": "Card",
+              "Transform": {
+                "posX": 3.06935287,
+                "posY": 1.55768812,
+                "posZ": -33.433403,
+                "rotX": 1.72355558e-05,
+                "rotY": 270.0,
+                "rotZ": 178.834869,
+                "scaleX": 1.0,
+                "scaleY": 1.0,
+                "scaleZ": 1.0
+              },
+              "Nickname": "Improvised Item",
+              "GMNotes": "{\"TtsZoopGuid\":\"bd9a0058-afd4-4d9f-9c7f-30215968ebda\",\"id\":\"bd9a0058-afd4-4d9f-9c7f-30215968ebda\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Method.\",\"wildIcons\":1}",
+              "Tags": [
+                "PlayerCard",
+                "Asset"
+              ],
+              "CardID": 267106,
+              "CustomDeck": {
+                "2671": {
+                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+                  "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+                  "NumWidth": 9,
+                  "NumHeight": 4,
+                  "BackIsHidden": true,
+                  "UniqueBack": false,
+                  "Type": 0
+                }
+              }
+            },
+            {
+              "GUID": "f46cdf",
+              "Name": "Card",
+              "Transform": {
+                "posX": 3.04557443,
+                "posY": 1.49510348,
+                "posZ": -33.66603,
+                "rotX": 2.3569936e-07,
+                "rotY": 269.999878,
+                "rotZ": 180.000031,
+                "scaleX": 1.0,
+                "scaleY": 1.0,
+                "scaleZ": 1.0
+              },
+              "Nickname": "Fell From a Height",
+              "GMNotes": "{\"TtsZoopGuid\":\"452d1841-4d35-40f0-9612-2fd429ba93cb\",\"id\":\"452d1841-4d35-40f0-9612-2fd429ba93cb\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Method.\",\"wildIcons\":1}",
+              "Tags": [
+                "PlayerCard",
+                "Asset"
+              ],
+              "CardID": 267108,
+              "CustomDeck": {
+                "2671": {
+                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+                  "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+                  "NumWidth": 9,
+                  "NumHeight": 4,
+                  "BackIsHidden": true,
+                  "UniqueBack": false,
+                  "Type": 0
+                }
+              }
+            }
+          ]
+        },
+        {
+          "GUID": "2c660c",
+          "Name": "Deck",
+          "Transform": {
+            "posX": 16.441576,
+            "posY": 2.526872,
+            "posZ": -73.6213455,
+            "rotX": 7.38762438e-08,
+            "rotY": 269.999969,
+            "rotZ": 180.0,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Method pile",
+          "Hands": false,
+          "DeckIDs": [
+            267100,
+            267110,
+            267114
+          ],
+          "CustomDeck": {
+            "2671": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 9,
+              "NumHeight": 4,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "ContainedObjects": [
+            {
+              "GUID": "bd5cd9",
+              "Name": "Card",
+              "Transform": {
+                "posX": 3.1056633,
+                "posY": 1.57081258,
+                "posZ": -31.0302048,
+                "rotX": -0.000665037544,
+                "rotY": 270.0,
+                "rotZ": 179.9891,
+                "scaleX": 1.0,
+                "scaleY": 1.0,
+                "scaleZ": 1.0
+              },
+              "Nickname": "Straight Razor",
+              "GMNotes": "{\"TtsZoopGuid\":\"f008fa0a-5db8-437e-8558-3b1188731b50\",\"id\":\"f008fa0a-5db8-437e-8558-3b1188731b50\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Method.\",\"agilityIcons\":1}",
+              "Tags": [
+                "PlayerCard",
+                "Asset"
+              ],
+              "CardID": 267100,
+              "CustomDeck": {
+                "2671": {
+                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+                  "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+                  "NumWidth": 9,
+                  "NumHeight": 4,
+                  "BackIsHidden": true,
+                  "UniqueBack": false,
+                  "Type": 0
+                }
+              }
+            },
+            {
+              "GUID": "ab63e9",
+              "Name": "Card",
+              "Transform": {
+                "posX": 3.029693,
+                "posY": 1.53115666,
+                "posZ": -31.35196,
+                "rotX": 359.989563,
+                "rotY": 270.0,
+                "rotZ": 180.0173,
+                "scaleX": 1.0,
+                "scaleY": 1.0,
+                "scaleZ": 1.0
+              },
+              "Nickname": "Drowned in the Sea",
+              "GMNotes": "{\"TtsZoopGuid\":\"ff869121-67f3-446e-8b5a-d483da06cb22\",\"id\":\"ff869121-67f3-446e-8b5a-d483da06cb22\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Method.\",\"agilityIcons\":1}",
+              "Tags": [
+                "PlayerCard",
+                "Asset"
+              ],
+              "CardID": 267110,
+              "CustomDeck": {
+                "2671": {
+                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+                  "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+                  "NumWidth": 9,
+                  "NumHeight": 4,
+                  "BackIsHidden": true,
+                  "UniqueBack": false,
+                  "Type": 0
+                }
+              }
+            },
+            {
+              "GUID": "c3f736",
+              "Name": "Card",
+              "Transform": {
+                "posX": 2.98252416,
+                "posY": 1.49513745,
+                "posZ": -31.1734447,
+                "rotX": -0.000254495535,
+                "rotY": 270.0,
+                "rotZ": 179.9979,
+                "scaleX": 1.0,
+                "scaleY": 1.0,
+                "scaleZ": 1.0
+              },
+              "Nickname": "Blowpipe",
+              "GMNotes": "{\"TtsZoopGuid\":\"cd261276-94a8-4485-8a94-bac1f2c70ba7\",\"id\":\"cd261276-94a8-4485-8a94-bac1f2c70ba7\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Method.\",\"agilityIcons\":1}",
+              "Tags": [
+                "PlayerCard",
+                "Asset"
+              ],
+              "CardID": 267114,
+              "CustomDeck": {
+                "2671": {
+                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+                  "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+                  "NumWidth": 9,
+                  "NumHeight": 4,
+                  "BackIsHidden": true,
+                  "UniqueBack": false,
+                  "Type": 0
+                }
+              }
+            }
+          ]
+        },
+        {
+          "GUID": "49a317",
+          "Name": "Deck",
+          "Transform": {
+            "posX": 14.7577639,
+            "posY": 2.52687287,
+            "posZ": -69.4117,
+            "rotX": -8.25109652e-08,
+            "rotY": 269.999756,
+            "rotZ": 180.0,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Method pile",
+          "Hands": false,
+          "DeckIDs": [
+            267102,
+            267107,
+            267112
+          ],
+          "CustomDeck": {
+            "2671": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 9,
+              "NumHeight": 4,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "ContainedObjects": [
+            {
+              "GUID": "00b495",
+              "Name": "Card",
+              "Transform": {
+                "posX": 3.4938786,
+                "posY": 1.57477522,
+                "posZ": -28.3148289,
+                "rotX": -3.074919e-05,
+                "rotY": 270.0,
+                "rotZ": 179.6958,
+                "scaleX": 1.0,
+                "scaleY": 1.0,
+                "scaleZ": 1.0
+              },
+              "Nickname": "Service Revolver",
+              "GMNotes": "{\"TtsZoopGuid\":\"194f5f81-a36f-484b-93b2-a774cdd1eb91\",\"id\":\"194f5f81-a36f-484b-93b2-a774cdd1eb91\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Method.\",\"combatIcons\":1}",
+              "Tags": [
+                "PlayerCard",
+                "Asset"
+              ],
+              "CardID": 267102,
+              "CustomDeck": {
+                "2671": {
+                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+                  "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+                  "NumWidth": 9,
+                  "NumHeight": 4,
+                  "BackIsHidden": true,
+                  "UniqueBack": false,
+                  "Type": 0
+                }
+              }
+            },
+            {
+              "GUID": "419273",
+              "Name": "Card",
+              "Transform": {
+                "posX": 3.13397527,
+                "posY": 1.53945947,
+                "posZ": -28.4716625,
+                "rotX": 359.993378,
+                "rotY": 270.0,
+                "rotZ": 179.780441,
+                "scaleX": 1.0,
+                "scaleY": 1.0,
+                "scaleZ": 1.0
+              },
+              "Nickname": "Hatchet",
+              "GMNotes": "{\"TtsZoopGuid\":\"1b7b2ded-06ac-4947-a891-fc1d75e9867c\",\"id\":\"1b7b2ded-06ac-4947-a891-fc1d75e9867c\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Method.\",\"combatIcons\":1}",
+              "Tags": [
+                "PlayerCard",
+                "Asset"
+              ],
+              "CardID": 267107,
+              "CustomDeck": {
+                "2671": {
+                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+                  "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+                  "NumWidth": 9,
+                  "NumHeight": 4,
+                  "BackIsHidden": true,
+                  "UniqueBack": false,
+                  "Type": 0
+                }
+              }
+            },
+            {
+              "GUID": "398113",
+              "Name": "Card",
+              "Transform": {
+                "posX": 3.11226034,
+                "posY": 1.49510181,
+                "posZ": -28.3705559,
+                "rotX": 3.77035321e-05,
+                "rotY": 270.0,
+                "rotZ": 180.000153,
+                "scaleX": 1.0,
+                "scaleY": 1.0,
+                "scaleZ": 1.0
+              },
+              "Nickname": "Crushed by Debris",
+              "GMNotes": "{\"TtsZoopGuid\":\"82e0fc13-753a-4092-98cf-03675c4b6eed\",\"id\":\"82e0fc13-753a-4092-98cf-03675c4b6eed\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Method.\",\"combatIcons\":1}",
+              "Tags": [
+                "PlayerCard",
+                "Asset"
+              ],
+              "CardID": 267112,
+              "CustomDeck": {
+                "2671": {
+                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+                  "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+                  "NumWidth": 9,
+                  "NumHeight": 4,
+                  "BackIsHidden": true,
+                  "UniqueBack": false,
+                  "Type": 0
+                }
+              }
+            }
+          ]
+        },
+        {
+          "GUID": "f19c52",
+          "Name": "Deck",
+          "Transform": {
+            "posX": 13.3316526,
+            "posY": 2.52687216,
+            "posZ": -61.5911255,
+            "rotX": 1.72272323e-07,
+            "rotY": 269.99353,
+            "rotZ": 180.0,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Method pile",
+          "Hands": false,
+          "DeckIDs": [
+            267104,
+            267109,
+            267111
+          ],
+          "CustomDeck": {
+            "2671": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 9,
+              "NumHeight": 4,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "ContainedObjects": [
+            {
+              "GUID": "ab9d68",
+              "Name": "Card",
+              "Transform": {
+                "posX": 3.43764567,
+                "posY": 1.58231759,
+                "posZ": -25.4157772,
+                "rotX": -1.52078428e-06,
+                "rotY": 270.0,
+                "rotZ": 179.21907,
+                "scaleX": 1.0,
+                "scaleY": 1.0,
+                "scaleZ": 1.0
+              },
+              "Nickname": "Poisoned Drink",
+              "GMNotes": "{\"TtsZoopGuid\":\"6c6d06cf-e403-4c5b-bb7e-33997d230520\",\"id\":\"6c6d06cf-e403-4c5b-bb7e-33997d230520\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Method.\",\"intellectIcons\":1}",
+              "Tags": [
+                "PlayerCard",
+                "Asset"
+              ],
+              "CardID": 267104,
+              "CustomDeck": {
+                "2671": {
+                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+                  "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+                  "NumWidth": 9,
+                  "NumHeight": 4,
+                  "BackIsHidden": true,
+                  "UniqueBack": false,
+                  "Type": 0
+                }
+              }
+            },
+            {
+              "GUID": "fd26e0",
+              "Name": "Card",
+              "Transform": {
+                "posX": 3.13728142,
+                "posY": 1.55658948,
+                "posZ": -25.6190948,
+                "rotX": -0.000235321364,
+                "rotY": 269.9912,
+                "rotZ": 181.455872,
+                "scaleX": 1.0,
+                "scaleY": 1.0,
+                "scaleZ": 1.0
+              },
+              "Nickname": "Electrocution",
+              "GMNotes": "{\"TtsZoopGuid\":\"7067b6b3-8146-4341-b2ae-96b21c007b2d\",\"id\":\"7067b6b3-8146-4341-b2ae-96b21c007b2d\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Method.\",\"intellectIcons\":1}",
+              "Tags": [
+                "PlayerCard",
+                "Asset"
+              ],
+              "CardID": 267109,
+              "CustomDeck": {
+                "2671": {
+                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+                  "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+                  "NumWidth": 9,
+                  "NumHeight": 4,
+                  "BackIsHidden": true,
+                  "UniqueBack": false,
+                  "Type": 0
+                }
+              }
+            },
+            {
+              "GUID": "9d8469",
+              "Name": "Card",
+              "Transform": {
+                "posX": 3.11242175,
+                "posY": 1.495116,
+                "posZ": -25.6568279,
+                "rotX": -8.894233e-05,
+                "rotY": 269.993835,
+                "rotZ": 180.0,
+                "scaleX": 1.0,
+                "scaleY": 1.0,
+                "scaleZ": 1.0
+              },
+              "Nickname": "Cyanide Injection",
+              "GMNotes": "{\"TtsZoopGuid\":\"31403308-9701-4119-bf83-4fbeba6dc6fd\",\"id\":\"31403308-9701-4119-bf83-4fbeba6dc6fd\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Method.\",\"intellectIcons\":1}",
+              "Tags": [
+                "PlayerCard",
+                "Asset"
+              ],
+              "CardID": 267111,
+              "CustomDeck": {
+                "2671": {
+                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+                  "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+                  "NumWidth": 9,
+                  "NumHeight": 4,
+                  "BackIsHidden": true,
+                  "UniqueBack": false,
+                  "Type": 0
+                }
+              }
+            }
+          ]
+        },
+        {
+          "GUID": "cfafc9",
+          "Name": "Deck",
+          "Transform": {
+            "posX": 15.4337063,
+            "posY": 2.52686834,
+            "posZ": -62.18076,
+            "rotX": -2.51389736e-07,
+            "rotY": 269.999634,
+            "rotZ": 180.0,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Method pile",
+          "Hands": false,
+          "DeckIDs": [
+            267101,
+            267103,
+            267113
+          ],
+          "CustomDeck": {
+            "2671": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 9,
+              "NumHeight": 4,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "ContainedObjects": [
+            {
+              "GUID": "e53077",
+              "Name": "Card",
+              "Transform": {
+                "posX": 3.19890976,
+                "posY": 1.57101583,
+                "posZ": -22.7505131,
+                "rotX": 0.0102650439,
+                "rotY": 297.4341,
+                "rotZ": 179.948883,
+                "scaleX": 1.0,
+                "scaleY": 1.0,
+                "scaleZ": 1.0
+              },
+              "Nickname": "Smothered in Sleep",
+              "GMNotes": "{\"TtsZoopGuid\":\"72e0effb-06bd-4a90-b1a7-e8abbb48890e\",\"id\":\"72e0effb-06bd-4a90-b1a7-e8abbb48890e\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Method.\",\"willpowerIcons\":1}",
+              "Tags": [
+                "PlayerCard",
+                "Asset"
+              ],
+              "CardID": 267101,
+              "CustomDeck": {
+                "2671": {
+                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+                  "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+                  "NumWidth": 9,
+                  "NumHeight": 4,
+                  "BackIsHidden": true,
+                  "UniqueBack": false,
+                  "Type": 0
+                }
+              }
+            },
+            {
+              "GUID": "ed922d",
+              "Name": "Card",
+              "Transform": {
+                "posX": 3.213258,
+                "posY": 1.54791737,
+                "posZ": -22.53618,
+                "rotX": 4.16214643e-05,
+                "rotY": 270.0,
+                "rotZ": 179.3172,
+                "scaleX": 1.0,
+                "scaleY": 1.0,
+                "scaleZ": 1.0
+              },
+              "Nickname": "Rope Noose",
+              "GMNotes": "{\"TtsZoopGuid\":\"2317110f-184f-42a7-996f-ac2b7b34362a\",\"id\":\"2317110f-184f-42a7-996f-ac2b7b34362a\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Method.\",\"willpowerIcons\":1}",
+              "Tags": [
+                "PlayerCard",
+                "Asset"
+              ],
+              "CardID": 267103,
+              "CustomDeck": {
+                "2671": {
+                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+                  "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+                  "NumWidth": 9,
+                  "NumHeight": 4,
+                  "BackIsHidden": true,
+                  "UniqueBack": false,
+                  "Type": 0
+                }
+              }
+            },
+            {
+              "GUID": "8aeaa0",
+              "Name": "Card",
+              "Transform": {
+                "posX": 2.95173645,
+                "posY": 1.495104,
+                "posZ": -22.622242,
+                "rotX": -1.39708172e-05,
+                "rotY": 269.999634,
+                "rotZ": 180.000031,
+                "scaleX": 1.0,
+                "scaleY": 1.0,
+                "scaleZ": 1.0
+              },
+              "Nickname": "Chloral Hydrate Overdose",
+              "GMNotes": "{\"TtsZoopGuid\":\"dc1b3f57-5b76-4992-9fe4-e3ee007e9611\",\"id\":\"dc1b3f57-5b76-4992-9fe4-e3ee007e9611\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Method.\",\"willpowerIcons\":1}",
+              "Tags": [
+                "PlayerCard",
+                "Asset"
+              ],
+              "CardID": 267113,
+              "CustomDeck": {
+                "2671": {
+                  "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18101146309541358913/BF16CB06866AE8B8223816012D1F317F130DB74B/",
+                  "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14664641065150279344/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+                  "NumWidth": 9,
+                  "NumHeight": 4,
+                  "BackIsHidden": true,
+                  "UniqueBack": false,
+                  "Type": 0
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "GUID": "e4ab0b",
+      "Name": "Card",
+      "Transform": {
+        "posX": -9.319784,
+        "posY": 1.56533885,
+        "posZ": 4.60432339,
+        "rotX": 1.187589,
+        "rotY": 269.999817,
+        "rotZ": 180.001526,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Guide 1",
+      "Description": "Intro",
+      "GMNotes": "{\"TtsZoopGuid\":\"7c47b4a4-26ea-4a71-85db-94b790ead4c2\"}",
+      "Tags": [
+        "ScenarioCard"
+      ],
+      "HideWhenFaceDown": false,
+      "CardID": 267020,
+      "CustomDeck": {
+        "2670": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12242732159275532641/24D1AB0EADA1CDEE3DC45B740FF2DDF3742F24D2/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13861358155440805126/0F2043795BA9B9AD26CB0ED82A6798C5508E1CB2/",
+          "NumWidth": 6,
+          "NumHeight": 4,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "7e42a2",
+      "Name": "Card",
+      "Transform": {
+        "posX": -9.319984,
+        "posY": 1.56533647,
+        "posZ": 2.31719232,
+        "rotX": 1.18734348,
+        "rotY": 270.0054,
+        "rotZ": 0.00138522487,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Guide 2",
+      "Description": "Token Bag and Campaign Rules",
+      "GMNotes": "{\"TtsZoopGuid\":\"4aa0d644-2225-492c-b9e4-b80f0274ee55\"}",
+      "Tags": [
+        "ScenarioCard"
+      ],
+      "HideWhenFaceDown": false,
+      "CardID": 267019,
+      "CustomDeck": {
+        "2670": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12242732159275532641/24D1AB0EADA1CDEE3DC45B740FF2DDF3742F24D2/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13861358155440805126/0F2043795BA9B9AD26CB0ED82A6798C5508E1CB2/",
+          "NumWidth": 6,
+          "NumHeight": 4,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "9fba50",
+      "Name": "Card",
+      "Transform": {
+        "posX": -9.319984,
+        "posY": 1.56533647,
+        "posZ": 0.0295864437,
+        "rotX": 1.18734264,
+        "rotY": 270.005524,
+        "rotZ": 0.00138645247,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Guide 3",
+      "Description": "Story and Setup",
+      "GMNotes": "{\"TtsZoopGuid\":\"9bae816d-85e6-4dfe-8927-2602fac2270b\"}",
+      "Tags": [
+        "ScenarioCard"
+      ],
+      "HideWhenFaceDown": false,
+      "CardID": 267018,
+      "CustomDeck": {
+        "2670": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12242732159275532641/24D1AB0EADA1CDEE3DC45B740FF2DDF3742F24D2/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13861358155440805126/0F2043795BA9B9AD26CB0ED82A6798C5508E1CB2/",
+          "NumWidth": 6,
+          "NumHeight": 4,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "2d4b27",
+      "Name": "Card",
+      "Transform": {
+        "posX": -9.31998348,
+        "posY": 1.5653367,
+        "posZ": -2.25829124,
+        "rotX": 1.18750679,
+        "rotY": 269.999939,
+        "rotZ": 180.001511,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Guide 4",
+      "Description": "Location Placement and Resolution 1",
+      "GMNotes": "{\"TtsZoopGuid\":\"3ef434f7-6a4f-4755-b00a-ab6807b8c3f4\"}",
+      "Tags": [
+        "ScenarioCard"
+      ],
+      "HideWhenFaceDown": false,
+      "CardID": 267017,
+      "CustomDeck": {
+        "2670": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12242732159275532641/24D1AB0EADA1CDEE3DC45B740FF2DDF3742F24D2/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13861358155440805126/0F2043795BA9B9AD26CB0ED82A6798C5508E1CB2/",
+          "NumWidth": 6,
+          "NumHeight": 4,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "d5a5ab",
+      "Name": "Card",
+      "Transform": {
+        "posX": -9.319983,
+        "posY": 1.56533647,
+        "posZ": -4.54542255,
+        "rotX": 1.18734777,
+        "rotY": 270.0014,
+        "rotZ": 0.00130692776,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Guide 5",
+      "Description": "Resolution 2",
+      "GMNotes": "{\"TtsZoopGuid\":\"4be167a4-bfc9-4ca7-aac2-854882ff07b1\"}",
+      "Tags": [
+        "ScenarioCard"
+      ],
+      "HideWhenFaceDown": false,
+      "CardID": 267016,
+      "CustomDeck": {
+        "2670": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12242732159275532641/24D1AB0EADA1CDEE3DC45B740FF2DDF3742F24D2/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13861358155440805126/0F2043795BA9B9AD26CB0ED82A6798C5508E1CB2/",
+          "NumWidth": 6,
+          "NumHeight": 4,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "52fd0d",
+      "Name": "Deck",
+      "Transform": {
+        "posX": -11.5073652,
+        "posY": 1.589071,
+        "posZ": -9.879122,
+        "rotX": -2.27978028e-08,
+        "rotY": 270.000153,
+        "rotZ": -2.40943065e-09,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Victim cards",
+      "Hands": false,
+      "DeckIDs": [
+        267000,
+        267001,
+        267002,
+        267003,
+        267004,
+        267005,
+        267006,
+        267007,
+        267008,
+        267009
+      ],
+      "CustomDeck": {
+        "2670": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12242732159275532641/24D1AB0EADA1CDEE3DC45B740FF2DDF3742F24D2/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13861358155440805126/0F2043795BA9B9AD26CB0ED82A6798C5508E1CB2/",
+          "NumWidth": 6,
+          "NumHeight": 4,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "ContainedObjects": [
+        {
+          "GUID": "99e2c1",
+          "Name": "Card",
+          "Transform": {
+            "posX": -5.80302048,
+            "posY": 1.64419055,
+            "posZ": -22.2968979,
+            "rotX": -3.0482388e-05,
+            "rotY": 270.0,
+            "rotZ": 179.5953,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "William Blore",
+          "Description": "The Inspector",
+          "GMNotes": "{\"TtsZoopGuid\":\"2ceb8da2-faf3-4baa-9006-615e8daa708f\",\"id\":\"2ceb8da2-faf3-4baa-9006-615e8daa708f\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Victim.\",\"combatIcons\":1,\"intellectIcons\":1}",
+          "Tags": [
+            "PlayerCard",
+            "Asset"
+          ],
+          "HideWhenFaceDown": false,
+          "CardID": 267000,
+          "CustomDeck": {
+            "2670": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12242732159275532641/24D1AB0EADA1CDEE3DC45B740FF2DDF3742F24D2/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13861358155440805126/0F2043795BA9B9AD26CB0ED82A6798C5508E1CB2/",
+              "NumWidth": 6,
+              "NumHeight": 4,
+              "BackIsHidden": false,
+              "UniqueBack": true,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "43ded2",
+          "Name": "Card",
+          "Transform": {
+            "posX": -6.21840048,
+            "posY": 1.620564,
+            "posZ": -22.2917023,
+            "rotX": -0.001074681,
+            "rotY": 270.000458,
+            "rotZ": 179.929108,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Vera Claythorne",
+          "Description": "The Governess",
+          "GMNotes": "{\"TtsZoopGuid\":\"3e07ac39-d032-4a00-94f8-e0717c6488c5\",\"id\":\"3e07ac39-d032-4a00-94f8-e0717c6488c5\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Victim.\",\"agilityIcons\":1,\"intellectIcons\":1}",
+          "Tags": [
+            "PlayerCard",
+            "Asset"
+          ],
+          "HideWhenFaceDown": false,
+          "CardID": 267001,
+          "CustomDeck": {
+            "2670": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12242732159275532641/24D1AB0EADA1CDEE3DC45B740FF2DDF3742F24D2/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13861358155440805126/0F2043795BA9B9AD26CB0ED82A6798C5508E1CB2/",
+              "NumWidth": 6,
+              "NumHeight": 4,
+              "BackIsHidden": false,
+              "UniqueBack": true,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "c7438e",
+          "Name": "Card",
+          "Transform": {
+            "posX": -5.91394,
+            "posY": 1.61898351,
+            "posZ": -22.79293,
+            "rotX": 0.000174864661,
+            "rotY": 270.0,
+            "rotZ": 179.9966,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Thomas Rogers",
+          "Description": "The Butler",
+          "GMNotes": "{\"TtsZoopGuid\":\"4d647087-57fd-4488-8e24-e3cf16c32c5b\",\"id\":\"4d647087-57fd-4488-8e24-e3cf16c32c5b\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Victim.\",\"combatIcons\":1,\"wildIcons\":1}",
+          "Tags": [
+            "PlayerCard",
+            "Asset"
+          ],
+          "HideWhenFaceDown": false,
+          "CardID": 267002,
+          "CustomDeck": {
+            "2670": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12242732159275532641/24D1AB0EADA1CDEE3DC45B740FF2DDF3742F24D2/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13861358155440805126/0F2043795BA9B9AD26CB0ED82A6798C5508E1CB2/",
+              "NumWidth": 6,
+              "NumHeight": 4,
+              "BackIsHidden": false,
+              "UniqueBack": true,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "1616ec",
+          "Name": "Card",
+          "Transform": {
+            "posX": -5.6014204,
+            "posY": 1.62687492,
+            "posZ": -22.3802185,
+            "rotX": -4.41294251e-05,
+            "rotY": 270.0,
+            "rotZ": 179.068649,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Philip Lombard",
+          "Description": "The Soldier",
+          "GMNotes": "{\"TtsZoopGuid\":\"3c316008-c5a3-458e-ab52-ec5ab06ce889\",\"id\":\"3c316008-c5a3-458e-ab52-ec5ab06ce889\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Victim.\",\"agilityIcons\":1,\"combatIcons\":1}",
+          "Tags": [
+            "PlayerCard",
+            "Asset"
+          ],
+          "HideWhenFaceDown": false,
+          "CardID": 267003,
+          "CustomDeck": {
+            "2670": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12242732159275532641/24D1AB0EADA1CDEE3DC45B740FF2DDF3742F24D2/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13861358155440805126/0F2043795BA9B9AD26CB0ED82A6798C5508E1CB2/",
+              "NumWidth": 6,
+              "NumHeight": 4,
+              "BackIsHidden": false,
+              "UniqueBack": true,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "278330",
+          "Name": "Card",
+          "Transform": {
+            "posX": -6.097583,
+            "posY": 1.61902475,
+            "posZ": -22.30328,
+            "rotX": -2.59867356e-05,
+            "rotY": 270.0,
+            "rotZ": 179.009933,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Lawrence Wargrave",
+          "Description": "The Judge",
+          "GMNotes": "{\"TtsZoopGuid\":\"75c76c1e-1f01-423d-a430-223ef0df2983\",\"id\":\"75c76c1e-1f01-423d-a430-223ef0df2983\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Victim.\",\"willpowerIcons\":1,\"wildIcons\":1}",
+          "Tags": [
+            "PlayerCard",
+            "Asset"
+          ],
+          "HideWhenFaceDown": false,
+          "CardID": 267004,
+          "CustomDeck": {
+            "2670": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12242732159275532641/24D1AB0EADA1CDEE3DC45B740FF2DDF3742F24D2/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13861358155440805126/0F2043795BA9B9AD26CB0ED82A6798C5508E1CB2/",
+              "NumWidth": 6,
+              "NumHeight": 4,
+              "BackIsHidden": false,
+              "UniqueBack": true,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "1c801f",
+          "Name": "Card",
+          "Transform": {
+            "posX": -5.87589359,
+            "posY": 1.59605,
+            "posZ": -22.456625,
+            "rotX": -2.73874575e-05,
+            "rotY": 270.0,
+            "rotZ": 179.5953,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "John MacArthur",
+          "Description": "The General",
+          "GMNotes": "{\"TtsZoopGuid\":\"4bb1950d-78e5-48d9-8b2b-8a8a50510d0a\",\"id\":\"4bb1950d-78e5-48d9-8b2b-8a8a50510d0a\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Victim.\",\"combatIcons\":1,\"willpowerIcons\":1}",
+          "Tags": [
+            "PlayerCard",
+            "Asset"
+          ],
+          "HideWhenFaceDown": false,
+          "CardID": 267005,
+          "CustomDeck": {
+            "2670": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12242732159275532641/24D1AB0EADA1CDEE3DC45B740FF2DDF3742F24D2/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13861358155440805126/0F2043795BA9B9AD26CB0ED82A6798C5508E1CB2/",
+              "NumWidth": 6,
+              "NumHeight": 4,
+              "BackIsHidden": false,
+              "UniqueBack": true,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "778795",
+          "Name": "Card",
+          "Transform": {
+            "posX": -5.96221733,
+            "posY": 1.59838927,
+            "posZ": -22.4365082,
+            "rotX": 8.93260658e-05,
+            "rotY": 270.0,
+            "rotZ": 181.182785,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Ethel Rogers",
+          "Description": "The Housekeeper",
+          "GMNotes": "{\"TtsZoopGuid\":\"9375c809-ebe4-4cd5-bcae-c7d8abd0c000\",\"id\":\"9375c809-ebe4-4cd5-bcae-c7d8abd0c000\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Victim.\",\"agilityIcons\":1,\"willpowerIcons\":1}",
+          "Tags": [
+            "PlayerCard",
+            "Asset"
+          ],
+          "HideWhenFaceDown": false,
+          "CardID": 267006,
+          "CustomDeck": {
+            "2670": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12242732159275532641/24D1AB0EADA1CDEE3DC45B740FF2DDF3742F24D2/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13861358155440805126/0F2043795BA9B9AD26CB0ED82A6798C5508E1CB2/",
+              "NumWidth": 6,
+              "NumHeight": 4,
+              "BackIsHidden": false,
+              "UniqueBack": true,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "c4ab6d",
+          "Name": "Card",
+          "Transform": {
+            "posX": -6.230806,
+            "posY": 1.57450688,
+            "posZ": -22.3360081,
+            "rotX": -7.09699361e-06,
+            "rotY": 270.0,
+            "rotZ": 179.711929,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Emily Brent",
+          "Description": "The Spinster",
+          "GMNotes": "{\"TtsZoopGuid\":\"8b1b15e5-df65-4da8-96ab-ad913c6311a7\",\"id\":\"8b1b15e5-df65-4da8-96ab-ad913c6311a7\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Victim.\",\"intellectIcons\":1,\"willpowerIcons\":1}",
+          "Tags": [
+            "PlayerCard",
+            "Asset"
+          ],
+          "HideWhenFaceDown": false,
+          "CardID": 267007,
+          "CustomDeck": {
+            "2670": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12242732159275532641/24D1AB0EADA1CDEE3DC45B740FF2DDF3742F24D2/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13861358155440805126/0F2043795BA9B9AD26CB0ED82A6798C5508E1CB2/",
+              "NumWidth": 6,
+              "NumHeight": 4,
+              "BackIsHidden": false,
+              "UniqueBack": true,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "d83864",
+          "Name": "Card",
+          "Transform": {
+            "posX": -6.17468929,
+            "posY": 1.536787,
+            "posZ": -22.5819073,
+            "rotX": -0.00139678956,
+            "rotY": 270.0,
+            "rotZ": 179.980057,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Edward Armstrong",
+          "Description": "The Doctor",
+          "GMNotes": "{\"TtsZoopGuid\":\"c9f446b5-5e16-479e-a48f-26c106fd20a3\",\"id\":\"c9f446b5-5e16-479e-a48f-26c106fd20a3\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Victim.\",\"intellectIcons\":1,\"wildIcons\":1}",
+          "Tags": [
+            "PlayerCard",
+            "Asset"
+          ],
+          "HideWhenFaceDown": false,
+          "CardID": 267008,
+          "CustomDeck": {
+            "2670": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12242732159275532641/24D1AB0EADA1CDEE3DC45B740FF2DDF3742F24D2/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13861358155440805126/0F2043795BA9B9AD26CB0ED82A6798C5508E1CB2/",
+              "NumWidth": 6,
+              "NumHeight": 4,
+              "BackIsHidden": false,
+              "UniqueBack": true,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "6b9570",
+          "Name": "Card",
+          "Transform": {
+            "posX": -5.9847703,
+            "posY": 1.49509609,
+            "posZ": -22.276228,
+            "rotX": 8.965246e-05,
+            "rotY": 269.9999,
+            "rotZ": 180.000519,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Anthony Marston",
+          "Description": "The Playboy",
+          "GMNotes": "{\"TtsZoopGuid\":\"e6689bf1-b193-4ac7-9659-1eabbff43f4b\",\"id\":\"e6689bf1-b193-4ac7-9659-1eabbff43f4b\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Victim.\",\"agilityIcons\":1,\"wildIcons\":1}",
+          "Tags": [
+            "PlayerCard",
+            "Asset"
+          ],
+          "HideWhenFaceDown": false,
+          "CardID": 267009,
+          "CustomDeck": {
+            "2670": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12242732159275532641/24D1AB0EADA1CDEE3DC45B740FF2DDF3742F24D2/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13861358155440805126/0F2043795BA9B9AD26CB0ED82A6798C5508E1CB2/",
+              "NumWidth": 6,
+              "NumHeight": 4,
+              "BackIsHidden": false,
+              "UniqueBack": true,
+              "Type": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "GUID": "9b6e6e",
+      "Name": "Card",
+      "Transform": {
+        "posX": -17.0399818,
+        "posY": 1.53360486,
+        "posZ": 1.1559456e-06,
+        "rotX": -4.23519637e-08,
+        "rotY": 270.000244,
+        "rotZ": 180.0,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Bedrooms",
+      "GMNotes": "{\"TtsZoopGuid\":\"b048fd8c-1185-4477-b2d4-a6b39a9fd9cf\",\"id\":\"b048fd8c-1185-4477-b2d4-a6b39a9fd9cf\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"Soldier Island.\",\"locationFront\":{\"icons\":\"Moon\",\"connections\":\"Cross|Star|Circle\",\"uses\":[{\"countPerInvestigator\":3,\"token\":\"clue\",\"type\":\"Clue\"}]},\"locationBack\":{\"icons\":\"Moon\",\"connections\":\"Cross|Star|Circle\"}}",
+      "Tags": [
+        "Location",
+        "ScenarioCard"
+      ],
+      "HideWhenFaceDown": false,
+      "CardID": 267010,
+      "CustomDeck": {
+        "2670": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12242732159275532641/24D1AB0EADA1CDEE3DC45B740FF2DDF3742F24D2/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13861358155440805126/0F2043795BA9B9AD26CB0ED82A6798C5508E1CB2/",
+          "NumWidth": 6,
+          "NumHeight": 4,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "bd95b7",
+      "Name": "Card",
+      "Transform": {
+        "posX": -23.6399975,
+        "posY": 1.53360486,
+        "posZ": 7.65001154,
+        "rotX": 3.24813136e-08,
+        "rotY": 270.000641,
+        "rotZ": 180.0,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Dining Room",
+      "GMNotes": "{\"TtsZoopGuid\":\"733e9e77-c448-438b-8b57-c5d9b35c0703\",\"id\":\"733e9e77-c448-438b-8b57-c5d9b35c0703\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"Soldier Island.\",\"locationFront\":{\"icons\":\"Star\",\"connections\":\"Cross|T|Circle|Moon\",\"uses\":[{\"countPerInvestigator\":2,\"token\":\"clue\",\"type\":\"Clue\"}]},\"locationBack\":{\"icons\":\"Star\",\"connections\":\"Cross|T|Circle|Moon\"}}",
+      "Tags": [
+        "Location",
+        "ScenarioCard"
+      ],
+      "HideWhenFaceDown": false,
+      "CardID": 267011,
+      "CustomDeck": {
+        "2670": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12242732159275532641/24D1AB0EADA1CDEE3DC45B740FF2DDF3742F24D2/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13861358155440805126/0F2043795BA9B9AD26CB0ED82A6798C5508E1CB2/",
+          "NumWidth": 6,
+          "NumHeight": 4,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "a2845b",
+      "Name": "Card",
+      "Transform": {
+        "posX": -23.6399975,
+        "posY": 1.53360486,
+        "posZ": -7.65001154,
+        "rotX": 4.48986519e-08,
+        "rotY": 270.000031,
+        "rotZ": 180.0,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Sunroom",
+      "GMNotes": "{\"TtsZoopGuid\":\"b4c0bccb-c719-43b7-b205-b38e3e58b6d9\",\"id\":\"b4c0bccb-c719-43b7-b205-b38e3e58b6d9\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"Soldier Island.\",\"locationFront\":{\"icons\":\"Circle\",\"connections\":\"Cross|Triangle|Star|Moon\",\"uses\":[{\"countPerInvestigator\":2,\"token\":\"clue\",\"type\":\"Clue\"}]},\"locationBack\":{\"icons\":\"Circle\",\"connections\":\"Cross|Triangle|Star|Moon\"}}",
+      "Tags": [
+        "Location",
+        "ScenarioCard"
+      ],
+      "HideWhenFaceDown": false,
+      "CardID": 267012,
+      "CustomDeck": {
+        "2670": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12242732159275532641/24D1AB0EADA1CDEE3DC45B740FF2DDF3742F24D2/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13861358155440805126/0F2043795BA9B9AD26CB0ED82A6798C5508E1CB2/",
+          "NumWidth": 6,
+          "NumHeight": 4,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "77b34e",
+      "Name": "Card",
+      "Transform": {
+        "posX": -30.2400017,
+        "posY": 1.53360486,
+        "posZ": -2.14235143e-07,
+        "rotX": -2.92729059e-08,
+        "rotY": 270.000549,
+        "rotZ": 180.0,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Terrace",
+      "GMNotes": "{\"TtsZoopGuid\":\"cb222c5a-14bf-4293-8e17-5fd4e0b28ea2\",\"id\":\"cb222c5a-14bf-4293-8e17-5fd4e0b28ea2\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"Soldier Island.  Central.\",\"locationFront\":{\"icons\":\"Cross\",\"connections\":\"Triangle|T|Circle|Star|Moon\",\"uses\":[{\"count\":0,\"token\":\"clue\",\"type\":\"Clue\"}]},\"locationBack\":{\"icons\":\"Cross\",\"connections\":\"Triangle|T|Circle|Star|Moon\"}}",
+      "Tags": [
+        "Location",
+        "ScenarioCard"
+      ],
+      "HideWhenFaceDown": false,
+      "CardID": 267015,
+      "CustomDeck": {
+        "2670": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12242732159275532641/24D1AB0EADA1CDEE3DC45B740FF2DDF3742F24D2/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13861358155440805126/0F2043795BA9B9AD26CB0ED82A6798C5508E1CB2/",
+          "NumWidth": 6,
+          "NumHeight": 4,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "a21a54",
+      "Name": "Card",
+      "Transform": {
+        "posX": -36.84001,
+        "posY": 1.53360486,
+        "posZ": 7.65000248,
+        "rotX": 2.12627285e-08,
+        "rotY": 269.999817,
+        "rotZ": 180.0,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Wood Shed",
+      "GMNotes": "{\"TtsZoopGuid\":\"83365f5e-1658-44ad-a36c-ce8ce20c091c\",\"id\":\"83365f5e-1658-44ad-a36c-ce8ce20c091c\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"Soldier Island.\",\"locationFront\":{\"icons\":\"T\",\"connections\":\"Cross|Triangle|Star\",\"uses\":[{\"countPerInvestigator\":3,\"token\":\"clue\",\"type\":\"Clue\"}]},\"locationBack\":{\"icons\":\"T\",\"connections\":\"Cross|Triangle|Star\"}}",
+      "Tags": [
+        "Location",
+        "ScenarioCard"
+      ],
+      "HideWhenFaceDown": false,
+      "CardID": 267013,
+      "CustomDeck": {
+        "2670": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12242732159275532641/24D1AB0EADA1CDEE3DC45B740FF2DDF3742F24D2/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13861358155440805126/0F2043795BA9B9AD26CB0ED82A6798C5508E1CB2/",
+          "NumWidth": 6,
+          "NumHeight": 4,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "57a083",
+      "Name": "Card",
+      "Transform": {
+        "posX": -36.84,
+        "posY": 1.53360486,
+        "posZ": -7.650007,
+        "rotX": 2.116732e-08,
+        "rotY": 270.000549,
+        "rotZ": 180.0,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Beach",
+      "GMNotes": "{\"TtsZoopGuid\":\"1aff63db-c5d2-49c8-82b9-d4a92e678be1\",\"id\":\"1aff63db-c5d2-49c8-82b9-d4a92e678be1\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"Soldier Island.\",\"locationFront\":{\"icons\":\"Triangle\",\"connections\":\"Cross|T|Circle\",\"uses\":[{\"countPerInvestigator\":3,\"token\":\"clue\",\"type\":\"Clue\"}]},\"locationBack\":{\"icons\":\"Triangle\",\"connections\":\"Cross|T|Circle\"}}",
+      "Tags": [
+        "Location",
+        "ScenarioCard"
+      ],
+      "HideWhenFaceDown": false,
+      "CardID": 267014,
+      "CustomDeck": {
+        "2670": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12242732159275532641/24D1AB0EADA1CDEE3DC45B740FF2DDF3742F24D2/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13861358155440805126/0F2043795BA9B9AD26CB0ED82A6798C5508E1CB2/",
+          "NumWidth": 6,
+          "NumHeight": 4,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    }
+  ],
+  "AttachedDecals": [
+    {
+      "Transform": {
+        "posX": -0.0021877822,
+        "posY": -0.08963572,
+        "posZ": -0.00288731651,
+        "rotX": 270.0,
+        "rotY": 359.869568,
+        "rotZ": 0.0,
+        "scaleX": 2.00000215,
+        "scaleY": 2.00000238,
+        "scaleZ": 2.00000262
+      },
+      "CustomDecal": {
+        "Name": "dunwich_back",
+        "ImageURL": "https://steamusercontent-a.akamaihd.net/ugc/959719855119695911/931B9829687A20F4DEADB36DA57B7E6D76792231/",
+        "Size": 7.4
+      }
+    }
+  ]
+}
