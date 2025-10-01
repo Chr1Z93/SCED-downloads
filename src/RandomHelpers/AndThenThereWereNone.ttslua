@@ -1,0 +1,188 @@
+local GUIDReferenceApi = require("core/GUIDReferenceApi")
+local TableLib         = require("util/TableLib")
+
+local REMOVED_POSITION = Vector(3.3, 2, 19.25)
+local METHOD_OFFSET    = Vector(0, 0, -2.8)
+local VICTIM_OFFSETS   = {
+  Vector(1.7, 0, 2.8),
+  Vector(-1.7, 0, 2.8)
+}
+
+function onLoad()
+  self.createButton({
+    label          = "Scenario\nSetup",
+    click_function = "setup",
+    function_owner = self,
+    scale          = Vector(0.2, 1, 0.2),
+    position       = Vector(0, 0.11, 0),
+    height         = 1400,
+    width          = 3750,
+    font_size      = 475
+  })
+end
+
+function setup()
+  -- find victims
+  local victims = getObjectByName("Victim cards")
+  if not victims then
+    printToAll("Couldn't find victims.", "Red")
+    return
+  end
+
+  -- find method bag
+  local methodBag = getObjectFromGUID("f36b35")
+  if not methodBag then
+    printToAll("Couldn't find methods.", "Red")
+    return
+  end
+
+  -- get locations
+  local zone = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "PlayAreaZone")
+  if not zone then
+    printToAll("Can't get play area zone.", "Red")
+    return
+  end
+
+  local locations = {}
+  for _, obj in ipairs(zone.getObjects()) do
+    if obj.type == "Card" and obj.hasTag("Location") and obj.getName() ~= "Terrace" then
+      table.insert(locations, obj)
+    end
+  end
+
+  if #locations ~= 5 then
+    printToAll("Couldn't find the 5 non-central locations.", "Red")
+    return
+  end
+
+  -- place victims
+  victims.shuffle()
+
+  for _, location in ipairs(locations) do
+    local pos = location.getPosition()
+    victims.takeObject({ position = pos + VICTIM_OFFSETS[1] })
+
+    if victims.remainder then
+      victims.remainder.setPositionSmooth(pos + VICTIM_OFFSETS[2])
+    else
+      victims.takeObject({ position = pos + VICTIM_OFFSETS[2] })
+    end
+  end
+
+  -- construct list of legal methods
+  local methodPiles = {}
+  for _, pileData in ipairs(methodBag.getData().ContainedObjects) do
+    local cardList = {}
+    for _, cardData in ipairs(pileData.ContainedObjects) do
+      table.insert(cardList, cardData)
+    end
+    table.insert(methodPiles, cardList)
+  end
+
+  -- remove cards
+  TableLib.shuffle(methodPiles)
+
+  -- remove two cards from first index
+  TableLib.shuffle(methodPiles[1])
+  table.remove(methodPiles[1])
+  table.remove(methodPiles[1])
+
+  -- remove two cards from second index
+  TableLib.shuffle(methodPiles[2])
+  table.remove(methodPiles[2])
+  table.remove(methodPiles[2])
+
+  -- remove one card from third index
+  TableLib.shuffle(methodPiles[3])
+  table.remove(methodPiles[3])
+
+  -- combine all cards into a single table
+  local methods = {}
+  for _, methodPile in ipairs(methodPiles) do
+    for _, cardData in ipairs(methodPile) do
+      table.insert(methods, cardData)
+    end
+  end
+
+  TableLib.shuffle(methods)
+
+  -- split it
+  local parts = splitTable(methods, 5)
+
+  for i, part in ipairs(parts) do
+    for _, cardData in ipairs(part) do
+      local position = locations[i].getPosition() + METHOD_OFFSET
+      cardData.Transform = {
+        posX = position.x,
+        posY = position.y,
+        posZ = position.z,
+        rotX = 0,
+        rotY = 270,
+        rotZ = 180,
+        scaleX = 1,
+        scaleY = 1,
+        scaleZ = 1
+      }
+      cardData.Nickname = "Methods"
+      spawnObjectData({ data = cardData })
+    end
+  end
+
+  methodBag.setPositionSmooth(REMOVED_POSITION)
+  broadcastToAll("Successfully completed setup.", "Green")
+end
+
+function getObjectByName(name)
+  for _, obj in ipairs(getObjects()) do
+    if obj.getName() == name then
+      return obj
+    end
+  end
+end
+
+--- Divides a numerically-indexed table into 'n' approximately equal parts.
+---@param tbl table The table to be split (must be numerically indexed, starting from 1).
+---@param n number The number of parts to split the table into (must be a positive integer).
+---@return table: A new table containing 'n' sub-tables.
+function splitTable(tbl, n)
+  local len = #tbl -- Get the length of the table
+  if len == 0 then
+    return {}      -- Return an empty table of splits for an empty input table
+  end
+
+  -- If n is greater than the table length, we'll get 'len' sub-tables of size 1
+  -- followed by 'n - len' empty sub-tables.
+  if n > len then
+    n = len -- Optimizing: Max splits needed is the length of the table
+  end
+
+  local parts = {}                      -- The table to hold the resulting sub-tables
+  local base_size = math.floor(len / n) -- Minimum size of each part
+  local remainder = len % n             -- Number of parts that will be one element larger
+
+  local current_index = 1               -- Index in the original table
+
+  for i = 1, n do
+    -- Determine the size of the current part
+    local part_size = base_size
+    if i <= remainder then
+      part_size = part_size + 1 -- Distribute the remainder elements one-by-one
+    end
+
+    -- If the table was shorter than the original 'n', we might have remaining
+    -- splits to create that will be empty.
+    if part_size == 0 then
+      parts[i] = {}
+    else
+      -- Create the sub-table by slicing the original table
+      local sub_tbl = {}
+      for j = 1, part_size do
+        sub_tbl[j] = tbl[current_index]
+        current_index = current_index + 1
+      end
+      parts[i] = sub_tbl
+    end
+  end
+
+  return parts
+end
