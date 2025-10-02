@@ -1,6 +1,7 @@
 local GUIDReferenceApi = require("core/GUIDReferenceApi")
 local MythosAreaApi    = require("mythos/MythosAreaApi")
 local PlayAreaApi      = require("playarea/PlayAreaApi")
+local SearchLib        = require("util/SearchLib")
 local TableLib         = require("util/TableLib")
 
 local REMOVED_POSITION = Vector(3.3, 2, 19.25)
@@ -20,6 +21,19 @@ function onLoad()
 end
 
 function setup(_, playerColor)
+  -- work out scenario version
+  version = 1
+  for _, obj in ipairs(SearchLib.atPosition(MythosAreaApi.getActPosition(), "isDeck")) do
+    for _, cardData in ipairs(obj.getData().ContainedObjects) do
+      if cardData.Nickname == "Bird in a Cage (v. II)" then
+        version = 2
+        break
+      end
+    end
+  end
+
+  printToAll("Detected Lambs to the Slaughter v. II.")
+
   prisonCells = {}
 
   -- get prison cells
@@ -70,10 +84,27 @@ function setup(_, playerColor)
 
   -- place prison cells
   prisonCellsDeck.shuffle()
-  for _, grid in ipairs({ { x = -1, y = 2 }, { x = 0, y = 2 }, { x = 1, y = 2 } }) do
-    table.insert(prisonCells, prisonCellsDeck.takeObject({ position = PlayAreaApi.gridToWorld(grid) }))
+
+  if version == 1 then
+    for _, grid in ipairs({ { x = -1, y = 2 }, { x = 0, y = 2 }, { x = 1, y = 2 } }) do
+      table.insert(prisonCells, prisonCellsDeck.takeObject({ position = PlayAreaApi.gridToWorld(grid) }))
+    end
+  else
+    local invCount = PlayAreaApi.getInvestigatorCount()
+    local startPos = PlayAreaApi.gridToWorld({ x = -1, y = 2 })
+    local endPos = PlayAreaApi.gridToWorld({ x = 1, y = 2 })
+    local positions = getPositionSpread(startPos, endPos, invCount)
+
+    for i = 1, invCount do
+      table.insert(prisonCells, prisonCellsDeck.takeObject({ position = positions[i] }))
+    end
   end
-  prisonCellsDeck.remainder.setPositionSmooth(REMOVED_POSITION)
+
+  if prisonCellsDeck.remainder ~= nil then
+    prisonCellsDeck.remainder.setPositionSmooth(REMOVED_POSITION)
+  elseif prisonCellsDeck ~= nil then
+    prisonCellsDeck.setPositionSmooth(REMOVED_POSITION)
+  end
 
   -- shuffle 4 prisoners into the encounter deck
   prisonerDeck.shuffle()
@@ -146,12 +177,17 @@ function setupContinued()
   data.GUID = nil
   data.Nickname = ""
 
-  -- split into three parts
-  local parts = splitTable(data.ContainedObjects, 3)
+  -- split into parts
+  local partCount = 3
+  if version == 2 then
+    partCount = PlayAreaApi.getInvestigatorCount()
+  end
+
+  local parts = splitTable(data.ContainedObjects, partCount)
   TableLib.shuffle(prisonCells)
   prisonerDeckBag.destruct()
 
-  for i = 1, 3 do
+  for i = 1, partCount do
     local position = prisonCells[i].getPosition() + PRISONER_OFFSET
     data.Transform = {
       posX = position.x,
@@ -169,6 +205,47 @@ function setupContinued()
   end
 
   printToAll("Successfully created the prison cell decks.", "Green")
+end
+
+--- Generates a spread of 'count' positions between a start and end vector.
+--- @param startPos tts__Vector
+--- @param endPos tts__Vector
+--- @param count number The number of positions to generate. Must be >= 1.
+--- @return table: A list of TTS Vectors
+function getPositionSpread(startPos, endPos, count)
+  local positions = {}
+
+  -- Handle invalid count
+  if count < 1 then
+    print("Error: count must be 1 or greater.")
+    return positions
+  end
+
+  -- Case 1: n = 1 (Middle position only)
+  if count == 1 then
+    -- Linear interpolation at t = 0.5 (midpoint)
+    local middlePos = Vector.lerp(startPos, endPos, 0.5)
+    table.insert(positions, middlePos)
+    return positions
+  end
+
+  -- Case 2: n >= 2 (Spread including start and end)
+  -- The positions will be evenly spaced along the line segment.
+  -- The step size is calculated to ensure 'count' points are included,
+  -- with the start being the first and the end being the last.
+  local stepSize = 1 / (count - 1)
+
+  for i = 1, count do
+    -- 't' is the interpolation factor, ranging from 0 to 1
+    local t = (i - 1) * stepSize
+
+    -- Linear interpolation: pos = start + t * (end - start)
+    local pos = Vector.lerp(startPos, endPos, t)
+
+    table.insert(positions, pos)
+  end
+
+  return positions
 end
 
 function getObjectByName(name)
