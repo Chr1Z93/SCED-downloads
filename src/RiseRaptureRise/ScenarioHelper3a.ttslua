@@ -1,0 +1,62 @@
+local PlayAreaApi        = require("playarea/PlayAreaApi")
+local SearchLib          = require("util/SearchLib")
+
+local ROLLING_HILLS_GRID = { x = -1.5, y = 2 }
+local DEAD_ENDS_GRID     = { x = -2, y = 2 }
+local LOCATION_GRIDS     = { { x = -1, y = 1 }, { x = 1, y = -1 } }
+
+function onLoad()
+  self.createButton({
+    label          = "Perform\nSetup",
+    click_function = "setup",
+    function_owner = self,
+    scale          = Vector(0.2, 1, 0.2),
+    position       = Vector(0, 0.11, 0),
+    height         = 1400,
+    width          = 3750,
+    font_size      = 475
+  })
+end
+
+function setup(_, playerColor)
+  -- find decks
+  local searchPosition = PlayAreaApi.gridToWorld(ROLLING_HILLS_GRID)
+  local searchResult = SearchLib.atPosition(searchPosition, "isDeck")
+  if #searchResult == 0 then
+    printToAll("Couldn't find Rolling Hills.", "Red")
+    return
+  end
+
+  local rollingHillsDeck = searchResult[1]
+
+  searchPosition = PlayAreaApi.gridToWorld(DEAD_ENDS_GRID)
+  searchResult = SearchLib.atPosition(searchPosition, "isDeck")
+  if #searchResult == 0 then
+    printToAll("Couldn't find Dead Ends.", "Red")
+    return
+  end
+
+  local deadEndsDeck = searchResult[1]
+
+  -- place two locations
+  rollingHillsDeck.shuffle()
+
+  printToAll("Placing two Rolling Hills at random.")
+
+  local delay = 0.3
+  for i = 1, 2 do
+    Wait.time(function()
+      rollingHillsDeck.takeObject({ position = PlayAreaApi.gridToWorld(LOCATION_GRIDS[i]) })
+    end, (i - 1) * delay)
+  end
+
+  Wait.time(function()
+    rollingHillsDeck.putObject(deadEndsDeck)
+    rollingHillsDeck.shuffle()
+    rollingHillsDeck.setName("Exploration Deck")
+    Wait.time(function()
+      Player[playerColor].pingTable(rollingHillsDeck.getPosition())
+      broadcastToAll("Created Exploration Deck!", "Green")
+    end, 0.5)
+  end, 2 * delay)
+end
