@@ -13,7 +13,7 @@
     "scaleZ": 2.42
   },
   "Nickname": "Clueless Cultist Coup",
-  "Description": "by NightHawk8P",
+  "Description": "by Grim8P",
   "ColorDiffuse": {
     "r": 1.0,
     "g": 1.0,
@@ -38,7 +38,7 @@
     }
   },
   "LuaScript": "-- Bundled by luabundle {\"version\":\"1.6.0\"}\nlocal __bundle_require, __bundle_loaded, __bundle_register, __bundle_modules = (function(superRequire)\n\tlocal loadingPlaceholder = {[{}] = true}\n\n\tlocal register\n\tlocal modules = {}\n\n\tlocal require\n\tlocal loaded = {}\n\n\tregister = function(name, body)\n\t\tif not modules[name] then\n\t\t\tmodules[name] = body\n\t\tend\n\tend\n\n\trequire = function(name)\n\t\tlocal loadedModule = loaded[name]\n\n\t\tif loadedModule then\n\t\t\tif loadedModule == loadingPlaceholder then\n\t\t\t\treturn nil\n\t\t\tend\n\t\telse\n\t\t\tif not modules[name] then\n\t\t\t\tif not superRequire then\n\t\t\t\t\tlocal identifier = type(name) == 'string' and '\\\"' .. name .. '\\\"' or tostring(name)\n\t\t\t\t\terror('Tried to require ' .. identifier .. ', but no such module has been registered')\n\t\t\t\telse\n\t\t\t\t\treturn superRequire(name)\n\t\t\t\tend\n\t\t\tend\n\n\t\t\tloaded[name] = loadingPlaceholder\n\t\t\tloadedModule = modules[name](require, loaded, register, modules)\n\t\t\tloaded[name] = loadedModule\n\t\tend\n\n\t\treturn loadedModule\n\tend\n\n\treturn require, loaded, register, modules\nend)(nil)\n__bundle_register(\"MemoryBag\", function(require, _LOADED, __bundle_register, __bundle_modules)\nfunction updateSave()\n  self.script_state = JSON.encode({ ml = memoryList, setupButton = setupButton })\nend\n\nfunction onLoad(savedData)\n  if savedData and savedData ~= \"\" then\n    local loadedData = JSON.decode(savedData)\n    memoryList = loadedData.ml\n    setupButton = loadedData.setupButton\n  end\n\n  memoryList = memoryList or {}\n  self.addContextMenuItem(\"Toggle setup button\", toggleSetupButton)\n\n  -- make sure the model is loaded so that we can use the bounds\n  Wait.condition(function()\n    Wait.frames(function()\n      generateButtonData()\n      createMemoryActionButtons()\n    end, 5)\n  end, function() return not self.loading_custom end)\nend\n\nfunction generateButtonData()\n  local selfScale = self.getScale()\n  local selfBounds = self.getBoundsNormalized()\n  buttonScale = Vector(1 / selfScale.x, 1, 1 / selfScale.z)\n\n  buttonX = math.max(selfBounds.size.x / 5, 1.5) / selfScale.x\n  buttonY = -(selfBounds.size.y / 2 + selfBounds.offset.y) / selfScale.y + 0.5\n  buttonZ = {}\n  for i = 1, 4 do\n    buttonZ[i] = (selfBounds.size.z / 2 + i * 1.15 - 0.15) / selfScale.z\n  end\n\n  local upperButtonMult = 1.1\n  buttonData = {\n    [\"Add\"]       = {\n      tooltip = \"Add highlighted objects to memory\",\n      pos = { buttonX * upperButtonMult, buttonY, -buttonZ[1] },\n      fColor = { 0.25, 1, 0.25 }\n    },\n    [\"Cancel\"]    = {\n      tooltip = \"Abort setup mode\",\n      pos = { -buttonX * upperButtonMult, buttonY, -buttonZ[1] },\n    },\n    [\"Internal\"]    = {\n      tooltip = \"Copy memory from internal bags\",\n      pos = { -buttonX * upperButtonMult, buttonY, -buttonZ[4] },\n    },\n    [\"Place\"]     = {\n      pos = { buttonX, buttonY, buttonZ[1] },\n      fSize = 350,\n      w = 1200\n    },\n    [\"Recall\"]    = {\n      pos = { -buttonX, buttonY, buttonZ[1] },\n      fSize = 350,\n      w = 1200\n    },\n    [\"Remove\"]    = {\n      tooltip = \"Remove highlighted objects from memory\",\n      pos = { buttonX * upperButtonMult, buttonY, -buttonZ[2] },\n      fColor = { 1, 0.25, 0.25 }\n    },\n    [\"Reset\"]     = {\n      tooltip = \"Completely reset memory\",\n      pos = { -buttonX * upperButtonMult, buttonY, -buttonZ[3] },\n    },\n    [\"Selection\"] = {\n      tooltip = \"Add / Remove highlight for selected objects\",\n      pos = { -buttonX * upperButtonMult, buttonY, -buttonZ[2] },\n    },\n    [\"Setup\"]     = {\n      pos = { 0, buttonY, -buttonZ[1] },\n      fSize = 350\n    },\n    [\"Update\"]   = {\n      tooltip = \"Update memory for placed objects\",\n      pos = { buttonX * upperButtonMult, buttonY, -buttonZ[3] },\n      fColor = { 0.75, 0.75, 1 }\n    }\n  }\nend\n\nfunction createButtonByName(label)\n  self.createButton({\n    label = label,\n    tooltip = buttonData[label].tooltip or \"\",\n    position = buttonData[label].pos,\n    height = buttonData[label].h or 500,\n    width = buttonData[label].w or 1500,\n    font_size = buttonData[label].fSize or 325,\n    font_color = buttonData[label].fColor or { 1, 1, 1 },\n    function_owner = self,\n    color = { 0, 0, 0 },\n    scale = buttonScale,\n    click_function = \"buttonClick_\" .. string.lower(string.gsub(label, \"%s+\", \"\"))\n  })\nend\n\n-- context menu function to toggle the setup button visibility\nfunction toggleSetupButton()\n  if setupButton then\n    setupButton = false\n    broadcastToAll(\"Setup button disabled\")\n  else\n    setupButton = true\n    broadcastToAll(\"Setup button enabled\")\n  end\n  updateSave()\n  removeAllHighlights()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_setup()\n  tempList = {}\n  self.clearButtons()\n  createButtonsOnAllObjects()\n  createSetupActionButtons()\nend\n\nfunction broadcastFeedback(str1, count, name, str2, color)\n  local bcStr = count .. \" \" .. name\n  if str1 then\n    bcStr = str1 .. \" \" .. bcStr\n  end\n  if count ~= 1 then\n    bcStr = bcStr .. \"s\"\n  end\n  if str2 then\n    bcStr = bcStr .. \" \" .. str2\n  end\n  broadcastToAll(bcStr, color)\nend\n\nfunction createButtonsOnAllObjects()\n  buttonIndexMap = {}\n\n  local buttonCount = 0\n  for _, obj in ipairs(getObjects()) do\n    if obj ~= self and obj.type ~= \"Scripting\" and obj.type ~= \"Hand\" then\n      local objPos = obj.getPosition()\n      local objBounds = obj.getBounds()\n      local offSet = Vector(0, objBounds.size.y / 2 + 1, 0)\n      local scaleVec = Vector(-1, 1, 1)\n      local buttonPos = self.positionToLocal(objPos + offSet):scale(scaleVec)\n\n      local fName = \"selectButton_\" .. buttonCount\n      _G[fName] = function() buttonClick_selectObject(obj) end\n      self.createButton({\n        click_function = fName,\n        function_owner = self,\n        position = buttonPos,\n        height = 600,\n        width = 600,\n        color = { 0.75, 0.25, 0.25, 0.75 },\n        scale = buttonScale\n      })\n      buttonIndexMap[obj.getGUID()] = buttonCount\n      buttonCount = buttonCount + 1\n    end\n  end\nend\n\nfunction createSetupActionButtons()\n  createButtonByName(\"Cancel\")\n  createButtonByName(\"Selection\")\n  createButtonByName(\"Reset\")\n  createButtonByName(\"Internal\")\n  createButtonByName(\"Add\")\n\n  if next(memoryList) then\n    createButtonByName(\"Remove\")\n    createButtonByName(\"Update\")\n  end\nend\n\nfunction buttonClick_selectObject(obj)\n  local guid = obj.getGUID()\n  local index = buttonIndexMap[guid]\n  if not index then return end\n\n  if tempList[guid] == nil then\n    self.editButton({ index = index, color = { 0, 1, 0, 0.75 } })\n    tempList[guid] = {\n      pos = roundVector(obj.getPosition(), 3),\n      rot = roundVector(obj.getRotation(), 0),\n      lock = obj.getLock()\n    }\n    obj.highlightOn({ 0, 1, 0 })\n  else\n    self.editButton({ index = index, color = { 0.75, 0.25, 0.25, 0.75 } })\n    tempList[guid] = nil\n    obj.highlightOff()\n  end\nend\n\nfunction buttonClick_cancel()\n  broadcastToAll(\"Setup Canceled\")\n  removeAllHighlights()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_selection(_, playerColor)\n  local objList = Player[playerColor].getSelectedObjects()\n\n  if #objList == 0 then\n    broadcastToAll(\"No objects selected!\")\n  else\n    broadcastFeedback(\"Toggled selection for\", #objList, \"object\")\n    for _, obj in ipairs(objList) do\n      buttonClick_selectObject(obj)\n    end\n  end\nend\n\nfunction buttonClick_add()\n  local count = 0\n  for _ in pairs(tempList) do\n    count = count + 1\n  end\n  broadcastFeedback(\"Added\", count, \"Object\", \"from selection\")\n\n  -- copy data from tempList to memoryList\n  for guid, entry in pairs(tempList) do\n    memoryList[guid] = entry\n  end\n\n  updateSave()\n  removeAllHighlights()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_update()\n  local count = 0\n  for guid, entry in pairs(memoryList) do\n    local obj = getObjectFromGUID(guid)\n    if obj ~= nil then\n      count = count + 1\n      memoryList[guid] = {\n        pos = roundVector(obj.getPosition(), 3),\n        rot = roundVector(obj.getRotation(), 0),\n        lock = obj.getLock()\n      }\n    end\n  end\n  broadcastFeedback(\"Updated data for\", count, \"Object\")\n  updateSave()\nend\n\nfunction buttonClick_remove()\n  local count = 0\n  for guid in pairs(tempList) do\n    count = count + 1\n    memoryList[guid] = nil\n  end\n  broadcastFeedback(_, count, \"Object\", \"Removed\", { 1, 1, 1 })\n\n  updateSave()\n  removeAllHighlights()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_setNew()\n  local count = 0\n  for _, obj in ipairs(getObjects()) do\n    if memoryList[obj.guid] then\n      count = count + 1\n      memoryList[obj.guid].pos = roundVector(obj.getPosition(), 3)\n      memoryList[obj.guid].rot = roundVector(obj.getRotation(), 0)\n      memoryList[obj.guid].lock = obj.getLock()\n    end\n  end\n  broadcastFeedback(\"Updated Data for\", count, \"Object\", _, { 1, 1, 1 })\n  updateSave()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_reset()\n  memoryList = {}\n  updateSave()\n  removeAllHighlights()\n  broadcastToAll(\"Tool Reset\", { 1, 1, 1 })\n  self.clearButtons()\n\n  if setupButton then\n    createButtonByName(\"Setup\")\n  end\nend\n\nfunction buttonClick_internal()\n  local count = 0\n  for _, bagObj in ipairs(self.getObjects()) do\n    local data = bagObj.lua_script_state\n    if data ~= nil then\n      local j = JSON.decode(data)\n      if j ~= nil and j.ml ~= nil then\n        count = count + 1\n        for guid, entry in pairs(j.ml) do\n          memoryList[guid] = entry\n        end\n      end\n    end\n  end\n\n  if count > 0 then\n    broadcastFeedback(\"Added\", count, \"internal bag\", \"to existing memory\")\n  end\nend\n\nfunction createMemoryActionButtons()\n  self.clearButtons()\n\n  if next(memoryList) then\n    createButtonByName(\"Place\")\n    createButtonByName(\"Recall\")\n  end\n\n  if setupButton then\n    createButtonByName(\"Setup\")\n  end\nend\n\n-- Sends objects from bag/table to their saved position/rotation\nfunction buttonClick_place()\n  local data = self.getData()\n\n  -- get names of contained objects\n  local guidToName = {}\n  for _, bagObjData in ipairs(data.ContainedObjects or {}) do\n    guidToName[bagObjData[\"GUID\"]] = bagObjData[\"Nickname\"]\n  end\n\n  local updateGuids = {}\n  local placeCount = 0\n  local moveCount = 0\n  for guid, entry in pairs(memoryList) do\n    local obj = getObjectFromGUID(guid)\n    if obj ~= nil and (obj.getName() == guidToName[guid] or guidToName[guid] == nil) then\n      -- If obj is out on the table and has the same name (or there's no contained copy), move it\n      moveCount = moveCount + 1\n      obj.setPositionSmooth(entry.pos)\n      obj.setRotationSmooth(entry.rot)\n      obj.setLock(entry.lock)\n    elseif guidToName[guid] then\n      -- If obj is inside of the bag\n      placeCount = placeCount + 1\n      local item = self.takeObject({\n        guid = guid,\n        position = entry.pos,\n        rotation = entry.rot,\n        smooth = false\n      })\n      item.setLock(entry.lock)\n\n      if obj ~= nil then\n        updateGuids[guid] = item.getGUID()\n      end\n    end\n  end\n\n  -- update memoryList if we placed an item that got a new GUID\n  if next(updateGuids) then\n    for oldGuid, newGuid in pairs(updateGuids) do\n      memoryList[newGuid] = memoryList[oldGuid]\n      memoryList[oldGuid] = nil\n    end\n    updateSave()\n  end\n\n  if placeCount > 0 then\n    broadcastFeedback(_, placeCount, \"Object\", \"Placed\", { 1, 1, 1 })\n  end\n\n  if moveCount > 0 then\n    broadcastFeedback(_, moveCount, \"Object\", \"Moved\", { 1, 1, 1 })\n  end\n\n  if placeCount == 0 and moveCount == 0 then\n    broadcastToAll(\"Bag is empty and no matching objects were found in play\", { 1, 1, 1 })\n  end\nend\n\nfunction buttonClick_recall()\n  local count = 0\n  for guid, _ in pairs(memoryList) do\n    local obj = getObjectFromGUID(guid)\n    if obj ~= nil then\n      self.putObject(obj)\n      count = count + 1\n    end\n  end\n  broadcastFeedback(_, count, \"Object\", \"Recalled\", { 1, 1, 1 })\nend\n\nfunction removeAllHighlights()\n  for _, obj in ipairs(getObjects()) do\n    obj.highlightOff()\n  end\nend\n\n-- Round vector to the Nth decimal\nfunction roundVector(vec, dec)\n  local mult = 10 ^ (dec or 0)\n  local t = {}\n  for _, k in ipairs({ \"x\", \"y\", \"z\" }) do\n    t[k] = math.floor(vec[k] * mult + 0.5) / mult\n  end\n  return t\nend\nend)\n__bundle_register(\"__root\", function(require, _LOADED, __bundle_register, __bundle_modules)\nrequire(\"MemoryBag\")\nend)\nreturn __bundle_require(\"__root\")",
-  "LuaScriptState": "{\"ml\":{\"0c1c5b\":{\"lock\":false,\"pos\":{\"x\":-2.291,\"y\":1.481,\"z\":45.663},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"1badb4\":{\"lock\":false,\"pos\":{\"x\":-1.58,\"y\":1.481,\"z\":44.569},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"1fff46\":{\"lock\":false,\"pos\":{\"x\":-11.916,\"y\":1.59,\"z\":9.779},\"rot\":{\"x\":0,\"y\":90,\"z\":0}},\"231d19\":{\"lock\":false,\"pos\":{\"x\":-30.24,\"y\":1.551,\"z\":0},\"rot\":{\"x\":0,\"y\":270,\"z\":180}},\"2a6350\":{\"lock\":false,\"pos\":{\"x\":-2.942,\"y\":1.623,\"z\":0.364},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"4355e8\":{\"lock\":false,\"pos\":{\"x\":-16.193,\"y\":1.59,\"z\":9.769},\"rot\":{\"x\":0,\"y\":90,\"z\":0}},\"7a167a\":{\"lock\":false,\"pos\":{\"x\":1.693,\"y\":1.558,\"z\":14.242},\"rot\":{\"x\":0,\"y\":225,\"z\":0}},\"9341e6\":{\"lock\":false,\"pos\":{\"x\":-2.942,\"y\":1.623,\"z\":0.364},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"9e1ebf\":{\"lock\":false,\"pos\":{\"x\":-36.84,\"y\":1.551,\"z\":0},\"rot\":{\"x\":0,\"y\":270,\"z\":180}},\"a314dc\":{\"lock\":false,\"pos\":{\"x\":-1.746,\"y\":1.481,\"z\":46.033},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"a90298\":{\"lock\":false,\"pos\":{\"x\":-36.84,\"y\":1.551,\"z\":7.65},\"rot\":{\"x\":0,\"y\":270,\"z\":180}},\"asdjkl\":{\"lock\":false,\"pos\":{\"x\":-23.576,\"y\":1.52,\"z\":7.636},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"b05430\":{\"lock\":false,\"pos\":{\"x\":-3.733,\"y\":1.583,\"z\":-14.437},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"b2d437\":{\"lock\":false,\"pos\":{\"x\":-2.942,\"y\":1.633,\"z\":-5.051},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"e0000e\":{\"lock\":false,\"pos\":{\"x\":-3.715,\"y\":1.597,\"z\":-10.4},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"e00012\":{\"lock\":false,\"pos\":{\"x\":-18.819,\"y\":1.534,\"z\":2.259},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"e00013\":{\"lock\":false,\"pos\":{\"x\":-15.656,\"y\":1.534,\"z\":-0.028},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"e00014\":{\"lock\":false,\"pos\":{\"x\":-18.819,\"y\":1.534,\"z\":-2.316},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"e00015\":{\"lock\":false,\"pos\":{\"x\":-18.819,\"y\":1.534,\"z\":-0.028},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"e00016\":{\"lock\":false,\"pos\":{\"x\":-15.656,\"y\":1.534,\"z\":-2.316},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"e00017\":{\"lock\":false,\"pos\":{\"x\":-15.656,\"y\":1.534,\"z\":2.259},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"e00019\":{\"lock\":false,\"pos\":{\"x\":-3.852,\"y\":1.719,\"z\":5.72},\"rot\":{\"x\":0,\"y\":270,\"z\":180}},\"e0006a\":{\"lock\":false,\"pos\":{\"x\":-33.522,\"y\":1.534,\"z\":3.784},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"f4cf37\":{\"lock\":false,\"pos\":{\"x\":-30.24,\"y\":1.551,\"z\":7.65},\"rot\":{\"x\":0,\"y\":270,\"z\":180}}},\"setupButton\":false}",
+  "LuaScriptState": "{\"ml\":{\"0c1c5b\":{\"lock\":false,\"pos\":{\"x\":-2.291,\"y\":1.481,\"z\":45.663},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"1badb4\":{\"lock\":false,\"pos\":{\"x\":-1.58,\"y\":1.481,\"z\":44.569},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"1fff46\":{\"lock\":false,\"pos\":{\"x\":-11.916,\"y\":1.59,\"z\":9.779},\"rot\":{\"x\":0,\"y\":90,\"z\":0}},\"231d19\":{\"lock\":false,\"pos\":{\"x\":-30.24,\"y\":1.551,\"z\":0},\"rot\":{\"x\":0,\"y\":270,\"z\":180}},\"2a6350\":{\"lock\":false,\"pos\":{\"x\":-2.942,\"y\":1.623,\"z\":0.364},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"41988b\":{\"lock\":false,\"pos\":{\"x\":-30.241,\"y\":1.551,\"z\":7.647},\"rot\":{\"x\":0,\"y\":270,\"z\":180}},\"4355e8\":{\"lock\":false,\"pos\":{\"x\":-16.193,\"y\":1.59,\"z\":9.769},\"rot\":{\"x\":0,\"y\":90,\"z\":0}},\"489932\":{\"lock\":false,\"pos\":{\"x\":-1.974,\"y\":1.481,\"z\":45.466},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"5e1710\":{\"lock\":false,\"pos\":{\"x\":-17.964,\"y\":1.534,\"z\":-0.061},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"6418c7\":{\"lock\":false,\"pos\":{\"x\":-2.942,\"y\":1.623,\"z\":0.364},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"79503f\":{\"lock\":false,\"pos\":{\"x\":-2.942,\"y\":1.633,\"z\":-5.051},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"7a167a\":{\"lock\":false,\"pos\":{\"x\":1.693,\"y\":1.558,\"z\":14.242},\"rot\":{\"x\":0,\"y\":225,\"z\":0}},\"7cd043\":{\"lock\":false,\"pos\":{\"x\":-17.964,\"y\":1.534,\"z\":-2.348},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"9341e6\":{\"lock\":false,\"pos\":{\"x\":-2.942,\"y\":1.623,\"z\":0.364},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"96b0a1\":{\"lock\":false,\"pos\":{\"x\":-36.84,\"y\":1.551,\"z\":7.65},\"rot\":{\"x\":0,\"y\":270,\"z\":180}},\"9b9d8f\":{\"lock\":false,\"pos\":{\"x\":-14.802,\"y\":1.534,\"z\":-0.061},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"9e1ebf\":{\"lock\":false,\"pos\":{\"x\":-36.84,\"y\":1.551,\"z\":0},\"rot\":{\"x\":0,\"y\":270,\"z\":180}},\"a314dc\":{\"lock\":false,\"pos\":{\"x\":-1.746,\"y\":1.481,\"z\":46.033},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"a90298\":{\"lock\":false,\"pos\":{\"x\":-36.84,\"y\":1.551,\"z\":7.65},\"rot\":{\"x\":0,\"y\":270,\"z\":180}},\"asdjkl\":{\"lock\":false,\"pos\":{\"x\":-23.576,\"y\":1.52,\"z\":7.636},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"b05430\":{\"lock\":false,\"pos\":{\"x\":-3.733,\"y\":1.583,\"z\":-14.437},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"b2d437\":{\"lock\":false,\"pos\":{\"x\":-2.942,\"y\":1.633,\"z\":-5.051},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"b33f6d\":{\"lock\":false,\"pos\":{\"x\":-30.24,\"y\":1.551,\"z\":0},\"rot\":{\"x\":0,\"y\":270,\"z\":180}},\"b3ec91\":{\"lock\":false,\"pos\":{\"x\":-33.429,\"y\":1.534,\"z\":3.7},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"c5b759\":{\"lock\":false,\"pos\":{\"x\":-36.84,\"y\":1.551,\"z\":0},\"rot\":{\"x\":0,\"y\":270,\"z\":180}},\"d3807f\":{\"lock\":false,\"pos\":{\"x\":-17.964,\"y\":1.534,\"z\":2.227},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"e0000e\":{\"lock\":false,\"pos\":{\"x\":-3.715,\"y\":1.597,\"z\":-10.4},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"e00012\":{\"lock\":false,\"pos\":{\"x\":-18.819,\"y\":1.534,\"z\":2.259},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"e00013\":{\"lock\":false,\"pos\":{\"x\":-15.656,\"y\":1.534,\"z\":-0.028},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"e00014\":{\"lock\":false,\"pos\":{\"x\":-18.819,\"y\":1.534,\"z\":-2.316},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"e00015\":{\"lock\":false,\"pos\":{\"x\":-18.819,\"y\":1.534,\"z\":-0.028},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"e00016\":{\"lock\":false,\"pos\":{\"x\":-15.656,\"y\":1.534,\"z\":-2.316},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"e00017\":{\"lock\":false,\"pos\":{\"x\":-15.656,\"y\":1.534,\"z\":2.259},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"e00019\":{\"lock\":false,\"pos\":{\"x\":-3.852,\"y\":1.719,\"z\":5.72},\"rot\":{\"x\":0,\"y\":270,\"z\":180}},\"e0006a\":{\"lock\":false,\"pos\":{\"x\":-33.522,\"y\":1.534,\"z\":3.784},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"e8e1a4\":{\"lock\":false,\"pos\":{\"x\":-14.802,\"y\":1.534,\"z\":2.227},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"f4cf37\":{\"lock\":false,\"pos\":{\"x\":-30.24,\"y\":1.551,\"z\":7.65},\"rot\":{\"x\":0,\"y\":270,\"z\":180}},\"f89699\":{\"lock\":false,\"pos\":{\"x\":-14.802,\"y\":1.534,\"z\":-2.348},\"rot\":{\"x\":0,\"y\":270,\"z\":0}}},\"setupButton\":false}",
   "ContainedObjects": [
     {
       "GUID": "1fff46",
@@ -60,7 +60,7 @@
       "Hands": false
     },
     {
-      "GUID": "231d19",
+      "GUID": "41988b",
       "Name": "Deck",
       "Transform": {
         "rotY": 270,
@@ -76,22 +76,22 @@
       ],
       "Hands": false,
       "DeckIDs": [
-        107700,
-        107600
+        107900,
+        107800
       ],
       "CustomDeck": {
-        "1077": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/aergla2n9r2vj2zw5ylxw/ec22b13c-9227-4b5d-ac75-de8293fd6c61-Front-The-Court-Noble-District-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=q6iky91a1319rldgcsy22hvxu&raw=1&cachebust=1760622475795",
-          "BackURL": "https://www.dropbox.com/scl/fi/qoqn6lw0kzd6sxg2z8lxa/ec22b13c-9227-4b5d-ac75-de8293fd6c61-Back-The-Court-Noble-District-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=qjr02v541g2rz8h8ch5r3qq1b&raw=1&cachebust=1760622478368",
+        "1079": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/ml43lkm97osvizw61zujc/8072de2a-591f-4095-a5b0-844770e8095e-Front-Yhilin-Cathedral-Place-of-Worship-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=p7wcs8d1lle0c3790hupt14ds&raw=1&cachebust=1760548963787",
+          "BackURL": "https://www.dropbox.com/scl/fi/na2ih128qauou1zp8jfcl/8072de2a-591f-4095-a5b0-844770e8095e-Back-Yhilin-Cathedral-Place-of-Worship-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=q8u256vq0xlkl4pjhu009ys44&raw=1&cachebust=1760548964955",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
           "UniqueBack": true,
           "Type": 0
         },
-        "1076": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/e4i7d8t2vwfxhdx1czkem/744f64c8-9d37-4707-9654-041dfd6b0a33-Front-The-Court-House-of-Petitions-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=zmx36e3ymgb23yl2219482dpb&raw=1&cachebust=1760622470644",
-          "BackURL": "https://www.dropbox.com/scl/fi/jqbk6g8po8zjkfh7iajkg/744f64c8-9d37-4707-9654-041dfd6b0a33-Back-The-Court-House-of-Petitions-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=1mt2tf85fp8nlzm0ir9j9c9ic&raw=1&cachebust=1760622473201",
+        "1078": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/9304etpavo6757xi44qk9/32d219f8-07ef-43be-8a39-9aff93a58417-Front-Yhilin-Cathedral-Place-of-Devotion-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=33l219pbia8pnbvwv7k1m9oxo&raw=1&cachebust=1760548961315",
+          "BackURL": "https://www.dropbox.com/scl/fi/7e9y759y0sbkn5nuel8wa/32d219f8-07ef-43be-8a39-9aff93a58417-Back-Yhilin-Cathedral-Place-of-Devotion-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=idptpdsrmmgjudizoylqaym0x&raw=1&cachebust=1760548962343",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -101,7 +101,7 @@
       },
       "ContainedObjects": [
         {
-          "GUID": "e00058",
+          "GUID": "e0005a",
           "Name": "Card",
           "Transform": {
             "rotY": 270,
@@ -110,18 +110,18 @@
             "scaleY": 1.0,
             "scaleZ": 1.0
           },
-          "Nickname": "The Court",
-          "Description": "Noble District",
-          "GMNotes": "{\"TtsZoopGuid\":\"ec22b13c-9227-4b5d-ac75-de8293fd6c61\",\"id\":\"ec22b13c-9227-4b5d-ac75-de8293fd6c61\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"Yhilin. Central.\",\"locationFront\":{\"icons\":\"Triangle\",\"connections\":\"Circle|Square|Diamond|Moon|Slash\",\"uses\":[{\"countPerInvestigator\":1,\"token\":\"clue\",\"type\":\"Clue\"}],\"victory\":1},\"locationBack\":{\"icons\":\"Triangle\",\"connections\":\"Circle|Square|Diamond|Moon|Slash\"}}",
+          "Nickname": "Yhilin Cathedral",
+          "Description": "Place of Worship",
+          "GMNotes": "{\"TtsZoopGuid\":\"8072de2a-591f-4095-a5b0-844770e8095e\",\"id\":\"8072de2a-591f-4095-a5b0-844770e8095e\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"Yhilin. Central.\",\"locationFront\":{\"icons\":\"Diamond\",\"connections\":\"Circle|Square|Triangle\",\"uses\":[{\"countPerInvestigator\":1,\"token\":\"clue\",\"type\":\"Clue\"}]},\"locationBack\":{\"icons\":\"Diamond\",\"connections\":\"Circle|Square|Triangle\"}}",
           "Tags": [
             "Location",
             "ScenarioCard"
           ],
-          "CardID": 107700,
+          "CardID": 107900,
           "CustomDeck": {
-            "1077": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/aergla2n9r2vj2zw5ylxw/ec22b13c-9227-4b5d-ac75-de8293fd6c61-Front-The-Court-Noble-District-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=q6iky91a1319rldgcsy22hvxu&raw=1&cachebust=1760622475795",
-              "BackURL": "https://www.dropbox.com/scl/fi/qoqn6lw0kzd6sxg2z8lxa/ec22b13c-9227-4b5d-ac75-de8293fd6c61-Back-The-Court-Noble-District-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=qjr02v541g2rz8h8ch5r3qq1b&raw=1&cachebust=1760622478368",
+            "1079": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/ml43lkm97osvizw61zujc/8072de2a-591f-4095-a5b0-844770e8095e-Front-Yhilin-Cathedral-Place-of-Worship-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=p7wcs8d1lle0c3790hupt14ds&raw=1&cachebust=1760548963787",
+              "BackURL": "https://www.dropbox.com/scl/fi/na2ih128qauou1zp8jfcl/8072de2a-591f-4095-a5b0-844770e8095e-Back-Yhilin-Cathedral-Place-of-Worship-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=q8u256vq0xlkl4pjhu009ys44&raw=1&cachebust=1760548964955",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -131,7 +131,7 @@
           }
         },
         {
-          "GUID": "e00057",
+          "GUID": "e00059",
           "Name": "Card",
           "Transform": {
             "rotY": 270,
@@ -140,18 +140,18 @@
             "scaleY": 1.0,
             "scaleZ": 1.0
           },
-          "Nickname": "The Court",
-          "Description": "House of Petitions",
-          "GMNotes": "{\"TtsZoopGuid\":\"744f64c8-9d37-4707-9654-041dfd6b0a33\",\"id\":\"744f64c8-9d37-4707-9654-041dfd6b0a33\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"Yhilin. Central.\",\"locationFront\":{\"icons\":\"Triangle\",\"connections\":\"Circle|Square|Diamond|Moon|Slash\",\"uses\":[{\"countPerInvestigator\":1,\"token\":\"clue\",\"type\":\"Clue\"}],\"victory\":1},\"locationBack\":{\"icons\":\"Triangle\",\"connections\":\"Circle|Square|Diamond|Moon|Slash\"}}",
+          "Nickname": "Yhilin Cathedral",
+          "Description": "Place of Devotion",
+          "GMNotes": "{\"TtsZoopGuid\":\"32d219f8-07ef-43be-8a39-9aff93a58417\",\"id\":\"32d219f8-07ef-43be-8a39-9aff93a58417\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"Yhilin. Central.\",\"locationFront\":{\"icons\":\"Diamond\",\"connections\":\"Circle|Square|Triangle\",\"uses\":[{\"countPerInvestigator\":1,\"token\":\"clue\",\"type\":\"Clue\"}]},\"locationBack\":{\"icons\":\"Diamond\",\"connections\":\"Circle|Square|Triangle\"}}",
           "Tags": [
             "Location",
             "ScenarioCard"
           ],
-          "CardID": 107600,
+          "CardID": 107800,
           "CustomDeck": {
-            "1076": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/e4i7d8t2vwfxhdx1czkem/744f64c8-9d37-4707-9654-041dfd6b0a33-Front-The-Court-House-of-Petitions-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=zmx36e3ymgb23yl2219482dpb&raw=1&cachebust=1760622470644",
-              "BackURL": "https://www.dropbox.com/scl/fi/jqbk6g8po8zjkfh7iajkg/744f64c8-9d37-4707-9654-041dfd6b0a33-Back-The-Court-House-of-Petitions-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=1mt2tf85fp8nlzm0ir9j9c9ic&raw=1&cachebust=1760622473201",
+            "1078": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/9304etpavo6757xi44qk9/32d219f8-07ef-43be-8a39-9aff93a58417-Front-Yhilin-Cathedral-Place-of-Devotion-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=33l219pbia8pnbvwv7k1m9oxo&raw=1&cachebust=1760548961315",
+              "BackURL": "https://www.dropbox.com/scl/fi/7e9y759y0sbkn5nuel8wa/32d219f8-07ef-43be-8a39-9aff93a58417-Back-Yhilin-Cathedral-Place-of-Devotion-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=idptpdsrmmgjudizoylqaym0x&raw=1&cachebust=1760548962343",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -180,6 +180,471 @@
       },
       "HideWhenFaceDown": false,
       "Hands": false
+    },
+    {
+      "GUID": "489932",
+      "Name": "Custom_PDF",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 2.2,
+        "scaleY": 1.0,
+        "scaleZ": 2.2
+      },
+      "Nickname": "",
+      "ColorDiffuse": {
+        "r": 1.0,
+        "g": 1.0,
+        "b": 1.0
+      },
+      "HideWhenFaceDown": false,
+      "Hands": false,
+      "CustomPDF": {
+        "PDFUrl": "https://steamusercontent-a.akamaihd.net/ugc/9836595441825924944/92ACC27B710FB6A105348338A374519A158DF439/",
+        "PDFPassword": "",
+        "PDFPage": 1,
+        "PDFPageOffset": 0
+      }
+    },
+    {
+      "GUID": "5e1710",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Hilstara",
+      "Description": "Ardan Warrior",
+      "GMNotes": "{\"TtsZoopGuid\":\"73671389-463c-4cd9-a4df-00f3d7cd118d\",\"id\":\"73671389-463c-4cd9-a4df-00f3d7cd118d\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Humanoid. Close Ally. Mercenary.\"}",
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "CardID": 101200,
+      "CustomDeck": {
+        "1012": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/ljgf07cq84n3vijqz5o77/73671389-463c-4cd9-a4df-00f3d7cd118d-Front-Hilstara-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=fm8lek4a040al71z1dn5a1hld&raw=1&cachebust=1761492273149",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "6418c7",
+      "Name": "Deck",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 0.714285731,
+        "scaleY": 1.0,
+        "scaleZ": 0.714285731
+      },
+      "Nickname": "Agenda Deck",
+      "Tags": [
+        "ScenarioCard"
+      ],
+      "Hands": false,
+      "DeckIDs": [
+        100900,
+        100800,
+        100700,
+        100600
+      ],
+      "CustomDeck": {
+        "1009": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/rz0ev0uk0lfydvldc46f6/5f6e0c8d-8927-41ae-923b-5b9d78fe08a8-Front-Agenda-4-The-Kingsmen-Plot-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=a48rjsxdvkh2sxrsr9wrz4ibs&raw=1&cachebust=1761492270260",
+          "BackURL": "https://www.dropbox.com/scl/fi/56gngcc3yvnsi02cu6bk7/5f6e0c8d-8927-41ae-923b-5b9d78fe08a8-Back-Agenda-4-The-Kingsmen-Plot-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=8g229kuoogng1f9rfve63z4h3&raw=1&cachebust=1761492271243",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        },
+        "1008": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/k3c1t8xjaxxu3peij9ecr/2e066176-9080-4d89-9a8a-366bff5232a6-Front-Agenda-3-Time-is-Short-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=4i7opuwxvz52omwddsz6jwdtd&raw=1&cachebust=1761492267833",
+          "BackURL": "https://www.dropbox.com/scl/fi/02ayc78sxdrbg42f9a8yx/2e066176-9080-4d89-9a8a-366bff5232a6-Back-Agenda-3-Time-is-Short-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=98txik9paivuszs195rrgk469&raw=1&cachebust=1761492268822",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        },
+        "1007": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/k7c7flrj2ng6pq02kn0xz/d3c2361d-d817-4840-8f69-884258f45fbe-Front-Agenda-2-A-Sinister-Trail-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=5qt17nkglhov2pyjf32qdn00k&raw=1&cachebust=1761492264274",
+          "BackURL": "https://www.dropbox.com/scl/fi/1mvfvxflliakouylzb3gt/d3c2361d-d817-4840-8f69-884258f45fbe-Back-Agenda-2-A-Sinister-Trail-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=2nb0xsaoa27po2m5wyitnbwdb&raw=1&cachebust=1761492265221",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        },
+        "1006": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/us0bcu7vlc2ijjrc7o7pb/540b1cbe-444a-4a98-951d-90b14f75b6fc-Front-Agenda-1-A-Murky-Plot-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=d6o1o5x1qkv31tg7donlbx8m4&raw=1&cachebust=1761492261298",
+          "BackURL": "https://www.dropbox.com/scl/fi/5g5gtfs80eg0siduqgr5l/540b1cbe-444a-4a98-951d-90b14f75b6fc-Back-Agenda-1-A-Murky-Plot-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=8g09j07bhoj6oulicp16ejpip&raw=1&cachebust=1761492262263",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "ContainedObjects": [
+        {
+          "GUID": "e0000c",
+          "Name": "Card",
+          "Transform": {
+            "rotY": 270,
+            "scaleX": 0.714285731,
+            "scaleY": 1.0,
+            "scaleZ": 0.714285731
+          },
+          "Nickname": "The Kingsman Plot",
+          "GMNotes": "{\"TtsZoopGuid\":\"5f6e0c8d-8927-41ae-923b-5b9d78fe08a8\",\"id\":\"5f6e0c8d-8927-41ae-923b-5b9d78fe08a8\",\"type\":\"Agenda\",\"class\":\"Mythos\",\"doomThreshold\":4}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 100900,
+          "CustomDeck": {
+            "1009": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/rz0ev0uk0lfydvldc46f6/5f6e0c8d-8927-41ae-923b-5b9d78fe08a8-Front-Agenda-4-The-Kingsmen-Plot-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=a48rjsxdvkh2sxrsr9wrz4ibs&raw=1&cachebust=1761492270260",
+              "BackURL": "https://www.dropbox.com/scl/fi/56gngcc3yvnsi02cu6bk7/5f6e0c8d-8927-41ae-923b-5b9d78fe08a8-Back-Agenda-4-The-Kingsmen-Plot-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=8g229kuoogng1f9rfve63z4h3&raw=1&cachebust=1761492271243",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": true,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "e0000b",
+          "Name": "Card",
+          "Transform": {
+            "rotY": 270,
+            "scaleX": 0.714285731,
+            "scaleY": 1.0,
+            "scaleZ": 0.714285731
+          },
+          "Nickname": "Time is Short",
+          "GMNotes": "{\"TtsZoopGuid\":\"2e066176-9080-4d89-9a8a-366bff5232a6\",\"id\":\"2e066176-9080-4d89-9a8a-366bff5232a6\",\"type\":\"Agenda\",\"class\":\"Mythos\",\"doomThreshold\":4}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 100800,
+          "CustomDeck": {
+            "1008": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/k3c1t8xjaxxu3peij9ecr/2e066176-9080-4d89-9a8a-366bff5232a6-Front-Agenda-3-Time-is-Short-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=4i7opuwxvz52omwddsz6jwdtd&raw=1&cachebust=1761492267833",
+              "BackURL": "https://www.dropbox.com/scl/fi/02ayc78sxdrbg42f9a8yx/2e066176-9080-4d89-9a8a-366bff5232a6-Back-Agenda-3-Time-is-Short-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=98txik9paivuszs195rrgk469&raw=1&cachebust=1761492268822",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": true,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "e0000a",
+          "Name": "Card",
+          "Transform": {
+            "rotY": 270,
+            "scaleX": 0.714285731,
+            "scaleY": 1.0,
+            "scaleZ": 0.714285731
+          },
+          "Nickname": "A Sinister Trail",
+          "GMNotes": "{\"TtsZoopGuid\":\"d3c2361d-d817-4840-8f69-884258f45fbe\",\"id\":\"d3c2361d-d817-4840-8f69-884258f45fbe\",\"type\":\"Agenda\",\"class\":\"Mythos\",\"doomThreshold\":4}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 100700,
+          "CustomDeck": {
+            "1007": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/k7c7flrj2ng6pq02kn0xz/d3c2361d-d817-4840-8f69-884258f45fbe-Front-Agenda-2-A-Sinister-Trail-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=5qt17nkglhov2pyjf32qdn00k&raw=1&cachebust=1761492264274",
+              "BackURL": "https://www.dropbox.com/scl/fi/1mvfvxflliakouylzb3gt/d3c2361d-d817-4840-8f69-884258f45fbe-Back-Agenda-2-A-Sinister-Trail-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=2nb0xsaoa27po2m5wyitnbwdb&raw=1&cachebust=1761492265221",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": true,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "e00009",
+          "Name": "Card",
+          "Transform": {
+            "rotY": 270,
+            "scaleX": 0.714285731,
+            "scaleY": 1.0,
+            "scaleZ": 0.714285731
+          },
+          "Nickname": "A Murky Plot",
+          "GMNotes": "{\"TtsZoopGuid\":\"540b1cbe-444a-4a98-951d-90b14f75b6fc\",\"id\":\"540b1cbe-444a-4a98-951d-90b14f75b6fc\",\"type\":\"Agenda\",\"class\":\"Mythos\",\"doomThreshold\":4}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 100600,
+          "CustomDeck": {
+            "1006": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/us0bcu7vlc2ijjrc7o7pb/540b1cbe-444a-4a98-951d-90b14f75b6fc-Front-Agenda-1-A-Murky-Plot-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=d6o1o5x1qkv31tg7donlbx8m4&raw=1&cachebust=1761492261298",
+              "BackURL": "https://www.dropbox.com/scl/fi/5g5gtfs80eg0siduqgr5l/540b1cbe-444a-4a98-951d-90b14f75b6fc-Back-Agenda-1-A-Murky-Plot-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=8g09j07bhoj6oulicp16ejpip&raw=1&cachebust=1761492262263",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": true,
+              "Type": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "GUID": "79503f",
+      "Name": "Deck",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 0.714285731,
+        "scaleY": 1.0,
+        "scaleZ": 0.714285731
+      },
+      "Nickname": "Act Deck",
+      "Tags": [
+        "ScenarioCard"
+      ],
+      "Hands": false,
+      "DeckIDs": [
+        100500,
+        100400,
+        100300,
+        100200,
+        100100,
+        100000
+      ],
+      "CustomDeck": {
+        "1005": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/w8lx8xulf4axcr3jw0y5h/38294da4-688d-467e-a56d-01e0eae9be0f-Front-Act-6-The-Mastermind-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=s83x503myzqoey126gw2s7dvj&raw=1&cachebust=1761492259104",
+          "BackURL": "https://www.dropbox.com/scl/fi/weece8whw9bdgz3178mdo/38294da4-688d-467e-a56d-01e0eae9be0f-Back-Act-6-The-Mastermind-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=uhv8e89hqha0v6s5r51zcqmrv&raw=1&cachebust=1761492260077",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        },
+        "1004": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/wxv45jfp7glr3hgezrwxp/b2c6a299-0bf9-43ed-bf2a-48d004424135-Front-Act-5-Race-to-Stop-the-Coup-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=ek36jp1ufh8h17tow1kmx73yv&raw=1&cachebust=1761492256608",
+          "BackURL": "https://www.dropbox.com/scl/fi/6tirlf6g3s51fwi7j0n21/b2c6a299-0bf9-43ed-bf2a-48d004424135-Back-Act-5-Race-to-Stop-the-Coup-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=ysomd2hhee6wqa7hnl4bhuevc&raw=1&cachebust=1761492257815",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        },
+        "1003": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/qefk8x685mvze2ywy4ppd/03d67115-dd1c-403d-af83-4a7776911285-Front-Act-4-Renthnor-Mage-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=coomflkii6hybqrla5i7389er&raw=1&cachebust=1761492253961",
+          "BackURL": "https://www.dropbox.com/scl/fi/v1bahk9v7sd8lamx4696n/03d67115-dd1c-403d-af83-4a7776911285-Back-Act-4-Renthnor-Mage-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=a248dsefn2eryf5lag7d1kash&raw=1&cachebust=1761492254974",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        },
+        "1002": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/mmnolsqm1xjcwq587dpvy/ef2b3b2b-029f-4c09-b231-6c8a8df5dfa2-Front-Act-3-Guard-Bar-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=1y2nkwazpizbom1wk2c1ye7el&raw=1&cachebust=1761492251811",
+          "BackURL": "https://www.dropbox.com/scl/fi/lqlamtdln8jzhrp4u3u2n/ef2b3b2b-029f-4c09-b231-6c8a8df5dfa2-Back-Act-3-Guard-Bar-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=mlq58bn5x4b78rky4ngs0hczv&raw=1&cachebust=1761492252757",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        },
+        "1001": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/vw1y5teqkds25q86iekor/3e8f40d1-54d2-4541-b9d0-f799d0f6cf8f-Front-Act-2-Chasing-Leads-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=bkwmvvqchw36v3jrthvntrk43&raw=1&cachebust=1761492248959",
+          "BackURL": "https://www.dropbox.com/scl/fi/9z2r7epimtm5gpkfp8vdz/3e8f40d1-54d2-4541-b9d0-f799d0f6cf8f-Back-Act-2-Chasing-Leads-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=s4gltsbaw7k3dr5g4ljzddwqi&raw=1&cachebust=1761492250513",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        },
+        "1000": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/loqkjw8ok17bzcufybf52/9d4003b0-6d73-45e3-a2e8-8f1c9de8ebb5-Front-Act-1-Gathering-Clues-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=hg0jxu085dyao1512xxpd8fyb&raw=1&cachebust=1761492246291",
+          "BackURL": "https://www.dropbox.com/scl/fi/lzm517cwwk9wxph70pses/9d4003b0-6d73-45e3-a2e8-8f1c9de8ebb5-Back-Act-1-Gathering-Clues-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=9tfr9wkspjsq04g4jkv5x8jq5&raw=1&cachebust=1761492247634",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "ContainedObjects": [
+        {
+          "GUID": "e00008",
+          "Name": "Card",
+          "Transform": {
+            "rotY": 270,
+            "scaleX": 0.714285731,
+            "scaleY": 1.0,
+            "scaleZ": 0.714285731
+          },
+          "Nickname": "The Mastermind?",
+          "GMNotes": "{\"TtsZoopGuid\":\"38294da4-688d-467e-a56d-01e0eae9be0f\",\"id\":\"38294da4-688d-467e-a56d-01e0eae9be0f\",\"type\":\"Act\",\"class\":\"Mythos\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 100500,
+          "CustomDeck": {
+            "1005": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/w8lx8xulf4axcr3jw0y5h/38294da4-688d-467e-a56d-01e0eae9be0f-Front-Act-6-The-Mastermind-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=s83x503myzqoey126gw2s7dvj&raw=1&cachebust=1761492259104",
+              "BackURL": "https://www.dropbox.com/scl/fi/weece8whw9bdgz3178mdo/38294da4-688d-467e-a56d-01e0eae9be0f-Back-Act-6-The-Mastermind-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=uhv8e89hqha0v6s5r51zcqmrv&raw=1&cachebust=1761492260077",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": true,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "e00007",
+          "Name": "Card",
+          "Transform": {
+            "rotY": 270,
+            "scaleX": 0.714285731,
+            "scaleY": 1.0,
+            "scaleZ": 0.714285731
+          },
+          "Nickname": "Race to Stop the Coup!",
+          "GMNotes": "{\"TtsZoopGuid\":\"b2c6a299-0bf9-43ed-bf2a-48d004424135\",\"id\":\"b2c6a299-0bf9-43ed-bf2a-48d004424135\",\"type\":\"Act\",\"class\":\"Mythos\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 100400,
+          "CustomDeck": {
+            "1004": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/wxv45jfp7glr3hgezrwxp/b2c6a299-0bf9-43ed-bf2a-48d004424135-Front-Act-5-Race-to-Stop-the-Coup-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=ek36jp1ufh8h17tow1kmx73yv&raw=1&cachebust=1761492256608",
+              "BackURL": "https://www.dropbox.com/scl/fi/6tirlf6g3s51fwi7j0n21/b2c6a299-0bf9-43ed-bf2a-48d004424135-Back-Act-5-Race-to-Stop-the-Coup-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=ysomd2hhee6wqa7hnl4bhuevc&raw=1&cachebust=1761492257815",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": true,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "e00006",
+          "Name": "Card",
+          "Transform": {
+            "rotY": 270,
+            "scaleX": 0.714285731,
+            "scaleY": 1.0,
+            "scaleZ": 0.714285731
+          },
+          "Nickname": "Renthnor Mage",
+          "GMNotes": "{\"TtsZoopGuid\":\"03d67115-dd1c-403d-af83-4a7776911285\",\"id\":\"03d67115-dd1c-403d-af83-4a7776911285\",\"type\":\"Act\",\"class\":\"Mythos\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 100300,
+          "CustomDeck": {
+            "1003": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/qefk8x685mvze2ywy4ppd/03d67115-dd1c-403d-af83-4a7776911285-Front-Act-4-Renthnor-Mage-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=coomflkii6hybqrla5i7389er&raw=1&cachebust=1761492253961",
+              "BackURL": "https://www.dropbox.com/scl/fi/v1bahk9v7sd8lamx4696n/03d67115-dd1c-403d-af83-4a7776911285-Back-Act-4-Renthnor-Mage-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=a248dsefn2eryf5lag7d1kash&raw=1&cachebust=1761492254974",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": true,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "e00005",
+          "Name": "Card",
+          "Transform": {
+            "rotY": 270,
+            "scaleX": 0.714285731,
+            "scaleY": 1.0,
+            "scaleZ": 0.714285731
+          },
+          "Nickname": "Guard Bar",
+          "GMNotes": "{\"TtsZoopGuid\":\"ef2b3b2b-029f-4c09-b231-6c8a8df5dfa2\",\"id\":\"ef2b3b2b-029f-4c09-b231-6c8a8df5dfa2\",\"type\":\"Act\",\"class\":\"Mythos\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 100200,
+          "CustomDeck": {
+            "1002": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/mmnolsqm1xjcwq587dpvy/ef2b3b2b-029f-4c09-b231-6c8a8df5dfa2-Front-Act-3-Guard-Bar-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=1y2nkwazpizbom1wk2c1ye7el&raw=1&cachebust=1761492251811",
+              "BackURL": "https://www.dropbox.com/scl/fi/lqlamtdln8jzhrp4u3u2n/ef2b3b2b-029f-4c09-b231-6c8a8df5dfa2-Back-Act-3-Guard-Bar-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=mlq58bn5x4b78rky4ngs0hczv&raw=1&cachebust=1761492252757",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": true,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "e00004",
+          "Name": "Card",
+          "Transform": {
+            "rotY": 270,
+            "scaleX": 0.714285731,
+            "scaleY": 1.0,
+            "scaleZ": 0.714285731
+          },
+          "Nickname": "Chasing Leads",
+          "GMNotes": "{\"TtsZoopGuid\":\"3e8f40d1-54d2-4541-b9d0-f799d0f6cf8f\",\"id\":\"3e8f40d1-54d2-4541-b9d0-f799d0f6cf8f\",\"type\":\"Act\",\"class\":\"Mythos\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 100100,
+          "CustomDeck": {
+            "1001": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/vw1y5teqkds25q86iekor/3e8f40d1-54d2-4541-b9d0-f799d0f6cf8f-Front-Act-2-Chasing-Leads-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=bkwmvvqchw36v3jrthvntrk43&raw=1&cachebust=1761492248959",
+              "BackURL": "https://www.dropbox.com/scl/fi/9z2r7epimtm5gpkfp8vdz/3e8f40d1-54d2-4541-b9d0-f799d0f6cf8f-Back-Act-2-Chasing-Leads-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=s4gltsbaw7k3dr5g4ljzddwqi&raw=1&cachebust=1761492250513",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": true,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "e00003",
+          "Name": "Card",
+          "Transform": {
+            "rotY": 270,
+            "scaleX": 0.714285731,
+            "scaleY": 1.0,
+            "scaleZ": 0.714285731
+          },
+          "Nickname": "Gathering Clues",
+          "GMNotes": "{\"TtsZoopGuid\":\"9d4003b0-6d73-45e3-a2e8-8f1c9de8ebb5\",\"id\":\"9d4003b0-6d73-45e3-a2e8-8f1c9de8ebb5\",\"type\":\"Act\",\"class\":\"Mythos\",\"clueThresholdPerInvestigator\":2}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 100000,
+          "CustomDeck": {
+            "1000": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/loqkjw8ok17bzcufybf52/9d4003b0-6d73-45e3-a2e8-8f1c9de8ebb5-Front-Act-1-Gathering-Clues-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=hg0jxu085dyao1512xxpd8fyb&raw=1&cachebust=1761492246291",
+              "BackURL": "https://www.dropbox.com/scl/fi/lzm517cwwk9wxph70pses/9d4003b0-6d73-45e3-a2e8-8f1c9de8ebb5-Back-Act-1-Gathering-Clues-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=9tfr9wkspjsq04g4jkv5x8jq5&raw=1&cachebust=1761492247634",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": true,
+              "Type": 0
+            }
+          }
+        }
+      ]
     },
     {
       "GUID": "7a167a",
@@ -222,6 +687,7 @@
             "b": 0.0
           },
           "HideWhenFaceDown": false,
+          "Hands": false,
           "ContainedObjects": [
             {
               "GUID": "b23261",
@@ -492,13 +958,13 @@
           ],
           "Hands": false,
           "DeckIDs": [
-            104600,
+            104800,
             104700,
-            104800
+            104600
           ],
           "CustomDeck": {
-            "1046": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/u27zi6g1l1hydbshq7dz9/c0f38e38-b4b8-4247-9bf2-decc83256501-Front-Kingsmen-Mage-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=go3vac04p27dngsbz18bycouo&raw=1&cachebust=1760548928688",
+            "1048": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/i04i8tbxg9nzgvl5n2d37/74afc16f-3efa-4905-ae60-b9584cef28d9-Front-Kingsmen-Scion-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=uwq03izt91uztnkxj1e730xdd&raw=1&cachebust=1760548930082",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -515,8 +981,8 @@
               "UniqueBack": false,
               "Type": 0
             },
-            "1048": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/i04i8tbxg9nzgvl5n2d37/74afc16f-3efa-4905-ae60-b9584cef28d9-Front-Kingsmen-Scion-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=uwq03izt91uztnkxj1e730xdd&raw=1&cachebust=1760548930082",
+            "1046": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/u27zi6g1l1hydbshq7dz9/c0f38e38-b4b8-4247-9bf2-decc83256501-Front-Kingsmen-Mage-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=go3vac04p27dngsbz18bycouo&raw=1&cachebust=1760548928688",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -527,7 +993,7 @@
           },
           "ContainedObjects": [
             {
-              "GUID": "e00037",
+              "GUID": "e00039",
               "Name": "Card",
               "Transform": {
                 "rotY": 270,
@@ -535,15 +1001,15 @@
                 "scaleY": 1.0,
                 "scaleZ": 1.0
               },
-              "Nickname": "Kingsmen Mage",
-              "GMNotes": "{\"TtsZoopGuid\":\"c0f38e38-b4b8-4247-9bf2-decc83256501\",\"id\":\"c0f38e38-b4b8-4247-9bf2-decc83256501\",\"type\":\"Enemy\",\"class\":\"Mythos\",\"traits\":\"Humanoid. Kingsmen. Mage.\",\"victory\":0}",
+              "Nickname": "Kingsmen Scion",
+              "GMNotes": "{\"TtsZoopGuid\":\"74afc16f-3efa-4905-ae60-b9584cef28d9\",\"id\":\"74afc16f-3efa-4905-ae60-b9584cef28d9\",\"type\":\"Enemy\",\"class\":\"Mythos\",\"traits\":\"Humanoid. Kingsmen. Noble. Elite.\",\"victory\":1}",
               "Tags": [
                 "ScenarioCard"
               ],
-              "CardID": 104600,
+              "CardID": 104800,
               "CustomDeck": {
-                "1046": {
-                  "FaceURL": "https://www.dropbox.com/scl/fi/u27zi6g1l1hydbshq7dz9/c0f38e38-b4b8-4247-9bf2-decc83256501-Front-Kingsmen-Mage-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=go3vac04p27dngsbz18bycouo&raw=1&cachebust=1760548928688",
+                "1048": {
+                  "FaceURL": "https://www.dropbox.com/scl/fi/i04i8tbxg9nzgvl5n2d37/74afc16f-3efa-4905-ae60-b9584cef28d9-Front-Kingsmen-Scion-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=uwq03izt91uztnkxj1e730xdd&raw=1&cachebust=1760548930082",
                   "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
                   "NumWidth": 1,
                   "NumHeight": 1,
@@ -581,7 +1047,7 @@
               }
             },
             {
-              "GUID": "e00039",
+              "GUID": "e00037",
               "Name": "Card",
               "Transform": {
                 "rotY": 270,
@@ -589,15 +1055,15 @@
                 "scaleY": 1.0,
                 "scaleZ": 1.0
               },
-              "Nickname": "Kingsmen Scion",
-              "GMNotes": "{\"TtsZoopGuid\":\"74afc16f-3efa-4905-ae60-b9584cef28d9\",\"id\":\"74afc16f-3efa-4905-ae60-b9584cef28d9\",\"type\":\"Enemy\",\"class\":\"Mythos\",\"traits\":\"Humanoid. Kingsmen. Noble. Elite.\",\"victory\":1}",
+              "Nickname": "Kingsmen Mage",
+              "GMNotes": "{\"TtsZoopGuid\":\"c0f38e38-b4b8-4247-9bf2-decc83256501\",\"id\":\"c0f38e38-b4b8-4247-9bf2-decc83256501\",\"type\":\"Enemy\",\"class\":\"Mythos\",\"traits\":\"Humanoid. Kingsmen. Mage.\",\"victory\":0}",
               "Tags": [
                 "ScenarioCard"
               ],
-              "CardID": 104800,
+              "CardID": 104600,
               "CustomDeck": {
-                "1048": {
-                  "FaceURL": "https://www.dropbox.com/scl/fi/i04i8tbxg9nzgvl5n2d37/74afc16f-3efa-4905-ae60-b9584cef28d9-Front-Kingsmen-Scion-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=uwq03izt91uztnkxj1e730xdd&raw=1&cachebust=1760548930082",
+                "1046": {
+                  "FaceURL": "https://www.dropbox.com/scl/fi/u27zi6g1l1hydbshq7dz9/c0f38e38-b4b8-4247-9bf2-decc83256501-Front-Kingsmen-Mage-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=go3vac04p27dngsbz18bycouo&raw=1&cachebust=1760548928688",
                   "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
                   "NumWidth": 1,
                   "NumHeight": 1,
@@ -630,8 +1096,8 @@
             107400,
             107100,
             107000,
-            107300,
-            107200
+            266400,
+            266500
           ],
           "CustomDeck": {
             "1075": {
@@ -670,7 +1136,7 @@
               "UniqueBack": true,
               "Type": 0
             },
-            "1073": {
+            "2664": {
               "FaceURL": "https://www.dropbox.com/scl/fi/7i3t6x5gxwz7ijgnrqhnz/28a79bb6-99fc-4140-b227-c11671867e0c-Front-Palace-Throne-Room-Seething-Desperation-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=pj53f8ciovh4o3z95yerm91ph&raw=1&cachebust=1760622465717",
               "BackURL": "https://www.dropbox.com/scl/fi/uip2bm31xm91zmi9c019c/28a79bb6-99fc-4140-b227-c11671867e0c-Back-Palace-Throne-Room-Seething-Desperation-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=8t00hngmsvrql6vu6sldqo1c8&raw=1&cachebust=1760622468185",
               "NumWidth": 1,
@@ -679,7 +1145,7 @@
               "UniqueBack": true,
               "Type": 0
             },
-            "1072": {
+            "2665": {
               "FaceURL": "https://www.dropbox.com/scl/fi/ztcuflxs42y0iz9uev192/f333424f-6d44-4d25-a6fc-938968b3559f-Front-Palace-Throne-Room-Alarm-Sounded-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=rb597dceyqijyaf0wicqfr28m&raw=1&cachebust=1760622460527",
               "BackURL": "https://www.dropbox.com/scl/fi/4o7k7m8gj9d040sa4sh86/f333424f-6d44-4d25-a6fc-938968b3559f-Back-Palace-Throne-Room-Alarm-Sounded-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=ijp8atb5mule510jtx8gbpbj7&raw=1&cachebust=1760622463032",
               "NumWidth": 1,
@@ -827,7 +1293,7 @@
                 "Location",
                 "ScenarioCard"
               ],
-              "CardID": 107300,
+              "CardID": 266400,
               "CustomDeck": {
                 "1073": {
                   "FaceURL": "https://www.dropbox.com/scl/fi/7i3t6x5gxwz7ijgnrqhnz/28a79bb6-99fc-4140-b227-c11671867e0c-Front-Palace-Throne-Room-Seething-Desperation-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=pj53f8ciovh4o3z95yerm91ph&raw=1&cachebust=1760622465717",
@@ -857,7 +1323,7 @@
                 "Location",
                 "ScenarioCard"
               ],
-              "CardID": 107200,
+              "CardID": 266500,
               "CustomDeck": {
                 "1072": {
                   "FaceURL": "https://www.dropbox.com/scl/fi/ztcuflxs42y0iz9uev192/f333424f-6d44-4d25-a6fc-938968b3559f-Front-Palace-Throne-Room-Alarm-Sounded-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=rb597dceyqijyaf0wicqfr28m&raw=1&cachebust=1760622460527",
@@ -1259,7 +1725,7 @@
           "GUID": "e00069",
           "Name": "Card",
           "Transform": {
-            "rotY": 270,
+            "rotY": 225,
             "scaleX": 1.0,
             "scaleY": 1.0,
             "scaleZ": 1.0
@@ -1461,7 +1927,7 @@
               "GUID": "e0006b",
               "Name": "Card",
               "Transform": {
-                "rotY": 275,
+                "rotY": 270,
                 "scaleX": 1.0,
                 "scaleY": 1.0,
                 "scaleZ": 1.0
@@ -2021,110 +2487,36 @@
       ]
     },
     {
-      "GUID": "9e1ebf",
-      "Name": "Deck",
+      "GUID": "7cd043",
+      "Name": "Card",
       "Transform": {
         "rotY": 270,
-        "rotZ": 180,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
       },
-      "Nickname": "",
+      "Nickname": "Yarra",
+      "Description": "Unbiasedly Best Succubus",
+      "GMNotes": "{\"TtsZoopGuid\":\"a86e1253-0770-4a5d-8dde-2bfa63159a0e\",\"id\":\"a86e1253-0770-4a5d-8dde-2bfa63159a0e\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Succubus. Close Ally. Mage.\"}",
       "Tags": [
-        "Location",
-        "ScenarioCard"
+        "Asset",
+        "PlayerCard"
       ],
-      "Hands": false,
-      "DeckIDs": [
-        106900,
-        106800
-      ],
+      "CardID": 101600,
       "CustomDeck": {
-        "1069": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/kwe7lmv0q5o2svhtdgmhw/b9220ca1-2789-407f-b1c4-780384789ec1-Front-Outskirts-Quest-Boards-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=z0zv5kkmy9vbv9kenpms583r2&raw=1&cachebust=1760548942882",
-          "BackURL": "https://www.dropbox.com/scl/fi/m7iq1yz5liufemmnub7lb/b9220ca1-2789-407f-b1c4-780384789ec1-Back-Outskirts-Quest-Boards-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=anajo1sosuly3hhpfia3hwm9c&raw=1&cachebust=1760548944152",
+        "1016": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/ph48qempyfu9p1xun4f9i/a86e1253-0770-4a5d-8dde-2bfa63159a0e-Front-Yarra-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=5h3g5rxdeoeuxsip7efqbucd5&raw=1&cachebust=1761492278636",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        },
-        "1068": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/bplui67ohcxq4z3hm4d79/f8c9bfc8-62d5-42b0-9606-aa20ecdbe0ec-Front-Outskirts-Mercenary-Camps-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=bj908l4m16eqljmkru3lcbx0r&raw=1&cachebust=1760486347982",
-          "BackURL": "https://www.dropbox.com/scl/fi/1tj93x7f27zksunq136ie/f8c9bfc8-62d5-42b0-9606-aa20ecdbe0ec-Back-Outskirts-Mercenary-Camps-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=gsnida32x6vidp8jkkcxjrhvt&raw=1&cachebust=1760486349358",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": true,
+          "UniqueBack": false,
           "Type": 0
         }
-      },
-      "ContainedObjects": [
-        {
-          "GUID": "e00050",
-          "Name": "Card",
-          "Transform": {
-            "rotY": 270,
-            "rotZ": 180,
-            "scaleX": 1.0,
-            "scaleY": 1.0,
-            "scaleZ": 1.0
-          },
-          "Nickname": "Outskirts",
-          "Description": "Quest Boards",
-          "GMNotes": "{\"TtsZoopGuid\":\"b9220ca1-2789-407f-b1c4-780384789ec1\",\"id\":\"b9220ca1-2789-407f-b1c4-780384789ec1\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"Yhilin. Central.\",\"locationFront\":{\"icons\":\"Circle\",\"connections\":\"Square|Triangle|Diamond|Hourglass\",\"uses\":[{\"countPerInvestigator\":1,\"token\":\"clue\",\"type\":\"Clue\"}]},\"locationBack\":{\"icons\":\"Circle\",\"connections\":\"Square|Triangle|Diamond|Hourglass\"}}",
-          "Tags": [
-            "Location",
-            "ScenarioCard"
-          ],
-          "CardID": 106900,
-          "CustomDeck": {
-            "1069": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/kwe7lmv0q5o2svhtdgmhw/b9220ca1-2789-407f-b1c4-780384789ec1-Front-Outskirts-Quest-Boards-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=z0zv5kkmy9vbv9kenpms583r2&raw=1&cachebust=1760548942882",
-              "BackURL": "https://www.dropbox.com/scl/fi/m7iq1yz5liufemmnub7lb/b9220ca1-2789-407f-b1c4-780384789ec1-Back-Outskirts-Quest-Boards-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=anajo1sosuly3hhpfia3hwm9c&raw=1&cachebust=1760548944152",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": true,
-              "Type": 0
-            }
-          }
-        },
-        {
-          "GUID": "e0004f",
-          "Name": "Card",
-          "Transform": {
-            "rotY": 270,
-            "rotZ": 180,
-            "scaleX": 1.0,
-            "scaleY": 1.0,
-            "scaleZ": 1.0
-          },
-          "Nickname": "Outskirts",
-          "Description": "Mercenary Camps",
-          "GMNotes": "{\"TtsZoopGuid\":\"f8c9bfc8-62d5-42b0-9606-aa20ecdbe0ec\",\"id\":\"f8c9bfc8-62d5-42b0-9606-aa20ecdbe0ec\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"Yhilin. Central.\",\"locationFront\":{\"icons\":\"Circle\",\"connections\":\"Square|Triangle|Diamond|Hourglass\",\"uses\":[{\"countPerInvestigator\":1,\"token\":\"clue\",\"type\":\"Clue\"}]},\"locationBack\":{\"icons\":\"Circle\",\"connections\":\"Square|Triangle|Diamond|Hourglass\"}}",
-          "Tags": [
-            "Location",
-            "ScenarioCard"
-          ],
-          "CardID": 106800,
-          "CustomDeck": {
-            "1068": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/bplui67ohcxq4z3hm4d79/f8c9bfc8-62d5-42b0-9606-aa20ecdbe0ec-Front-Outskirts-Mercenary-Camps-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=bj908l4m16eqljmkru3lcbx0r&raw=1&cachebust=1760486347982",
-              "BackURL": "https://www.dropbox.com/scl/fi/1tj93x7f27zksunq136ie/f8c9bfc8-62d5-42b0-9606-aa20ecdbe0ec-Back-Outskirts-Mercenary-Camps-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=gsnida32x6vidp8jkkcxjrhvt&raw=1&cachebust=1760486349358",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": true,
-              "Type": 0
-            }
-          }
-        }
-      ]
+      }
     },
     {
-      "GUID": "a90298",
+      "GUID": "96b0a1",
       "Name": "Deck",
       "Transform": {
         "rotY": 270,
@@ -2227,6 +2619,35 @@
       ]
     },
     {
+      "GUID": "9b9d8f",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Aka",
+      "Description": "Ardan Bounty Hunter",
+      "GMNotes": "{\"TtsZoopGuid\":\"47e2b402-6923-41b7-ad6c-31c1b06d6900\",\"id\":\"47e2b402-6923-41b7-ad6c-31c1b06d6900\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Humanoid. Close Ally. Bounty Hunter.\"}",
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "CardID": 101100,
+      "CustomDeck": {
+        "1011": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/hyqef2pq0qp6q42ure3ho/47e2b402-6923-41b7-ad6c-31c1b06d6900-Front-Aka-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=922b218uhb46d152xuccrb63h&raw=1&cachebust=1761492272244",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      }
+    },
+    {
       "GUID": "asdjkl",
       "Name": "Custom_Tile",
       "Transform": {
@@ -2292,76 +2713,38 @@
       "LuaScript": "-- Bundled by luabundle {\"version\":\"1.6.0\"}\r\nlocal __bundle_require, __bundle_loaded, __bundle_register, __bundle_modules = (function(superRequire)\r\n        local loadingPlaceholder = {[{}] = true}\r\n\r\n        local register\r\n        local modules = {}\r\n\r\n        local require\r\n        local loaded = {}\r\n\r\n        register = function(name, body)\r\n                if not modules[name] then\r\n                        modules[name] = body\r\n                end\r\n        end\r\n\r\n        require = function(name)\r\n                local loadedModule = loaded[name]\r\n\r\n                if loadedModule then\r\n                        if loadedModule == loadingPlaceholder then\r\n                                return nil\r\n                        end\r\n                else\r\n                        if not modules[name] then\r\n                                if not superRequire then\r\n                                        local identifier = type(name) == 'string' and '\\\"' .. name .. '\\\"' or tostring(name)\r\n                                        error('Tried to require ' .. identifier .. ', but no such module has been registered')\r\n                                else\r\n                                        return superRequire(name)\r\n                                end\r\n                        end\r\n\r\n                        loaded[name] = loadingPlaceholder\r\n                        loadedModule = modules[name](require, loaded, register, modules)\r\n                        loaded[name] = loadedModule\r\n                end\r\n\r\n                return loadedModule\r\n        end\r\n\r\n        return require, loaded, register, modules\r\nend)(nil)\r\n__bundle_register(\"DifficultySelectorLibrary\", function(require, _LOADED, __bundle_register, __bundle_modules)\r\n--[[ Library file for Difficulty Selectors\r\n- define the \"tokenData\" table and then require this file\r\n- list of valid ids: 'p1', '0', 'm1' - 'm8', 'skull', 'cultist', 'tablet', 'elder', 'red', 'blue', 'bless', 'curse', 'frost'\r\n\r\nExample:\r\ntokenData = {\r\n  Easy = { token = { 'p1', 'p1', '0', '0', '0', 'm1', 'm1', 'm1', 'm2', 'm2', 'skull', 'skull', 'cultist', 'tablet', 'red', 'blue' } },\r\n  Standard = { token = { 'p1', '0', '0', 'm1', 'm1', 'm1', 'm2', 'm2', 'm3', 'm4', 'skull', 'skull', 'cultist', 'tablet', 'red', 'blue' } }\r\n}\r\nrequire ...\r\n]]\r\n\r\nfunction onLoad()\r\n  local z_offset = -0.15\r\n  for difficulty, _ in pairs(tokenData) do\r\n    local clickFunction = difficulty:lower() .. \"Click\"\r\n    self.setVar(clickFunction, function() clickFun(difficulty) end)\r\n    self.createButton({\r\n      label          = difficulty,\r\n      function_owner = self,\r\n      click_function = clickFunction,\r\n      position       = { 0, 0.1, z_offset },\r\n      scale          = { 0.47, 1, 0.47 },\r\n      height         = 200,\r\n      width          = 1150,\r\n      color          = { 0.87, 0.8, 0.70 },\r\n    })\r\n    z_offset = z_offset + 0.225\r\n  end\r\nend\r\n\r\nfunction clickFun(difficulty)\r\n  local data = tokenData[difficulty]\r\n  if data.random then\r\n    -- handling for Carcosa standalone mode\r\n    local randomGroup = math.random(1, #data.random)\r\n    for _, tokenId in ipairs(data.random[randomGroup]) do\r\n      table.insert(data.token, tokenId)\r\n    end\r\n  end\r\n  Global.call(\"setChaosBagState\", data.token)\r\nend\r\nend)\r\n__bundle_register(\"DifficultySelectors/S06-TheBlobThatAteEverything\", function(require, _LOADED, __bundle_register, __bundle_modules)\r\ntokenData = {\r\n  Normal = { token = { 'p1', '0', '0', 'm1', 'm1', 'm2', 'm2', 'm3', 'm3', 'm5', 'skull', 'skull', 'skull', 'cultist', 'cultist', 'tablet', 'tablet', 'elder', 'elder', 'red', 'blue' } },\r\n  Hard = { token = { '0', '0', 'm1', 'm2', 'm2', 'm3', 'm3', 'm4', 'm4', 'm6', 'skull', 'skull', 'skull', 'cultist', 'cultist', 'tablet', 'tablet', 'elder', 'elder', 'red', 'blue' } },\r\n}\r\n\r\nrequire(\"DifficultySelectorLibrary\")\r\nend)\r\n__bundle_register(\"__root\", function(require, _LOADED, __bundle_register, __bundle_modules)\r\nrequire(\"DifficultySelectors/S06-TheBlobThatAteEverything\")\r\nend)\r\nreturn __bundle_require(\"__root\")\r\n"
     },
     {
-      "GUID": "b2d437",
+      "GUID": "b33f6d",
       "Name": "Deck",
       "Transform": {
         "rotY": 270,
-        "scaleX": 0.714285731,
+        "rotZ": 180,
+        "scaleX": 1.0,
         "scaleY": 1.0,
-        "scaleZ": 0.714285731
+        "scaleZ": 1.0
       },
-      "Nickname": "Act Deck",
+      "Nickname": "",
       "Tags": [
+        "Location",
         "ScenarioCard"
       ],
       "Hands": false,
       "DeckIDs": [
-        100500,
-        100400,
-        100300,
-        100200,
-        100100,
-        100000
+        107700,
+        107600
       ],
       "CustomDeck": {
-        "1005": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/w8lx8xulf4axcr3jw0y5h/38294da4-688d-467e-a56d-01e0eae9be0f-Front-Act-6-The-Mastermind-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=s83x503myzqoey126gw2s7dvj&raw=1&cachebust=1760548904626",
-          "BackURL": "https://www.dropbox.com/scl/fi/weece8whw9bdgz3178mdo/38294da4-688d-467e-a56d-01e0eae9be0f-Back-Act-6-The-Mastermind-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=uhv8e89hqha0v6s5r51zcqmrv&raw=1&cachebust=1760548905725",
+        "1077": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/aergla2n9r2vj2zw5ylxw/ec22b13c-9227-4b5d-ac75-de8293fd6c61-Front-The-Court-Noble-District-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=q6iky91a1319rldgcsy22hvxu&raw=1&cachebust=1761492288202",
+          "BackURL": "https://www.dropbox.com/scl/fi/qoqn6lw0kzd6sxg2z8lxa/ec22b13c-9227-4b5d-ac75-de8293fd6c61-Back-The-Court-Noble-District-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=qjr02v541g2rz8h8ch5r3qq1b&raw=1&cachebust=1761492289258",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
           "UniqueBack": true,
           "Type": 0
         },
-        "1004": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/wxv45jfp7glr3hgezrwxp/b2c6a299-0bf9-43ed-bf2a-48d004424135-Front-Act-5-Race-to-Stop-the-Coup-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=ek36jp1ufh8h17tow1kmx73yv&raw=1&cachebust=1760622413836",
-          "BackURL": "https://www.dropbox.com/scl/fi/6tirlf6g3s51fwi7j0n21/b2c6a299-0bf9-43ed-bf2a-48d004424135-Back-Act-5-Race-to-Stop-the-Coup-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=ysomd2hhee6wqa7hnl4bhuevc&raw=1&cachebust=1760622416667",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        },
-        "1003": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/qefk8x685mvze2ywy4ppd/03d67115-dd1c-403d-af83-4a7776911285-Front-Act-4-Renthnor-Mage-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=coomflkii6hybqrla5i7389er&raw=1&cachebust=1760622408427",
-          "BackURL": "https://www.dropbox.com/scl/fi/v1bahk9v7sd8lamx4696n/03d67115-dd1c-403d-af83-4a7776911285-Back-Act-4-Renthnor-Mage-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=a248dsefn2eryf5lag7d1kash&raw=1&cachebust=1760622411211",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        },
-        "1002": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/mmnolsqm1xjcwq587dpvy/ef2b3b2b-029f-4c09-b231-6c8a8df5dfa2-Front-Act-3-Guard-Bar-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=1y2nkwazpizbom1wk2c1ye7el&raw=1&cachebust=1760548896150",
-          "BackURL": "https://www.dropbox.com/scl/fi/lqlamtdln8jzhrp4u3u2n/ef2b3b2b-029f-4c09-b231-6c8a8df5dfa2-Back-Act-3-Guard-Bar-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=mlq58bn5x4b78rky4ngs0hczv&raw=1&cachebust=1760548897482",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        },
-        "1001": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/vw1y5teqkds25q86iekor/3e8f40d1-54d2-4541-b9d0-f799d0f6cf8f-Front-Act-2-Chasing-Leads-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=bkwmvvqchw36v3jrthvntrk43&raw=1&cachebust=1760622403431",
-          "BackURL": "https://www.dropbox.com/scl/fi/9z2r7epimtm5gpkfp8vdz/3e8f40d1-54d2-4541-b9d0-f799d0f6cf8f-Back-Act-2-Chasing-Leads-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=s4gltsbaw7k3dr5g4ljzddwqi&raw=1&cachebust=1760622405882",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        },
-        "1000": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/loqkjw8ok17bzcufybf52/9d4003b0-6d73-45e3-a2e8-8f1c9de8ebb5-Front-Act-1-Gathering-Clues-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=hg0jxu085dyao1512xxpd8fyb&raw=1&cachebust=1760548890075",
-          "BackURL": "https://www.dropbox.com/scl/fi/lzm517cwwk9wxph70pses/9d4003b0-6d73-45e3-a2e8-8f1c9de8ebb5-Back-Act-1-Gathering-Clues-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=9tfr9wkspjsq04g4jkv5x8jq5&raw=1&cachebust=1760548891561",
+        "1076": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/e4i7d8t2vwfxhdx1czkem/744f64c8-9d37-4707-9654-041dfd6b0a33-Front-The-Court-House-of-Petitions-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=zmx36e3ymgb23yl2219482dpb&raw=1&cachebust=1761492286013",
+          "BackURL": "https://www.dropbox.com/scl/fi/jqbk6g8po8zjkfh7iajkg/744f64c8-9d37-4707-9654-041dfd6b0a33-Back-The-Court-House-of-Petitions-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=1mt2tf85fp8nlzm0ir9j9c9ic&raw=1&cachebust=1761492286920",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
@@ -2371,24 +2754,27 @@
       },
       "ContainedObjects": [
         {
-          "GUID": "e00008",
+          "GUID": "e00058",
           "Name": "Card",
           "Transform": {
             "rotY": 270,
-            "scaleX": 0.714285731,
+            "rotZ": 180,
+            "scaleX": 1.0,
             "scaleY": 1.0,
-            "scaleZ": 0.714285731
+            "scaleZ": 1.0
           },
-          "Nickname": "The Mastermind?",
-          "GMNotes": "{\"TtsZoopGuid\":\"38294da4-688d-467e-a56d-01e0eae9be0f\",\"id\":\"38294da4-688d-467e-a56d-01e0eae9be0f\",\"type\":\"Act\",\"class\":\"Mythos\"}",
+          "Nickname": "The Court",
+          "Description": "Noble District",
+          "GMNotes": "{\"TtsZoopGuid\":\"ec22b13c-9227-4b5d-ac75-de8293fd6c61\",\"id\":\"ec22b13c-9227-4b5d-ac75-de8293fd6c61\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"Yhilin. Central.\",\"locationFront\":{\"icons\":\"Triangle\",\"connections\":\"Circle|Square|Diamond|Moon|Slash\",\"uses\":[{\"countPerInvestigator\":2,\"token\":\"clue\",\"type\":\"Clue\"}],\"victory\":1},\"locationBack\":{\"icons\":\"Triangle\",\"connections\":\"Circle|Square|Diamond|Moon|Slash\"}}",
           "Tags": [
+            "Location",
             "ScenarioCard"
           ],
-          "CardID": 100500,
+          "CardID": 107700,
           "CustomDeck": {
-            "1005": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/w8lx8xulf4axcr3jw0y5h/38294da4-688d-467e-a56d-01e0eae9be0f-Front-Act-6-The-Mastermind-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=s83x503myzqoey126gw2s7dvj&raw=1&cachebust=1760548904626",
-              "BackURL": "https://www.dropbox.com/scl/fi/weece8whw9bdgz3178mdo/38294da4-688d-467e-a56d-01e0eae9be0f-Back-Act-6-The-Mastermind-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=uhv8e89hqha0v6s5r51zcqmrv&raw=1&cachebust=1760548905725",
+            "1077": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/aergla2n9r2vj2zw5ylxw/ec22b13c-9227-4b5d-ac75-de8293fd6c61-Front-The-Court-Noble-District-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=q6iky91a1319rldgcsy22hvxu&raw=1&cachebust=1761492288202",
+              "BackURL": "https://www.dropbox.com/scl/fi/qoqn6lw0kzd6sxg2z8lxa/ec22b13c-9227-4b5d-ac75-de8293fd6c61-Back-The-Court-Noble-District-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=qjr02v541g2rz8h8ch5r3qq1b&raw=1&cachebust=1761492289258",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -2398,132 +2784,27 @@
           }
         },
         {
-          "GUID": "e00007",
+          "GUID": "e00057",
           "Name": "Card",
           "Transform": {
             "rotY": 270,
-            "scaleX": 0.714285731,
+            "rotZ": 180,
+            "scaleX": 1.0,
             "scaleY": 1.0,
-            "scaleZ": 0.714285731
+            "scaleZ": 1.0
           },
-          "Nickname": "Race to Stop the Coup!",
-          "GMNotes": "{\"TtsZoopGuid\":\"b2c6a299-0bf9-43ed-bf2a-48d004424135\",\"id\":\"b2c6a299-0bf9-43ed-bf2a-48d004424135\",\"type\":\"Act\",\"class\":\"Mythos\"}",
+          "Nickname": "The Court",
+          "Description": "House of Petitions",
+          "GMNotes": "{\"TtsZoopGuid\":\"744f64c8-9d37-4707-9654-041dfd6b0a33\",\"id\":\"744f64c8-9d37-4707-9654-041dfd6b0a33\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"Yhilin. Central.\",\"locationFront\":{\"icons\":\"Triangle\",\"connections\":\"Circle|Square|Diamond|Moon|Slash\",\"uses\":[{\"countPerInvestigator\":2,\"token\":\"clue\",\"type\":\"Clue\"}],\"victory\":1},\"locationBack\":{\"icons\":\"Triangle\",\"connections\":\"Circle|Square|Diamond|Moon|Slash\"}}",
           "Tags": [
+            "Location",
             "ScenarioCard"
           ],
-          "CardID": 100400,
+          "CardID": 107600,
           "CustomDeck": {
-            "1004": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/wxv45jfp7glr3hgezrwxp/b2c6a299-0bf9-43ed-bf2a-48d004424135-Front-Act-5-Race-to-Stop-the-Coup-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=ek36jp1ufh8h17tow1kmx73yv&raw=1&cachebust=1760622413836",
-              "BackURL": "https://www.dropbox.com/scl/fi/6tirlf6g3s51fwi7j0n21/b2c6a299-0bf9-43ed-bf2a-48d004424135-Back-Act-5-Race-to-Stop-the-Coup-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=ysomd2hhee6wqa7hnl4bhuevc&raw=1&cachebust=1760622416667",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": true,
-              "Type": 0
-            }
-          }
-        },
-        {
-          "GUID": "e00006",
-          "Name": "Card",
-          "Transform": {
-            "rotY": 270,
-            "scaleX": 0.714285731,
-            "scaleY": 1.0,
-            "scaleZ": 0.714285731
-          },
-          "Nickname": "Renthnor Mage",
-          "GMNotes": "{\"TtsZoopGuid\":\"03d67115-dd1c-403d-af83-4a7776911285\",\"id\":\"03d67115-dd1c-403d-af83-4a7776911285\",\"type\":\"Act\",\"class\":\"Mythos\"}",
-          "Tags": [
-            "ScenarioCard"
-          ],
-          "CardID": 100300,
-          "CustomDeck": {
-            "1003": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/qefk8x685mvze2ywy4ppd/03d67115-dd1c-403d-af83-4a7776911285-Front-Act-4-Renthnor-Mage-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=coomflkii6hybqrla5i7389er&raw=1&cachebust=1760622408427",
-              "BackURL": "https://www.dropbox.com/scl/fi/v1bahk9v7sd8lamx4696n/03d67115-dd1c-403d-af83-4a7776911285-Back-Act-4-Renthnor-Mage-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=a248dsefn2eryf5lag7d1kash&raw=1&cachebust=1760622411211",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": true,
-              "Type": 0
-            }
-          }
-        },
-        {
-          "GUID": "e00005",
-          "Name": "Card",
-          "Transform": {
-            "rotY": 270,
-            "scaleX": 0.714285731,
-            "scaleY": 1.0,
-            "scaleZ": 0.714285731
-          },
-          "Nickname": "Guard Bar",
-          "GMNotes": "{\"TtsZoopGuid\":\"ef2b3b2b-029f-4c09-b231-6c8a8df5dfa2\",\"id\":\"ef2b3b2b-029f-4c09-b231-6c8a8df5dfa2\",\"type\":\"Act\",\"class\":\"Mythos\"}",
-          "Tags": [
-            "ScenarioCard"
-          ],
-          "CardID": 100200,
-          "CustomDeck": {
-            "1002": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/mmnolsqm1xjcwq587dpvy/ef2b3b2b-029f-4c09-b231-6c8a8df5dfa2-Front-Act-3-Guard-Bar-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=1y2nkwazpizbom1wk2c1ye7el&raw=1&cachebust=1760548896150",
-              "BackURL": "https://www.dropbox.com/scl/fi/lqlamtdln8jzhrp4u3u2n/ef2b3b2b-029f-4c09-b231-6c8a8df5dfa2-Back-Act-3-Guard-Bar-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=mlq58bn5x4b78rky4ngs0hczv&raw=1&cachebust=1760548897482",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": true,
-              "Type": 0
-            }
-          }
-        },
-        {
-          "GUID": "e00004",
-          "Name": "Card",
-          "Transform": {
-            "rotY": 270,
-            "scaleX": 0.714285731,
-            "scaleY": 1.0,
-            "scaleZ": 0.714285731
-          },
-          "Nickname": "Chasing Leads",
-          "GMNotes": "{\"TtsZoopGuid\":\"3e8f40d1-54d2-4541-b9d0-f799d0f6cf8f\",\"id\":\"3e8f40d1-54d2-4541-b9d0-f799d0f6cf8f\",\"type\":\"Act\",\"class\":\"Mythos\"}",
-          "Tags": [
-            "ScenarioCard"
-          ],
-          "CardID": 100100,
-          "CustomDeck": {
-            "1001": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/vw1y5teqkds25q86iekor/3e8f40d1-54d2-4541-b9d0-f799d0f6cf8f-Front-Act-2-Chasing-Leads-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=bkwmvvqchw36v3jrthvntrk43&raw=1&cachebust=1760622403431",
-              "BackURL": "https://www.dropbox.com/scl/fi/9z2r7epimtm5gpkfp8vdz/3e8f40d1-54d2-4541-b9d0-f799d0f6cf8f-Back-Act-2-Chasing-Leads-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=s4gltsbaw7k3dr5g4ljzddwqi&raw=1&cachebust=1760622405882",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": true,
-              "Type": 0
-            }
-          }
-        },
-        {
-          "GUID": "e00003",
-          "Name": "Card",
-          "Transform": {
-            "rotY": 270,
-            "scaleX": 0.714285731,
-            "scaleY": 1.0,
-            "scaleZ": 0.714285731
-          },
-          "Nickname": "Gathering Clues",
-          "GMNotes": "{\"TtsZoopGuid\":\"9d4003b0-6d73-45e3-a2e8-8f1c9de8ebb5\",\"id\":\"9d4003b0-6d73-45e3-a2e8-8f1c9de8ebb5\",\"type\":\"Act\",\"class\":\"Mythos\",\"clueThresholdPerInvestigator\":2}",
-          "Tags": [
-            "ScenarioCard"
-          ],
-          "CardID": 100000,
-          "CustomDeck": {
-            "1000": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/loqkjw8ok17bzcufybf52/9d4003b0-6d73-45e3-a2e8-8f1c9de8ebb5-Front-Act-1-Gathering-Clues-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=hg0jxu085dyao1512xxpd8fyb&raw=1&cachebust=1760548890075",
-              "BackURL": "https://www.dropbox.com/scl/fi/lzm517cwwk9wxph70pses/9d4003b0-6d73-45e3-a2e8-8f1c9de8ebb5-Back-Act-1-Gathering-Clues-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=9tfr9wkspjsq04g4jkv5x8jq5&raw=1&cachebust=1760548891561",
+            "1076": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/e4i7d8t2vwfxhdx1czkem/744f64c8-9d37-4707-9654-041dfd6b0a33-Front-The-Court-House-of-Petitions-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=zmx36e3ymgb23yl2219482dpb&raw=1&cachebust=1761492286013",
+              "BackURL": "https://www.dropbox.com/scl/fi/jqbk6g8po8zjkfh7iajkg/744f64c8-9d37-4707-9654-041dfd6b0a33-Back-The-Court-House-of-Petitions-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=1mt2tf85fp8nlzm0ir9j9c9ic&raw=1&cachebust=1761492286920",
               "NumWidth": 1,
               "NumHeight": 1,
               "BackIsHidden": true,
@@ -2533,6 +2814,166 @@
           }
         }
       ]
+    },
+    {
+      "GUID": "b3ec91",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Inconspicuous Wagon",
+      "GMNotes": "{\"TtsZoopGuid\":\"c9a5501e-09e6-4c8f-960a-023c49bf01ed\",\"id\":\"c9a5501e-09e6-4c8f-960a-023c49bf01ed\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Vehicle.\"}",
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "CardID": 108900,
+      "CustomDeck": {
+        "1089": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/opnw7z8zcfbjic3okvwsm/c9a5501e-09e6-4c8f-960a-023c49bf01ed-Front-Inconspicuos-Wagon-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=krr6km34f0o69n7v23tulzjc1&raw=1&cachebust=1760456347442",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "c5b759",
+      "Name": "Deck",
+      "Transform": {
+        "rotY": 270,
+        "rotZ": 180,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "",
+      "Tags": [
+        "Location",
+        "ScenarioCard"
+      ],
+      "Hands": false,
+      "DeckIDs": [
+        106900,
+        106800
+      ],
+      "CustomDeck": {
+        "1069": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/kwe7lmv0q5o2svhtdgmhw/b9220ca1-2789-407f-b1c4-780384789ec1-Front-Outskirts-Quest-Boards-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=z0zv5kkmy9vbv9kenpms583r2&raw=1&cachebust=1760548942882",
+          "BackURL": "https://www.dropbox.com/scl/fi/m7iq1yz5liufemmnub7lb/b9220ca1-2789-407f-b1c4-780384789ec1-Back-Outskirts-Quest-Boards-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=anajo1sosuly3hhpfia3hwm9c&raw=1&cachebust=1760548944152",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        },
+        "1068": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/bplui67ohcxq4z3hm4d79/f8c9bfc8-62d5-42b0-9606-aa20ecdbe0ec-Front-Outskirts-Mercenary-Camps-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=bj908l4m16eqljmkru3lcbx0r&raw=1&cachebust=1760486347982",
+          "BackURL": "https://www.dropbox.com/scl/fi/1tj93x7f27zksunq136ie/f8c9bfc8-62d5-42b0-9606-aa20ecdbe0ec-Back-Outskirts-Mercenary-Camps-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=gsnida32x6vidp8jkkcxjrhvt&raw=1&cachebust=1760486349358",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "ContainedObjects": [
+        {
+          "GUID": "e00050",
+          "Name": "Card",
+          "Transform": {
+            "rotY": 270,
+            "rotZ": 180,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Outskirts",
+          "Description": "Quest Boards",
+          "GMNotes": "{\"TtsZoopGuid\":\"b9220ca1-2789-407f-b1c4-780384789ec1\",\"id\":\"b9220ca1-2789-407f-b1c4-780384789ec1\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"Yhilin. Central.\",\"locationFront\":{\"icons\":\"Circle\",\"connections\":\"Square|Triangle|Diamond|Hourglass\",\"uses\":[{\"countPerInvestigator\":1,\"token\":\"clue\",\"type\":\"Clue\"}]},\"locationBack\":{\"icons\":\"Circle\",\"connections\":\"Square|Triangle|Diamond|Hourglass\"}}",
+          "Tags": [
+            "Location",
+            "ScenarioCard"
+          ],
+          "CardID": 106900,
+          "CustomDeck": {
+            "1069": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/kwe7lmv0q5o2svhtdgmhw/b9220ca1-2789-407f-b1c4-780384789ec1-Front-Outskirts-Quest-Boards-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=z0zv5kkmy9vbv9kenpms583r2&raw=1&cachebust=1760548942882",
+              "BackURL": "https://www.dropbox.com/scl/fi/m7iq1yz5liufemmnub7lb/b9220ca1-2789-407f-b1c4-780384789ec1-Back-Outskirts-Quest-Boards-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=anajo1sosuly3hhpfia3hwm9c&raw=1&cachebust=1760548944152",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": true,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "e0004f",
+          "Name": "Card",
+          "Transform": {
+            "rotY": 270,
+            "rotZ": 180,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Outskirts",
+          "Description": "Mercenary Camps",
+          "GMNotes": "{\"TtsZoopGuid\":\"f8c9bfc8-62d5-42b0-9606-aa20ecdbe0ec\",\"id\":\"f8c9bfc8-62d5-42b0-9606-aa20ecdbe0ec\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"Yhilin. Central.\",\"locationFront\":{\"icons\":\"Circle\",\"connections\":\"Square|Triangle|Diamond|Hourglass\",\"uses\":[{\"countPerInvestigator\":1,\"token\":\"clue\",\"type\":\"Clue\"}]},\"locationBack\":{\"icons\":\"Circle\",\"connections\":\"Square|Triangle|Diamond|Hourglass\"}}",
+          "Tags": [
+            "Location",
+            "ScenarioCard"
+          ],
+          "CardID": 106800,
+          "CustomDeck": {
+            "1068": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/bplui67ohcxq4z3hm4d79/f8c9bfc8-62d5-42b0-9606-aa20ecdbe0ec-Front-Outskirts-Mercenary-Camps-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=bj908l4m16eqljmkru3lcbx0r&raw=1&cachebust=1760486347982",
+              "BackURL": "https://www.dropbox.com/scl/fi/1tj93x7f27zksunq136ie/f8c9bfc8-62d5-42b0-9606-aa20ecdbe0ec-Back-Outskirts-Mercenary-Camps-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=gsnida32x6vidp8jkkcxjrhvt&raw=1&cachebust=1760486349358",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": true,
+              "Type": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "GUID": "d3807f",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Qum",
+      "Description": "Adorable Succubus",
+      "GMNotes": "{\"TtsZoopGuid\":\"7012f0ca-45b1-4833-a2ac-7927c7e5c0a3\",\"id\":\"7012f0ca-45b1-4833-a2ac-7927c7e5c0a3\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Succubus. Close Ally. Mage.\"}",
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "CardID": 101400,
+      "CustomDeck": {
+        "1014": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/iqv0al1s0qw9ramb73f0u/7012f0ca-45b1-4833-a2ac-7927c7e5c0a3-Front-Qum-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=5akml48f6h3coxk89lbbd2onf&raw=1&cachebust=1761492276455",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      }
     },
     {
       "GUID": "e0000e",
@@ -2562,180 +3003,6 @@
       }
     },
     {
-      "GUID": "e00012",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 270,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Aka",
-      "Description": "Ardan Bounty Hunter",
-      "GMNotes": "{\"TtsZoopGuid\":\"47e2b402-6923-41b7-ad6c-31c1b06d6900\",\"id\":\"47e2b402-6923-41b7-ad6c-31c1b06d6900\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Humanoid. Close Ally. Bounty Hunter.\"}",
-      "Tags": [
-        "Asset",
-        "PlayerCard"
-      ],
-      "CardID": 101100,
-      "CustomDeck": {
-        "1011": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/hyqef2pq0qp6q42ure3ho/47e2b402-6923-41b7-ad6c-31c1b06d6900-Front-Aka-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=922b218uhb46d152xuccrb63h&raw=1&cachebust=1760456287811",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "e00013",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 270,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Hilstara",
-      "Description": "Ardan Warrior",
-      "GMNotes": "{\"TtsZoopGuid\":\"73671389-463c-4cd9-a4df-00f3d7cd118d\",\"id\":\"73671389-463c-4cd9-a4df-00f3d7cd118d\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Humanoid. Close Ally. Mercenary.\"}",
-      "Tags": [
-        "Asset",
-        "PlayerCard"
-      ],
-      "CardID": 101200,
-      "CustomDeck": {
-        "1012": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/ljgf07cq84n3vijqz5o77/73671389-463c-4cd9-a4df-00f3d7cd118d-Front-Hilstara-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=fm8lek4a040al71z1dn5a1hld&raw=1&cachebust=1760622419331",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "e00014",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 270,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Megail",
-      "Description": "Yhilini Merchant",
-      "GMNotes": "{\"TtsZoopGuid\":\"67c867de-e118-4e4f-8477-4ca0354290bc\",\"id\":\"67c867de-e118-4e4f-8477-4ca0354290bc\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Humanoid. Close Ally. Merchant.\"}",
-      "Tags": [
-        "Asset",
-        "PlayerCard"
-      ],
-      "CardID": 101300,
-      "CustomDeck": {
-        "1013": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/i8nlpygpy2miv5ccd9z6o/67c867de-e118-4e4f-8477-4ca0354290bc-Front-Megail-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=2vwg5ac8kplzn1lzbz5fuc0a6&raw=1&cachebust=1760622422346",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "e00015",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 270,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Qum",
-      "Description": "Adorable Succubus",
-      "GMNotes": "{\"TtsZoopGuid\":\"7012f0ca-45b1-4833-a2ac-7927c7e5c0a3\",\"id\":\"7012f0ca-45b1-4833-a2ac-7927c7e5c0a3\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Succubus. Close Ally. Mage.\"}",
-      "Tags": [
-        "Asset",
-        "PlayerCard"
-      ],
-      "CardID": 101400,
-      "CustomDeck": {
-        "1014": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/iqv0al1s0qw9ramb73f0u/7012f0ca-45b1-4833-a2ac-7927c7e5c0a3-Front-Qum-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=5akml48f6h3coxk89lbbd2onf&raw=1&cachebust=1760622424851",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "e00016",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 270,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Robin",
-      "Description": "Best Daughter",
-      "GMNotes": "{\"TtsZoopGuid\":\"c5b78b7a-4c54-45a4-8226-9f5290a75aaa\",\"id\":\"c5b78b7a-4c54-45a4-8226-9f5290a75aaa\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Humanoid. Close Ally. Mage.\"}",
-      "Tags": [
-        "Asset",
-        "PlayerCard"
-      ],
-      "CardID": 101500,
-      "CustomDeck": {
-        "1015": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/yibzf1361fy0h4jice1xf/c5b78b7a-4c54-45a4-8226-9f5290a75aaa-Front-Robin-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=aqymbary69xg4jdedgcvdhusz&raw=1&cachebust=1760622427326",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "e00017",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 270,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Yarra",
-      "Description": "Unbiasedly Best Succubus",
-      "GMNotes": "{\"TtsZoopGuid\":\"a86e1253-0770-4a5d-8dde-2bfa63159a0e\",\"id\":\"a86e1253-0770-4a5d-8dde-2bfa63159a0e\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Succubus. Close Ally. Mage.\"}",
-      "Tags": [
-        "Asset",
-        "PlayerCard"
-      ],
-      "CardID": 101600,
-      "CustomDeck": {
-        "1016": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/ph48qempyfu9p1xun4f9i/a86e1253-0770-4a5d-8dde-2bfa63159a0e-Front-Yarra-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=5h3g5rxdeoeuxsip7efqbucd5&raw=1&cachebust=1760622429985",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        }
-      }
-    },
-    {
       "GUID": "e00019",
       "Name": "Deck",
       "Transform": {
@@ -2747,34 +3014,34 @@
       },
       "Nickname": "Encounter Deck",
       "DeckIDs": [
-        103000,
-        105700,
-        101900,
-        103700,
-        102900,
-        103600,
-        105800,
         103100,
-        105000,
-        102800,
-        105600,
-        103500,
-        103900,
-        103300,
-        106000,
-        103400,
-        104900,
-        102700,
-        103200,
-        105100,
-        105500,
-        105900,
+        105700,
         103800,
+        102800,
+        103300,
+        103200,
+        106000,
+        105500,
+        103000,
+        105800,
+        105100,
+        103700,
+        103900,
+        105900,
+        105600,
+        102900,
+        103400,
+        105000,
+        102700,
+        103500,
+        101900,
+        104900,
+        103600,
         102600
       ],
       "CustomDeck": {
-        "1030": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/6rjkcy61a293yq3m7ftd5/5134190d-1418-47ee-949c-805bcd87092a-Front-False-Lead-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=l4no2oklpgs08p2jworri1c37&raw=1&cachebust=1760622440901",
+        "1031": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/luk4w1pinj8qh97vizauj/06496c7f-754f-4e36-9ebe-54e6df07bb14-Front-Fanatic-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=ydflzsl12ifd1e9gkx50z0bk3&raw=1&cachebust=1760548923539",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -2791,62 +3058,8 @@
           "UniqueBack": false,
           "Type": 0
         },
-        "1019": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/ovpzujzz90e20ae8iamcr/913192c9-cbb3-4bb9-a407-134605b5bd54-Front-Agent-of-the-King-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=ml1p7x8k4g7iv2qoauja5h9fi&raw=1&cachebust=1760622432841",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        },
-        "1037": {
+        "1038": {
           "FaceURL": "https://www.dropbox.com/scl/fi/ew90188amh2si9mdu71na/c894b198-b8d4-440f-aebc-d9cae7d43996-Front-Grime-and-Filth-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=pc4zhvsk1bjm1f4fko70x7vzg&raw=1&cachebust=1760548925530",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        },
-        "1029": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/6rjkcy61a293yq3m7ftd5/5134190d-1418-47ee-949c-805bcd87092a-Front-False-Lead-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=l4no2oklpgs08p2jworri1c37&raw=1&cachebust=1760622440901",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        },
-        "1036": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/hnkqkhofkkxh5i8b3a8b5/74420c24-1eec-47a2-abe7-c53ae2370157-Front-Grasping-Hands-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=b6g8on1sihigvs8vywx5zbpjh&raw=1&cachebust=1760622443996",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        },
-        "1058": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/xvlbjp1a2s9wo72hhlopj/ddb311b1-c254-4c3b-942c-ec77be2f7952-Front-Stalking-Shadow-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=gu09mpmj0g2mh7o0zgo0bg139&raw=1&cachebust=1760456316866",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        },
-        "1031": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/luk4w1pinj8qh97vizauj/06496c7f-754f-4e36-9ebe-54e6df07bb14-Front-Fanatic-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=ydflzsl12ifd1e9gkx50z0bk3&raw=1&cachebust=1760548923539",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        },
-        "1050": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/zfj0ez8r348ijzhba3ynf/30e631f7-4a72-428b-bbab-e92aeefbe6fa-Front-Resurgent-Evils-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=4qne1m2tgobb29dfpv7p8icwv&raw=1&cachebust=1760456312258",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -2863,34 +3076,16 @@
           "UniqueBack": false,
           "Type": 0
         },
-        "1056": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/iye6qwes8nzrrkh25gq1m/028961fd-66fd-4ea6-84ab-607b56711f44-Front-Shady-Mercenary-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=5e5dnx7pu32ercvzi930r0i5t&raw=1&cachebust=1760456315376",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        },
-        "1035": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/hnkqkhofkkxh5i8b3a8b5/74420c24-1eec-47a2-abe7-c53ae2370157-Front-Grasping-Hands-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=b6g8on1sihigvs8vywx5zbpjh&raw=1&cachebust=1760622443996",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        },
-        "1039": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/ew90188amh2si9mdu71na/c894b198-b8d4-440f-aebc-d9cae7d43996-Front-Grime-and-Filth-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=pc4zhvsk1bjm1f4fko70x7vzg&raw=1&cachebust=1760548925530",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        },
         "1033": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/luk4w1pinj8qh97vizauj/06496c7f-754f-4e36-9ebe-54e6df07bb14-Front-Fanatic-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=ydflzsl12ifd1e9gkx50z0bk3&raw=1&cachebust=1760548923539",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        },
+        "1032": {
           "FaceURL": "https://www.dropbox.com/scl/fi/luk4w1pinj8qh97vizauj/06496c7f-754f-4e36-9ebe-54e6df07bb14-Front-Fanatic-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=ydflzsl12ifd1e9gkx50z0bk3&raw=1&cachebust=1760548923539",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
@@ -2908,6 +3103,87 @@
           "UniqueBack": false,
           "Type": 0
         },
+        "1055": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/iye6qwes8nzrrkh25gq1m/028961fd-66fd-4ea6-84ab-607b56711f44-Front-Shady-Mercenary-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=5e5dnx7pu32ercvzi930r0i5t&raw=1&cachebust=1760456315376",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        },
+        "1030": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/6rjkcy61a293yq3m7ftd5/5134190d-1418-47ee-949c-805bcd87092a-Front-False-Lead-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=l4no2oklpgs08p2jworri1c37&raw=1&cachebust=1761492280149",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        },
+        "1058": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/xvlbjp1a2s9wo72hhlopj/ddb311b1-c254-4c3b-942c-ec77be2f7952-Front-Stalking-Shadow-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=gu09mpmj0g2mh7o0zgo0bg139&raw=1&cachebust=1760456316866",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        },
+        "1051": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/zfj0ez8r348ijzhba3ynf/30e631f7-4a72-428b-bbab-e92aeefbe6fa-Front-Resurgent-Evils-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=4qne1m2tgobb29dfpv7p8icwv&raw=1&cachebust=1760456312258",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        },
+        "1037": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/ew90188amh2si9mdu71na/c894b198-b8d4-440f-aebc-d9cae7d43996-Front-Grime-and-Filth-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=pc4zhvsk1bjm1f4fko70x7vzg&raw=1&cachebust=1760548925530",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        },
+        "1039": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/ew90188amh2si9mdu71na/c894b198-b8d4-440f-aebc-d9cae7d43996-Front-Grime-and-Filth-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=pc4zhvsk1bjm1f4fko70x7vzg&raw=1&cachebust=1760548925530",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        },
+        "1059": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/xvlbjp1a2s9wo72hhlopj/ddb311b1-c254-4c3b-942c-ec77be2f7952-Front-Stalking-Shadow-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=gu09mpmj0g2mh7o0zgo0bg139&raw=1&cachebust=1760456316866",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        },
+        "1056": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/iye6qwes8nzrrkh25gq1m/028961fd-66fd-4ea6-84ab-607b56711f44-Front-Shady-Mercenary-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=5e5dnx7pu32ercvzi930r0i5t&raw=1&cachebust=1760456315376",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        },
+        "1029": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/6rjkcy61a293yq3m7ftd5/5134190d-1418-47ee-949c-805bcd87092a-Front-False-Lead-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=l4no2oklpgs08p2jworri1c37&raw=1&cachebust=1761492280149",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        },
         "1034": {
           "FaceURL": "https://www.dropbox.com/scl/fi/hnkqkhofkkxh5i8b3a8b5/74420c24-1eec-47a2-abe7-c53ae2370157-Front-Grasping-Hands-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=b6g8on1sihigvs8vywx5zbpjh&raw=1&cachebust=1760622443996",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
@@ -2917,7 +3193,7 @@
           "UniqueBack": false,
           "Type": 0
         },
-        "1049": {
+        "1050": {
           "FaceURL": "https://www.dropbox.com/scl/fi/zfj0ez8r348ijzhba3ynf/30e631f7-4a72-428b-bbab-e92aeefbe6fa-Front-Resurgent-Evils-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=4qne1m2tgobb29dfpv7p8icwv&raw=1&cachebust=1760456312258",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
@@ -2935,8 +3211,8 @@
           "UniqueBack": false,
           "Type": 0
         },
-        "1032": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/luk4w1pinj8qh97vizauj/06496c7f-754f-4e36-9ebe-54e6df07bb14-Front-Fanatic-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=ydflzsl12ifd1e9gkx50z0bk3&raw=1&cachebust=1760548923539",
+        "1035": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/hnkqkhofkkxh5i8b3a8b5/74420c24-1eec-47a2-abe7-c53ae2370157-Front-Grasping-Hands-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=b6g8on1sihigvs8vywx5zbpjh&raw=1&cachebust=1760622443996",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -2944,7 +3220,16 @@
           "UniqueBack": false,
           "Type": 0
         },
-        "1051": {
+        "1019": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/ovpzujzz90e20ae8iamcr/913192c9-cbb3-4bb9-a407-134605b5bd54-Front-Agent-of-the-King-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=ml1p7x8k4g7iv2qoauja5h9fi&raw=1&cachebust=1760622432841",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        },
+        "1049": {
           "FaceURL": "https://www.dropbox.com/scl/fi/zfj0ez8r348ijzhba3ynf/30e631f7-4a72-428b-bbab-e92aeefbe6fa-Front-Resurgent-Evils-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=4qne1m2tgobb29dfpv7p8icwv&raw=1&cachebust=1760456312258",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
@@ -2953,26 +3238,8 @@
           "UniqueBack": false,
           "Type": 0
         },
-        "1055": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/iye6qwes8nzrrkh25gq1m/028961fd-66fd-4ea6-84ab-607b56711f44-Front-Shady-Mercenary-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=5e5dnx7pu32ercvzi930r0i5t&raw=1&cachebust=1760456315376",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        },
-        "1059": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/xvlbjp1a2s9wo72hhlopj/ddb311b1-c254-4c3b-942c-ec77be2f7952-Front-Stalking-Shadow-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=gu09mpmj0g2mh7o0zgo0bg139&raw=1&cachebust=1760456316866",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        },
-        "1038": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/ew90188amh2si9mdu71na/c894b198-b8d4-440f-aebc-d9cae7d43996-Front-Grime-and-Filth-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=pc4zhvsk1bjm1f4fko70x7vzg&raw=1&cachebust=1760548925530",
+        "1036": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/hnkqkhofkkxh5i8b3a8b5/74420c24-1eec-47a2-abe7-c53ae2370157-Front-Grasping-Hands-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=b6g8on1sihigvs8vywx5zbpjh&raw=1&cachebust=1760622443996",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -2992,7 +3259,7 @@
       },
       "ContainedObjects": [
         {
-          "GUID": "e00027",
+          "GUID": "e00028",
           "Name": "Card",
           "Transform": {
             "rotY": 270,
@@ -3000,15 +3267,15 @@
             "scaleY": 1.0,
             "scaleZ": 1.0
           },
-          "Nickname": "False Lead",
-          "GMNotes": "{\"TtsZoopGuid\":\"5134190d-1418-47ee-949c-805bcd87092a\",\"id\":\"5134190d-1418-47ee-949c-805bcd87092a\",\"type\":\"Treachery\",\"class\":\"Mythos\"}",
+          "Nickname": "Fanatic",
+          "GMNotes": "{\"TtsZoopGuid\":\"06496c7f-754f-4e36-9ebe-54e6df07bb14\",\"id\":\"06496c7f-754f-4e36-9ebe-54e6df07bb14\",\"type\":\"Enemy\",\"class\":\"Mythos\",\"traits\":\"Humanoid. Cultist.\"}",
           "Tags": [
             "ScenarioCard"
           ],
-          "CardID": 103000,
+          "CardID": 103100,
           "CustomDeck": {
-            "1030": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/6rjkcy61a293yq3m7ftd5/5134190d-1418-47ee-949c-805bcd87092a-Front-False-Lead-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=l4no2oklpgs08p2jworri1c37&raw=1&cachebust=1760622440901",
+            "1031": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/luk4w1pinj8qh97vizauj/06496c7f-754f-4e36-9ebe-54e6df07bb14-Front-Fanatic-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=ydflzsl12ifd1e9gkx50z0bk3&raw=1&cachebust=1760548923539",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -3046,34 +3313,7 @@
           }
         },
         {
-          "GUID": "e0001c",
-          "Name": "Card",
-          "Transform": {
-            "rotY": 270,
-            "scaleX": 1.0,
-            "scaleY": 1.0,
-            "scaleZ": 1.0
-          },
-          "Nickname": "Agent of the King",
-          "GMNotes": "{\"TtsZoopGuid\":\"913192c9-cbb3-4bb9-a407-134605b5bd54\",\"id\":\"913192c9-cbb3-4bb9-a407-134605b5bd54\",\"type\":\"Enemy\",\"class\":\"Mythos\",\"traits\":\"Humanoid. Cultist.\",\"victory\":1}",
-          "Tags": [
-            "ScenarioCard"
-          ],
-          "CardID": 101900,
-          "CustomDeck": {
-            "1019": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/ovpzujzz90e20ae8iamcr/913192c9-cbb3-4bb9-a407-134605b5bd54-Front-Agent-of-the-King-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=ml1p7x8k4g7iv2qoauja5h9fi&raw=1&cachebust=1760622432841",
-              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": false,
-              "Type": 0
-            }
-          }
-        },
-        {
-          "GUID": "e0002e",
+          "GUID": "e0002f",
           "Name": "Card",
           "Transform": {
             "rotY": 270,
@@ -3086,145 +3326,10 @@
           "Tags": [
             "ScenarioCard"
           ],
-          "CardID": 103700,
+          "CardID": 103800,
           "CustomDeck": {
-            "1037": {
+            "1038": {
               "FaceURL": "https://www.dropbox.com/scl/fi/ew90188amh2si9mdu71na/c894b198-b8d4-440f-aebc-d9cae7d43996-Front-Grime-and-Filth-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=pc4zhvsk1bjm1f4fko70x7vzg&raw=1&cachebust=1760548925530",
-              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": false,
-              "Type": 0
-            }
-          }
-        },
-        {
-          "GUID": "e00026",
-          "Name": "Card",
-          "Transform": {
-            "rotY": 270,
-            "scaleX": 1.0,
-            "scaleY": 1.0,
-            "scaleZ": 1.0
-          },
-          "Nickname": "False Lead",
-          "GMNotes": "{\"TtsZoopGuid\":\"5134190d-1418-47ee-949c-805bcd87092a\",\"id\":\"5134190d-1418-47ee-949c-805bcd87092a\",\"type\":\"Treachery\",\"class\":\"Mythos\"}",
-          "Tags": [
-            "ScenarioCard"
-          ],
-          "CardID": 102900,
-          "CustomDeck": {
-            "1029": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/6rjkcy61a293yq3m7ftd5/5134190d-1418-47ee-949c-805bcd87092a-Front-False-Lead-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=l4no2oklpgs08p2jworri1c37&raw=1&cachebust=1760622440901",
-              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": false,
-              "Type": 0
-            }
-          }
-        },
-        {
-          "GUID": "e0002d",
-          "Name": "Card",
-          "Transform": {
-            "rotY": 270,
-            "scaleX": 1.0,
-            "scaleY": 1.0,
-            "scaleZ": 1.0
-          },
-          "Nickname": "Grasping Hands",
-          "GMNotes": "{\"TtsZoopGuid\":\"74420c24-1eec-47a2-abe7-c53ae2370157\",\"id\":\"74420c24-1eec-47a2-abe7-c53ae2370157\",\"type\":\"Treachery\",\"class\":\"Mythos\",\"traits\":\"Hazard.\"}",
-          "Tags": [
-            "ScenarioCard"
-          ],
-          "CardID": 103600,
-          "CustomDeck": {
-            "1036": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/hnkqkhofkkxh5i8b3a8b5/74420c24-1eec-47a2-abe7-c53ae2370157-Front-Grasping-Hands-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=b6g8on1sihigvs8vywx5zbpjh&raw=1&cachebust=1760622443996",
-              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": false,
-              "Type": 0
-            }
-          }
-        },
-        {
-          "GUID": "e00043",
-          "Name": "Card",
-          "Transform": {
-            "rotY": 270,
-            "scaleX": 1.0,
-            "scaleY": 1.0,
-            "scaleZ": 1.0
-          },
-          "Nickname": "Stalking Shadow",
-          "GMNotes": "{\"TtsZoopGuid\":\"ddb311b1-c254-4c3b-942c-ec77be2f7952\",\"id\":\"ddb311b1-c254-4c3b-942c-ec77be2f7952\",\"type\":\"Treachery\",\"class\":\"Mythos\",\"traits\":\"Curse.\"}",
-          "Tags": [
-            "ScenarioCard"
-          ],
-          "CardID": 105800,
-          "CustomDeck": {
-            "1058": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/xvlbjp1a2s9wo72hhlopj/ddb311b1-c254-4c3b-942c-ec77be2f7952-Front-Stalking-Shadow-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=gu09mpmj0g2mh7o0zgo0bg139&raw=1&cachebust=1760456316866",
-              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": false,
-              "Type": 0
-            }
-          }
-        },
-        {
-          "GUID": "e00028",
-          "Name": "Card",
-          "Transform": {
-            "rotY": 270,
-            "scaleX": 1.0,
-            "scaleY": 1.0,
-            "scaleZ": 1.0
-          },
-          "Nickname": "Fanatic",
-          "GMNotes": "{\"TtsZoopGuid\":\"06496c7f-754f-4e36-9ebe-54e6df07bb14\",\"id\":\"06496c7f-754f-4e36-9ebe-54e6df07bb14\",\"type\":\"Enemy\",\"class\":\"Mythos\",\"traits\":\"Humanoid. Cultist.\"}",
-          "Tags": [
-            "ScenarioCard"
-          ],
-          "CardID": 103100,
-          "CustomDeck": {
-            "1031": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/luk4w1pinj8qh97vizauj/06496c7f-754f-4e36-9ebe-54e6df07bb14-Front-Fanatic-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=ydflzsl12ifd1e9gkx50z0bk3&raw=1&cachebust=1760548923539",
-              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": false,
-              "Type": 0
-            }
-          }
-        },
-        {
-          "GUID": "e0003b",
-          "Name": "Card",
-          "Transform": {
-            "rotY": 270,
-            "scaleX": 1.0,
-            "scaleY": 1.0,
-            "scaleZ": 1.0
-          },
-          "Nickname": "Resurgent Evils",
-          "GMNotes": "{\"TtsZoopGuid\":\"30e631f7-4a72-428b-bbab-e92aeefbe6fa\",\"id\":\"30e631f7-4a72-428b-bbab-e92aeefbe6fa\",\"type\":\"Treachery\",\"class\":\"Mythos\",\"traits\":\"Omen.\"}",
-          "Tags": [
-            "ScenarioCard"
-          ],
-          "CardID": 105000,
-          "CustomDeck": {
-            "1050": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/zfj0ez8r348ijzhba3ynf/30e631f7-4a72-428b-bbab-e92aeefbe6fa-Front-Resurgent-Evils-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=4qne1m2tgobb29dfpv7p8icwv&raw=1&cachebust=1760456312258",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -3262,87 +3367,6 @@
           }
         },
         {
-          "GUID": "e00041",
-          "Name": "Card",
-          "Transform": {
-            "rotY": 270,
-            "scaleX": 1.0,
-            "scaleY": 1.0,
-            "scaleZ": 1.0
-          },
-          "Nickname": "Shady Mercenary",
-          "GMNotes": "{\"TtsZoopGuid\":\"028961fd-66fd-4ea6-84ab-607b56711f44\",\"id\":\"028961fd-66fd-4ea6-84ab-607b56711f44\",\"type\":\"Enemy\",\"class\":\"Mythos\",\"traits\":\"Humanoid. Criminal. Mercenary.\"}",
-          "Tags": [
-            "ScenarioCard"
-          ],
-          "CardID": 105600,
-          "CustomDeck": {
-            "1056": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/iye6qwes8nzrrkh25gq1m/028961fd-66fd-4ea6-84ab-607b56711f44-Front-Shady-Mercenary-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=5e5dnx7pu32ercvzi930r0i5t&raw=1&cachebust=1760456315376",
-              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": false,
-              "Type": 0
-            }
-          }
-        },
-        {
-          "GUID": "e0002c",
-          "Name": "Card",
-          "Transform": {
-            "rotY": 270,
-            "scaleX": 1.0,
-            "scaleY": 1.0,
-            "scaleZ": 1.0
-          },
-          "Nickname": "Grasping Hands",
-          "GMNotes": "{\"TtsZoopGuid\":\"74420c24-1eec-47a2-abe7-c53ae2370157\",\"id\":\"74420c24-1eec-47a2-abe7-c53ae2370157\",\"type\":\"Treachery\",\"class\":\"Mythos\",\"traits\":\"Hazard.\"}",
-          "Tags": [
-            "ScenarioCard"
-          ],
-          "CardID": 103500,
-          "CustomDeck": {
-            "1035": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/hnkqkhofkkxh5i8b3a8b5/74420c24-1eec-47a2-abe7-c53ae2370157-Front-Grasping-Hands-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=b6g8on1sihigvs8vywx5zbpjh&raw=1&cachebust=1760622443996",
-              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": false,
-              "Type": 0
-            }
-          }
-        },
-        {
-          "GUID": "e00030",
-          "Name": "Card",
-          "Transform": {
-            "rotY": 270,
-            "scaleX": 1.0,
-            "scaleY": 1.0,
-            "scaleZ": 1.0
-          },
-          "Nickname": "Grime and Filth",
-          "GMNotes": "{\"TtsZoopGuid\":\"c894b198-b8d4-440f-aebc-d9cae7d43996\",\"id\":\"c894b198-b8d4-440f-aebc-d9cae7d43996\",\"type\":\"Treachery\",\"class\":\"Mythos\",\"traits\":\"Hazard.\"}",
-          "Tags": [
-            "ScenarioCard"
-          ],
-          "CardID": 103900,
-          "CustomDeck": {
-            "1039": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/ew90188amh2si9mdu71na/c894b198-b8d4-440f-aebc-d9cae7d43996-Front-Grime-and-Filth-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=pc4zhvsk1bjm1f4fko70x7vzg&raw=1&cachebust=1760548925530",
-              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": false,
-              "Type": 0
-            }
-          }
-        },
-        {
           "GUID": "e0002a",
           "Name": "Card",
           "Transform": {
@@ -3359,6 +3383,33 @@
           "CardID": 103300,
           "CustomDeck": {
             "1033": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/luk4w1pinj8qh97vizauj/06496c7f-754f-4e36-9ebe-54e6df07bb14-Front-Fanatic-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=ydflzsl12ifd1e9gkx50z0bk3&raw=1&cachebust=1760548923539",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "e00029",
+          "Name": "Card",
+          "Transform": {
+            "rotY": 270,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Fanatic",
+          "GMNotes": "{\"TtsZoopGuid\":\"06496c7f-754f-4e36-9ebe-54e6df07bb14\",\"id\":\"06496c7f-754f-4e36-9ebe-54e6df07bb14\",\"type\":\"Enemy\",\"class\":\"Mythos\",\"traits\":\"Humanoid. Cultist.\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 103200,
+          "CustomDeck": {
+            "1032": {
               "FaceURL": "https://www.dropbox.com/scl/fi/luk4w1pinj8qh97vizauj/06496c7f-754f-4e36-9ebe-54e6df07bb14-Front-Fanatic-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=ydflzsl12ifd1e9gkx50z0bk3&raw=1&cachebust=1760548923539",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
@@ -3397,6 +3448,249 @@
           }
         },
         {
+          "GUID": "e00040",
+          "Name": "Card",
+          "Transform": {
+            "rotY": 270,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Shady Mercenary",
+          "GMNotes": "{\"TtsZoopGuid\":\"028961fd-66fd-4ea6-84ab-607b56711f44\",\"id\":\"028961fd-66fd-4ea6-84ab-607b56711f44\",\"type\":\"Enemy\",\"class\":\"Mythos\",\"traits\":\"Humanoid. Criminal. Mercenary.\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 105500,
+          "CustomDeck": {
+            "1055": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/iye6qwes8nzrrkh25gq1m/028961fd-66fd-4ea6-84ab-607b56711f44-Front-Shady-Mercenary-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=5e5dnx7pu32ercvzi930r0i5t&raw=1&cachebust=1760456315376",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "e00027",
+          "Name": "Card",
+          "Transform": {
+            "rotY": 270,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "False Lead",
+          "GMNotes": "{\"TtsZoopGuid\":\"5134190d-1418-47ee-949c-805bcd87092a\",\"id\":\"5134190d-1418-47ee-949c-805bcd87092a\",\"type\":\"Treachery\",\"class\":\"Mythos\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 103000,
+          "CustomDeck": {
+            "1030": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/6rjkcy61a293yq3m7ftd5/5134190d-1418-47ee-949c-805bcd87092a-Front-False-Lead-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=l4no2oklpgs08p2jworri1c37&raw=1&cachebust=1761492280149",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "e00043",
+          "Name": "Card",
+          "Transform": {
+            "rotY": 270,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Stalking Shadow",
+          "GMNotes": "{\"TtsZoopGuid\":\"ddb311b1-c254-4c3b-942c-ec77be2f7952\",\"id\":\"ddb311b1-c254-4c3b-942c-ec77be2f7952\",\"type\":\"Treachery\",\"class\":\"Mythos\",\"traits\":\"Curse.\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 105800,
+          "CustomDeck": {
+            "1058": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/xvlbjp1a2s9wo72hhlopj/ddb311b1-c254-4c3b-942c-ec77be2f7952-Front-Stalking-Shadow-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=gu09mpmj0g2mh7o0zgo0bg139&raw=1&cachebust=1760456316866",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "e0003c",
+          "Name": "Card",
+          "Transform": {
+            "rotY": 270,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Resurgent Evils",
+          "GMNotes": "{\"TtsZoopGuid\":\"30e631f7-4a72-428b-bbab-e92aeefbe6fa\",\"id\":\"30e631f7-4a72-428b-bbab-e92aeefbe6fa\",\"type\":\"Treachery\",\"class\":\"Mythos\",\"traits\":\"Omen.\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 105100,
+          "CustomDeck": {
+            "1051": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/zfj0ez8r348ijzhba3ynf/30e631f7-4a72-428b-bbab-e92aeefbe6fa-Front-Resurgent-Evils-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=4qne1m2tgobb29dfpv7p8icwv&raw=1&cachebust=1760456312258",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "e0002e",
+          "Name": "Card",
+          "Transform": {
+            "rotY": 270,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Grime and Filth",
+          "GMNotes": "{\"TtsZoopGuid\":\"c894b198-b8d4-440f-aebc-d9cae7d43996\",\"id\":\"c894b198-b8d4-440f-aebc-d9cae7d43996\",\"type\":\"Treachery\",\"class\":\"Mythos\",\"traits\":\"Hazard.\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 103700,
+          "CustomDeck": {
+            "1037": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/ew90188amh2si9mdu71na/c894b198-b8d4-440f-aebc-d9cae7d43996-Front-Grime-and-Filth-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=pc4zhvsk1bjm1f4fko70x7vzg&raw=1&cachebust=1760548925530",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "e00030",
+          "Name": "Card",
+          "Transform": {
+            "rotY": 270,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Grime and Filth",
+          "GMNotes": "{\"TtsZoopGuid\":\"c894b198-b8d4-440f-aebc-d9cae7d43996\",\"id\":\"c894b198-b8d4-440f-aebc-d9cae7d43996\",\"type\":\"Treachery\",\"class\":\"Mythos\",\"traits\":\"Hazard.\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 103900,
+          "CustomDeck": {
+            "1039": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/ew90188amh2si9mdu71na/c894b198-b8d4-440f-aebc-d9cae7d43996-Front-Grime-and-Filth-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=pc4zhvsk1bjm1f4fko70x7vzg&raw=1&cachebust=1760548925530",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "e00044",
+          "Name": "Card",
+          "Transform": {
+            "rotY": 270,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Stalking Shadow",
+          "GMNotes": "{\"TtsZoopGuid\":\"ddb311b1-c254-4c3b-942c-ec77be2f7952\",\"id\":\"ddb311b1-c254-4c3b-942c-ec77be2f7952\",\"type\":\"Treachery\",\"class\":\"Mythos\",\"traits\":\"Curse.\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 105900,
+          "CustomDeck": {
+            "1059": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/xvlbjp1a2s9wo72hhlopj/ddb311b1-c254-4c3b-942c-ec77be2f7952-Front-Stalking-Shadow-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=gu09mpmj0g2mh7o0zgo0bg139&raw=1&cachebust=1760456316866",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "e00041",
+          "Name": "Card",
+          "Transform": {
+            "rotY": 270,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Shady Mercenary",
+          "GMNotes": "{\"TtsZoopGuid\":\"028961fd-66fd-4ea6-84ab-607b56711f44\",\"id\":\"028961fd-66fd-4ea6-84ab-607b56711f44\",\"type\":\"Enemy\",\"class\":\"Mythos\",\"traits\":\"Humanoid. Criminal. Mercenary.\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 105600,
+          "CustomDeck": {
+            "1056": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/iye6qwes8nzrrkh25gq1m/028961fd-66fd-4ea6-84ab-607b56711f44-Front-Shady-Mercenary-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=5e5dnx7pu32ercvzi930r0i5t&raw=1&cachebust=1760456315376",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "e00026",
+          "Name": "Card",
+          "Transform": {
+            "rotY": 270,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "False Lead",
+          "GMNotes": "{\"TtsZoopGuid\":\"5134190d-1418-47ee-949c-805bcd87092a\",\"id\":\"5134190d-1418-47ee-949c-805bcd87092a\",\"type\":\"Treachery\",\"class\":\"Mythos\"}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 102900,
+          "CustomDeck": {
+            "1029": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/6rjkcy61a293yq3m7ftd5/5134190d-1418-47ee-949c-805bcd87092a-Front-False-Lead-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=l4no2oklpgs08p2jworri1c37&raw=1&cachebust=1761492280149",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          }
+        },
+        {
           "GUID": "e0002b",
           "Name": "Card",
           "Transform": {
@@ -3424,7 +3718,7 @@
           }
         },
         {
-          "GUID": "e0003a",
+          "GUID": "e0003b",
           "Name": "Card",
           "Transform": {
             "rotY": 270,
@@ -3437,9 +3731,9 @@
           "Tags": [
             "ScenarioCard"
           ],
-          "CardID": 104900,
+          "CardID": 105000,
           "CustomDeck": {
-            "1049": {
+            "1050": {
               "FaceURL": "https://www.dropbox.com/scl/fi/zfj0ez8r348ijzhba3ynf/30e631f7-4a72-428b-bbab-e92aeefbe6fa-Front-Resurgent-Evils-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=4qne1m2tgobb29dfpv7p8icwv&raw=1&cachebust=1760456312258",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
@@ -3478,7 +3772,7 @@
           }
         },
         {
-          "GUID": "e00029",
+          "GUID": "e0002c",
           "Name": "Card",
           "Transform": {
             "rotY": 270,
@@ -3486,15 +3780,15 @@
             "scaleY": 1.0,
             "scaleZ": 1.0
           },
-          "Nickname": "Fanatic",
-          "GMNotes": "{\"TtsZoopGuid\":\"06496c7f-754f-4e36-9ebe-54e6df07bb14\",\"id\":\"06496c7f-754f-4e36-9ebe-54e6df07bb14\",\"type\":\"Enemy\",\"class\":\"Mythos\",\"traits\":\"Humanoid. Cultist.\"}",
+          "Nickname": "Grasping Hands",
+          "GMNotes": "{\"TtsZoopGuid\":\"74420c24-1eec-47a2-abe7-c53ae2370157\",\"id\":\"74420c24-1eec-47a2-abe7-c53ae2370157\",\"type\":\"Treachery\",\"class\":\"Mythos\",\"traits\":\"Hazard.\"}",
           "Tags": [
             "ScenarioCard"
           ],
-          "CardID": 103200,
+          "CardID": 103500,
           "CustomDeck": {
-            "1032": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/luk4w1pinj8qh97vizauj/06496c7f-754f-4e36-9ebe-54e6df07bb14-Front-Fanatic-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=ydflzsl12ifd1e9gkx50z0bk3&raw=1&cachebust=1760548923539",
+            "1035": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/hnkqkhofkkxh5i8b3a8b5/74420c24-1eec-47a2-abe7-c53ae2370157-Front-Grasping-Hands-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=b6g8on1sihigvs8vywx5zbpjh&raw=1&cachebust=1760622443996",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -3505,7 +3799,34 @@
           }
         },
         {
-          "GUID": "e0003c",
+          "GUID": "e0001c",
+          "Name": "Card",
+          "Transform": {
+            "rotY": 270,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "scaleZ": 1.0
+          },
+          "Nickname": "Agent of the King",
+          "GMNotes": "{\"TtsZoopGuid\":\"913192c9-cbb3-4bb9-a407-134605b5bd54\",\"id\":\"913192c9-cbb3-4bb9-a407-134605b5bd54\",\"type\":\"Enemy\",\"class\":\"Mythos\",\"traits\":\"Humanoid. Cultist.\",\"victory\":1}",
+          "Tags": [
+            "ScenarioCard"
+          ],
+          "CardID": 101900,
+          "CustomDeck": {
+            "1019": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/ovpzujzz90e20ae8iamcr/913192c9-cbb3-4bb9-a407-134605b5bd54-Front-Agent-of-the-King-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=ml1p7x8k4g7iv2qoauja5h9fi&raw=1&cachebust=1760622432841",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          }
+        },
+        {
+          "GUID": "e0003a",
           "Name": "Card",
           "Transform": {
             "rotY": 270,
@@ -3518,9 +3839,9 @@
           "Tags": [
             "ScenarioCard"
           ],
-          "CardID": 105100,
+          "CardID": 104900,
           "CustomDeck": {
-            "1051": {
+            "1049": {
               "FaceURL": "https://www.dropbox.com/scl/fi/zfj0ez8r348ijzhba3ynf/30e631f7-4a72-428b-bbab-e92aeefbe6fa-Front-Resurgent-Evils-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=4qne1m2tgobb29dfpv7p8icwv&raw=1&cachebust=1760456312258",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
@@ -3532,7 +3853,7 @@
           }
         },
         {
-          "GUID": "e00040",
+          "GUID": "e0002d",
           "Name": "Card",
           "Transform": {
             "rotY": 270,
@@ -3540,69 +3861,15 @@
             "scaleY": 1.0,
             "scaleZ": 1.0
           },
-          "Nickname": "Shady Mercenary",
-          "GMNotes": "{\"TtsZoopGuid\":\"028961fd-66fd-4ea6-84ab-607b56711f44\",\"id\":\"028961fd-66fd-4ea6-84ab-607b56711f44\",\"type\":\"Enemy\",\"class\":\"Mythos\",\"traits\":\"Humanoid. Criminal. Mercenary.\"}",
+          "Nickname": "Grasping Hands",
+          "GMNotes": "{\"TtsZoopGuid\":\"74420c24-1eec-47a2-abe7-c53ae2370157\",\"id\":\"74420c24-1eec-47a2-abe7-c53ae2370157\",\"type\":\"Treachery\",\"class\":\"Mythos\",\"traits\":\"Hazard.\"}",
           "Tags": [
             "ScenarioCard"
           ],
-          "CardID": 105500,
+          "CardID": 103600,
           "CustomDeck": {
-            "1055": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/iye6qwes8nzrrkh25gq1m/028961fd-66fd-4ea6-84ab-607b56711f44-Front-Shady-Mercenary-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=5e5dnx7pu32ercvzi930r0i5t&raw=1&cachebust=1760456315376",
-              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": false,
-              "Type": 0
-            }
-          }
-        },
-        {
-          "GUID": "e00044",
-          "Name": "Card",
-          "Transform": {
-            "rotY": 270,
-            "scaleX": 1.0,
-            "scaleY": 1.0,
-            "scaleZ": 1.0
-          },
-          "Nickname": "Stalking Shadow",
-          "GMNotes": "{\"TtsZoopGuid\":\"ddb311b1-c254-4c3b-942c-ec77be2f7952\",\"id\":\"ddb311b1-c254-4c3b-942c-ec77be2f7952\",\"type\":\"Treachery\",\"class\":\"Mythos\",\"traits\":\"Curse.\"}",
-          "Tags": [
-            "ScenarioCard"
-          ],
-          "CardID": 105900,
-          "CustomDeck": {
-            "1059": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/xvlbjp1a2s9wo72hhlopj/ddb311b1-c254-4c3b-942c-ec77be2f7952-Front-Stalking-Shadow-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=gu09mpmj0g2mh7o0zgo0bg139&raw=1&cachebust=1760456316866",
-              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": false,
-              "Type": 0
-            }
-          }
-        },
-        {
-          "GUID": "e0002f",
-          "Name": "Card",
-          "Transform": {
-            "rotY": 270,
-            "scaleX": 1.0,
-            "scaleY": 1.0,
-            "scaleZ": 1.0
-          },
-          "Nickname": "Grime and Filth",
-          "GMNotes": "{\"TtsZoopGuid\":\"c894b198-b8d4-440f-aebc-d9cae7d43996\",\"id\":\"c894b198-b8d4-440f-aebc-d9cae7d43996\",\"type\":\"Treachery\",\"class\":\"Mythos\",\"traits\":\"Hazard.\"}",
-          "Tags": [
-            "ScenarioCard"
-          ],
-          "CardID": 103800,
-          "CustomDeck": {
-            "1038": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/ew90188amh2si9mdu71na/c894b198-b8d4-440f-aebc-d9cae7d43996-Front-Grime-and-Filth-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=pc4zhvsk1bjm1f4fko70x7vzg&raw=1&cachebust=1760548925530",
+            "1036": {
+              "FaceURL": "https://www.dropbox.com/scl/fi/hnkqkhofkkxh5i8b3a8b5/74420c24-1eec-47a2-abe7-c53ae2370157-Front-Grasping-Hands-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=b6g8on1sihigvs8vywx5zbpjh&raw=1&cachebust=1760622443996",
               "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
               "NumWidth": 1,
               "NumHeight": 1,
@@ -3642,7 +3909,7 @@
       ]
     },
     {
-      "GUID": "e0006a",
+      "GUID": "e8e1a4",
       "Name": "Card",
       "Transform": {
         "rotY": 270,
@@ -3650,16 +3917,17 @@
         "scaleY": 1.0,
         "scaleZ": 1.0
       },
-      "Nickname": "Inconspicuous Wagon",
-      "GMNotes": "{\"TtsZoopGuid\":\"c9a5501e-09e6-4c8f-960a-023c49bf01ed\",\"id\":\"c9a5501e-09e6-4c8f-960a-023c49bf01ed\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Vehicle.\"}",
+      "Nickname": "Megail",
+      "Description": "Yhilini Merchant",
+      "GMNotes": "{\"TtsZoopGuid\":\"67c867de-e118-4e4f-8477-4ca0354290bc\",\"id\":\"67c867de-e118-4e4f-8477-4ca0354290bc\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Humanoid. Close Ally. Merchant.\"}",
       "Tags": [
         "Asset",
         "PlayerCard"
       ],
-      "CardID": 108900,
+      "CardID": 101300,
       "CustomDeck": {
-        "1089": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/opnw7z8zcfbjic3okvwsm/c9a5501e-09e6-4c8f-960a-023c49bf01ed-Front-Inconspicuos-Wagon-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=krr6km34f0o69n7v23tulzjc1&raw=1&cachebust=1760456347442",
+        "1013": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/i8nlpygpy2miv5ccd9z6o/67c867de-e118-4e4f-8477-4ca0354290bc-Front-Megail-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=2vwg5ac8kplzn1lzbz5fuc0a6&raw=1&cachebust=1761492274293",
           "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
           "NumWidth": 1,
           "NumHeight": 1,
@@ -3670,300 +3938,33 @@
       }
     },
     {
-      "GUID": "f4cf37",
-      "Name": "Deck",
+      "GUID": "f89699",
+      "Name": "Card",
       "Transform": {
         "rotY": 270,
-        "rotZ": 180,
         "scaleX": 1.0,
         "scaleY": 1.0,
         "scaleZ": 1.0
       },
-      "Nickname": "",
+      "Nickname": "Robin",
+      "Description": "Best Daughter",
+      "GMNotes": "{\"TtsZoopGuid\":\"c5b78b7a-4c54-45a4-8226-9f5290a75aaa\",\"id\":\"c5b78b7a-4c54-45a4-8226-9f5290a75aaa\",\"type\":\"Asset\",\"class\":\"Neutral\",\"traits\":\"Humanoid. Close Ally. Mage.\"}",
       "Tags": [
-        "Location",
-        "ScenarioCard"
+        "Asset",
+        "PlayerCard"
       ],
-      "Hands": false,
-      "DeckIDs": [
-        107800,
-        107900
-      ],
+      "CardID": 101500,
       "CustomDeck": {
-        "1078": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/9304etpavo6757xi44qk9/32d219f8-07ef-43be-8a39-9aff93a58417-Front-Yhilin-Cathedral-Place-of-Devotion-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=33l219pbia8pnbvwv7k1m9oxo&raw=1&cachebust=1760548961315",
-          "BackURL": "https://www.dropbox.com/scl/fi/7e9y759y0sbkn5nuel8wa/32d219f8-07ef-43be-8a39-9aff93a58417-Back-Yhilin-Cathedral-Place-of-Devotion-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=idptpdsrmmgjudizoylqaym0x&raw=1&cachebust=1760548962343",
+        "1015": {
+          "FaceURL": "https://www.dropbox.com/scl/fi/yibzf1361fy0h4jice1xf/c5b78b7a-4c54-45a4-8226-9f5290a75aaa-Front-Robin-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=aqymbary69xg4jdedgcvdhusz&raw=1&cachebust=1761492277671",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
           "NumWidth": 1,
           "NumHeight": 1,
           "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        },
-        "1079": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/ml43lkm97osvizw61zujc/8072de2a-591f-4095-a5b0-844770e8095e-Front-Yhilin-Cathedral-Place-of-Worship-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=p7wcs8d1lle0c3790hupt14ds&raw=1&cachebust=1760548963787",
-          "BackURL": "https://www.dropbox.com/scl/fi/na2ih128qauou1zp8jfcl/8072de2a-591f-4095-a5b0-844770e8095e-Back-Yhilin-Cathedral-Place-of-Worship-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=q8u256vq0xlkl4pjhu009ys44&raw=1&cachebust=1760548964955",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": true,
+          "UniqueBack": false,
           "Type": 0
         }
-      },
-      "ContainedObjects": [
-        {
-          "GUID": "e00059",
-          "Name": "Card",
-          "Transform": {
-            "rotY": 270,
-            "rotZ": 180,
-            "scaleX": 1.0,
-            "scaleY": 1.0,
-            "scaleZ": 1.0
-          },
-          "Nickname": "Yhilin Cathedral",
-          "Description": "Place of Devotion",
-          "GMNotes": "{\"TtsZoopGuid\":\"32d219f8-07ef-43be-8a39-9aff93a58417\",\"id\":\"32d219f8-07ef-43be-8a39-9aff93a58417\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"Yhilin. Central.\",\"locationFront\":{\"icons\":\"Diamond\",\"connections\":\"Circle|Square|Triangle\",\"uses\":[{\"countPerInvestigator\":1,\"token\":\"clue\",\"type\":\"Clue\"}]},\"locationBack\":{\"icons\":\"Diamond\",\"connections\":\"Circle|Square|Triangle\"}}",
-          "Tags": [
-            "Location",
-            "ScenarioCard"
-          ],
-          "CardID": 107800,
-          "CustomDeck": {
-            "1078": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/9304etpavo6757xi44qk9/32d219f8-07ef-43be-8a39-9aff93a58417-Front-Yhilin-Cathedral-Place-of-Devotion-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=33l219pbia8pnbvwv7k1m9oxo&raw=1&cachebust=1760548961315",
-              "BackURL": "https://www.dropbox.com/scl/fi/7e9y759y0sbkn5nuel8wa/32d219f8-07ef-43be-8a39-9aff93a58417-Back-Yhilin-Cathedral-Place-of-Devotion-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=idptpdsrmmgjudizoylqaym0x&raw=1&cachebust=1760548962343",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": true,
-              "Type": 0
-            }
-          }
-        },
-        {
-          "GUID": "e0005a",
-          "Name": "Card",
-          "Transform": {
-            "rotY": 270,
-            "rotZ": 180,
-            "scaleX": 1.0,
-            "scaleY": 1.0,
-            "scaleZ": 1.0
-          },
-          "Nickname": "Yhilin Cathedral",
-          "Description": "Place of Worship",
-          "GMNotes": "{\"TtsZoopGuid\":\"8072de2a-591f-4095-a5b0-844770e8095e\",\"id\":\"8072de2a-591f-4095-a5b0-844770e8095e\",\"type\":\"Location\",\"class\":\"Mythos\",\"traits\":\"Yhilin. Central.\",\"locationFront\":{\"icons\":\"Diamond\",\"connections\":\"Circle|Square|Triangle\",\"uses\":[{\"countPerInvestigator\":1,\"token\":\"clue\",\"type\":\"Clue\"}]},\"locationBack\":{\"icons\":\"Diamond\",\"connections\":\"Circle|Square|Triangle\"}}",
-          "Tags": [
-            "Location",
-            "ScenarioCard"
-          ],
-          "CardID": 107900,
-          "CustomDeck": {
-            "1079": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/ml43lkm97osvizw61zujc/8072de2a-591f-4095-a5b0-844770e8095e-Front-Yhilin-Cathedral-Place-of-Worship-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=p7wcs8d1lle0c3790hupt14ds&raw=1&cachebust=1760548963787",
-              "BackURL": "https://www.dropbox.com/scl/fi/na2ih128qauou1zp8jfcl/8072de2a-591f-4095-a5b0-844770e8095e-Back-Yhilin-Cathedral-Place-of-Worship-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=q8u256vq0xlkl4pjhu009ys44&raw=1&cachebust=1760548964955",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": true,
-              "Type": 0
-            }
-          }
-        }
-      ]
-    },
-    {
-      "GUID": "1badb4",
-      "Name": "Custom_PDF",
-      "Transform": {
-        "rotY": 270,
-        "scaleX": 2.2,
-        "scaleY": 1.0,
-        "scaleZ": 2.2
-      },
-      "Nickname": "Clueless Cultist Coup Campaign Guide",
-      "ColorDiffuse": {
-        "r": 1.0,
-        "g": 1.0,
-        "b": 1.0
-      },
-      "HideWhenFaceDown": false,
-      "Hands": false,
-      "CustomPDF": {
-        "PDFUrl": "https://steamusercontent-a.akamaihd.net/ugc/11932879440338026661/B43098EB67F998E5FC6CD30C80DC1B2FA820302C/",
-        "PDFPassword": "",
-        "PDFPage": 0,
-        "PDFPageOffset": 0
       }
-    },
-    {
-      "GUID": "2a6350",
-      "Name": "Deck",
-      "Transform": {
-        "rotY": 270,
-        "scaleX": 0.714285731,
-        "scaleY": 1.0,
-        "scaleZ": 0.714285731
-      },
-      "Nickname": "Agenda Deck",
-      "Tags": [
-        "ScenarioCard"
-      ],
-      "Hands": false,
-      "DeckIDs": [
-        100900,
-        100800,
-        100700,
-        100600
-      ],
-      "CustomDeck": {
-        "1009": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/rz0ev0uk0lfydvldc46f6/5f6e0c8d-8927-41ae-923b-5b9d78fe08a8-Front-Agenda-4-The-Kingsmen-Plot-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=a48rjsxdvkh2sxrsr9wrz4ibs&raw=1&cachebust=1760536056980",
-          "BackURL": "https://www.dropbox.com/scl/fi/56gngcc3yvnsi02cu6bk7/5f6e0c8d-8927-41ae-923b-5b9d78fe08a8-Back-Agenda-4-The-Kingsmen-Plot-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=8g229kuoogng1f9rfve63z4h3&raw=1&cachebust=1760536058312",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        },
-        "1008": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/k3c1t8xjaxxu3peij9ecr/2e066176-9080-4d89-9a8a-366bff5232a6-Front-Agenda-3-Time-is-Short-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=4i7opuwxvz52omwddsz6jwdtd&raw=1&cachebust=1760548912529",
-          "BackURL": "https://www.dropbox.com/scl/fi/02ayc78sxdrbg42f9a8yx/2e066176-9080-4d89-9a8a-366bff5232a6-Back-Agenda-3-Time-is-Short-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=98txik9paivuszs195rrgk469&raw=1&cachebust=1760548914236",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        },
-        "1007": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/k7c7flrj2ng6pq02kn0xz/d3c2361d-d817-4840-8f69-884258f45fbe-Front-Agenda-2-A-Sinister-Trail-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=5qt17nkglhov2pyjf32qdn00k&raw=1&cachebust=1760548909136",
-          "BackURL": "https://www.dropbox.com/scl/fi/1mvfvxflliakouylzb3gt/d3c2361d-d817-4840-8f69-884258f45fbe-Back-Agenda-2-A-Sinister-Trail-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=2nb0xsaoa27po2m5wyitnbwdb&raw=1&cachebust=1760548910505",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        },
-        "1006": {
-          "FaceURL": "https://www.dropbox.com/scl/fi/us0bcu7vlc2ijjrc7o7pb/540b1cbe-444a-4a98-951d-90b14f75b6fc-Front-Agenda-1-A-Murky-Plot-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=d6o1o5x1qkv31tg7donlbx8m4&raw=1&cachebust=1760548906747",
-          "BackURL": "https://www.dropbox.com/scl/fi/5g5gtfs80eg0siduqgr5l/540b1cbe-444a-4a98-951d-90b14f75b6fc-Back-Agenda-1-A-Murky-Plot-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=8g09j07bhoj6oulicp16ejpip&raw=1&cachebust=1760548908096",
-          "NumWidth": 1,
-          "NumHeight": 1,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        }
-      },
-      "ContainedObjects": [
-        {
-          "GUID": "e0000c",
-          "Name": "Card",
-          "Transform": {
-            "rotY": 270,
-            "scaleX": 0.714285731,
-            "scaleY": 1.0,
-            "scaleZ": 0.714285731
-          },
-          "Nickname": "The Kingsman Plot",
-          "GMNotes": "{\"TtsZoopGuid\":\"5f6e0c8d-8927-41ae-923b-5b9d78fe08a8\",\"id\":\"5f6e0c8d-8927-41ae-923b-5b9d78fe08a8\",\"type\":\"Agenda\",\"class\":\"Mythos\",\"doomThreshold\":4}",
-          "Tags": [
-            "ScenarioCard"
-          ],
-          "CardID": 100900,
-          "CustomDeck": {
-            "1009": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/rz0ev0uk0lfydvldc46f6/5f6e0c8d-8927-41ae-923b-5b9d78fe08a8-Front-Agenda-4-The-Kingsmen-Plot-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=a48rjsxdvkh2sxrsr9wrz4ibs&raw=1&cachebust=1760536056980",
-              "BackURL": "https://www.dropbox.com/scl/fi/56gngcc3yvnsi02cu6bk7/5f6e0c8d-8927-41ae-923b-5b9d78fe08a8-Back-Agenda-4-The-Kingsmen-Plot-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=8g229kuoogng1f9rfve63z4h3&raw=1&cachebust=1760536058312",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": true,
-              "Type": 0
-            }
-          }
-        },
-        {
-          "GUID": "e0000b",
-          "Name": "Card",
-          "Transform": {
-            "rotY": 270,
-            "scaleX": 0.714285731,
-            "scaleY": 1.0,
-            "scaleZ": 0.714285731
-          },
-          "Nickname": "Time is Short",
-          "GMNotes": "{\"TtsZoopGuid\":\"2e066176-9080-4d89-9a8a-366bff5232a6\",\"id\":\"2e066176-9080-4d89-9a8a-366bff5232a6\",\"type\":\"Agenda\",\"class\":\"Mythos\",\"doomThreshold\":4}",
-          "Tags": [
-            "ScenarioCard"
-          ],
-          "CardID": 100800,
-          "CustomDeck": {
-            "1008": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/k3c1t8xjaxxu3peij9ecr/2e066176-9080-4d89-9a8a-366bff5232a6-Front-Agenda-3-Time-is-Short-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=4i7opuwxvz52omwddsz6jwdtd&raw=1&cachebust=1760548912529",
-              "BackURL": "https://www.dropbox.com/scl/fi/02ayc78sxdrbg42f9a8yx/2e066176-9080-4d89-9a8a-366bff5232a6-Back-Agenda-3-Time-is-Short-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=98txik9paivuszs195rrgk469&raw=1&cachebust=1760548914236",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": true,
-              "Type": 0
-            }
-          }
-        },
-        {
-          "GUID": "e0000a",
-          "Name": "Card",
-          "Transform": {
-            "rotY": 270,
-            "scaleX": 0.714285731,
-            "scaleY": 1.0,
-            "scaleZ": 0.714285731
-          },
-          "Nickname": "A Sinister Trail",
-          "GMNotes": "{\"TtsZoopGuid\":\"d3c2361d-d817-4840-8f69-884258f45fbe\",\"id\":\"d3c2361d-d817-4840-8f69-884258f45fbe\",\"type\":\"Agenda\",\"class\":\"Mythos\",\"doomThreshold\":4}",
-          "Tags": [
-            "ScenarioCard"
-          ],
-          "CardID": 100700,
-          "CustomDeck": {
-            "1007": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/k7c7flrj2ng6pq02kn0xz/d3c2361d-d817-4840-8f69-884258f45fbe-Front-Agenda-2-A-Sinister-Trail-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=5qt17nkglhov2pyjf32qdn00k&raw=1&cachebust=1760548909136",
-              "BackURL": "https://www.dropbox.com/scl/fi/1mvfvxflliakouylzb3gt/d3c2361d-d817-4840-8f69-884258f45fbe-Back-Agenda-2-A-Sinister-Trail-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=2nb0xsaoa27po2m5wyitnbwdb&raw=1&cachebust=1760548910505",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": true,
-              "Type": 0
-            }
-          }
-        },
-        {
-          "GUID": "e00009",
-          "Name": "Card",
-          "Transform": {
-            "rotY": 270,
-            "scaleX": 0.714285731,
-            "scaleY": 1.0,
-            "scaleZ": 0.714285731
-          },
-          "Nickname": "A Murky Plot",
-          "GMNotes": "{\"TtsZoopGuid\":\"540b1cbe-444a-4a98-951d-90b14f75b6fc\",\"id\":\"540b1cbe-444a-4a98-951d-90b14f75b6fc\",\"type\":\"Agenda\",\"class\":\"Mythos\",\"doomThreshold\":4}",
-          "Tags": [
-            "ScenarioCard"
-          ],
-          "CardID": 100600,
-          "CustomDeck": {
-            "1006": {
-              "FaceURL": "https://www.dropbox.com/scl/fi/us0bcu7vlc2ijjrc7o7pb/540b1cbe-444a-4a98-951d-90b14f75b6fc-Front-Agenda-1-A-Murky-Plot-resolution-300-compressionquality-1.00-bleed-1.0-Front.png?rlkey=d6o1o5x1qkv31tg7donlbx8m4&raw=1&cachebust=1760548906747",
-              "BackURL": "https://www.dropbox.com/scl/fi/5g5gtfs80eg0siduqgr5l/540b1cbe-444a-4a98-951d-90b14f75b6fc-Back-Agenda-1-A-Murky-Plot-resolution-300-compressionquality-1.00-bleed-1.0-Back.png?rlkey=8g09j07bhoj6oulicp16ejpip&raw=1&cachebust=1760548908096",
-              "NumWidth": 1,
-              "NumHeight": 1,
-              "BackIsHidden": true,
-              "UniqueBack": true,
-              "Type": 0
-            }
-          }
-        }
-      ]
     }
   ],
   "AttachedDecals": [
