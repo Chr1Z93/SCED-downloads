@@ -19,7 +19,6 @@ def minify_json_file(json_file):
         with open(json_file_path, "w", encoding="utf-8") as f:
             json.dump(data, f, separators=(",", ":"), ensure_ascii=False)
 
-        # print(f"Minified: {json_file}")
     except json.JSONDecodeError:
         print(f"Error: {json_file} contains invalid JSON.")
     except Exception as e:
