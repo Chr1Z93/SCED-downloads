@@ -1,6 +1,7 @@
 import json
 import sys
 import os
+import re
 import subprocess
 import tempfile
 
@@ -82,26 +83,45 @@ def decompose_saved_object(input_file):
 
     # Construct the saved object path
     if sys.platform == "darwin": # macOS
-        saved_object = os.path.join(
+        base_path = os.path.join(
             os.path.expanduser("~"),
             "Library",
         )
     else: # windows
-        saved_object = os.path.join(
+        base_path = os.path.join(
             os.environ["USERPROFILE"],
             "Documents",
             "My Games",
         )
-    saved_object = os.path.join(
-        f"{saved_object}",
+    saved_objects_dir = os.path.join(
+        f"{base_path}",
         "Tabletop Simulator",
         "Saves",
-        "Saved Objects",
-        f"{nickname}.json",
+        "Saved Objects"
     )
 
+    # Primary path using the original nickname
+    primary_path = os.path.join(saved_objects_dir, f"{nickname}.json")
+
+    # Alternative path by sanitizing the nickname
+    # This regex removes any character that is NOT a letter, number, or whitespace
+    sanitized_nickname = re.sub(r'[^\w\s.-]', '', nickname).strip()
+    alternative_path = os.path.join(saved_objects_dir, f"{sanitized_nickname}.json")
+    
+    # Check which path exists, prioritizing the primary one
+    saved_object_path = None
+    if os.path.exists(primary_path):
+        saved_object_path = primary_path
+    elif os.path.exists(alternative_path):
+        print(f"Info: Could not find the original path. Using sanitized path instead:\n-> {alternative_path}")
+        saved_object_path = alternative_path
+    else:
+        print(f"Error: Could not find the saved object file for '{nickname}'", file=sys.stderr)
+        print(f"Checked paths:\n1. {primary_path}\n2. {alternative_path}", file=sys.stderr)
+        return
+    
     # Validate and prepare the saved object JSON
-    prepared_saved_object = validate_and_prepare_json(saved_object)
+    prepared_saved_object = validate_and_prepare_json(saved_object_path)
     if not prepared_saved_object:
         print("Error: Invalid or corrupted saved object JSON file", file=sys.stderr)
         return
@@ -143,7 +163,7 @@ def decompose_saved_object(input_file):
         subprocess.run(cmd, cwd="C:\\git\\TTSModManager")
 
     # Clean up temporary file if created
-    if prepared_saved_object != saved_object:
+    if prepared_saved_object != saved_object_path:
         os.remove(prepared_saved_object)
 
 
