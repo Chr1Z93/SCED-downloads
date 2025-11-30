@@ -36,18 +36,32 @@ def exec_mod_manager(input_path, output_path):
     )
 
 
+def sanitize_name(name):
+    # Here we remove all occurrences of '(' and ')'
+    return name.replace("(", "").replace(")", "").strip()
+
+
 def __main__():
     output_dir = resolve(PATHS["output"])
     output_dir.mkdir(parents=True, exist_ok=True)
 
     for item in [item for item in read_library() if item["decomposed"]]:
+        sanitized_name = sanitize_name(item["name"])
+
+        input_path = next(
+            Path.cwd()
+            .joinpath(PATHS["decomposed"], item["type"], sanitized_name)
+            .glob("*.json"),
+            None,
+        )
+
+        # Prevent NoneType error
+        if input_path is None:
+            print(f"Warning: No .json file found for item: {item['name']}")
+            continue
+
         exec_mod_manager(
-            next(
-                Path.cwd()
-                .joinpath(PATHS["decomposed"], item["type"], item["name"])
-                .glob("*.json"),
-                None,
-            ),
+            input_path,
             output_dir.joinpath(f'{item["filename"]}.json'),
         )
 
