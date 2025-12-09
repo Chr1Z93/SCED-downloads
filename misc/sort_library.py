@@ -1,15 +1,13 @@
 import json
 import os
 
-# --- Configuration ---
-
-# Define the name of your JSON file
+# Name of the JSON file
 JSON_FILE = "library.json"
 
-# Define the author whose items will be moved to the top, preserving original order
+# Author whose items will be moved to the top, preserving original order
 PRIORITY_AUTHOR = "Fantasy Flight Games"
 
-# Define the desired order of keys in the final JSON
+# Desired order of keys in the final JSON
 KEY_ORDER = [
     "name",
     "type",
@@ -23,10 +21,8 @@ KEY_ORDER = [
     "description",
 ]
 
-# Define the sorting order for the 'type' field for non-priority items
-TYPE_ORDER = {"playercards": 0, "campaign": 1, "scenario": 2}
-
-# --- Main Script ---
+# Sorting order for the 'type' field for non-priority items
+TYPE_ORDER = {"playercards": 0, "campaign": 1, "language-pack": 2, "scenario": 3}
 
 
 def get_sort_keys(enumerated_item):
@@ -122,6 +118,5 @@ def sort_json_file():
         print(f"An unexpected error occurred: {e}")
 
 
-# --- Run the script ---
 if __name__ == "__main__":
     sort_json_file()
