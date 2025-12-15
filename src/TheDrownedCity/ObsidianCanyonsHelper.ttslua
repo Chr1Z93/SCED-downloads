@@ -1,0 +1,960 @@
+local CoroutineLib     = require("util/CoroutineLib")
+local DeckLib          = require("util/DeckLib")
+local SearchLib        = require("util/SearchLib")
+local GUIDReferenceApi = require("core/GUIDReferenceApi")
+local PlayAreaApi      = require("playarea/PlayAreaApi")
+local MythosAreaApi    = require("mythos/MythosAreaApi")
+local LocationLib      = require("LocationLib")
+local GlobalApi        = require("Global/GlobalApi")
+
+
+local WIND_CONTROLLER_GUID              = 'fe9393'
+local WINDS_CARD_NAME                   = 'Winds'
+local STAR_SPAWN_DECK_GUID              = "929cf9"
+local CENTRAL_SPIRE_NAME                = "Central Spire"
+local FLOATING_SPIRE_NAME               = "Floating Spire"
+local OPEN_SKIES_DECK_NAME              = "Open Skies"
+local SUMMIT_DECK_NAME                  = "Summit Deck"
+local RLYEH_STREETS_GUID                = "37868c"
+local FLOATING_SPIRE_GUID               = "638756"
+local ANCIENT_DOME_GUID                 = "862f49"
+local WESTERN_WALL_GUID                 = "ec0fc1"
+local AERIAL_WATERFALL_GUID             = "b10b6a"
+local INNESCAPABLE_ENEMY_GUID           = "1acf22"
+local ROTATION                          = { x = 0, y = 270, z = 180 }
+local BAG_GUIDS                         = {
+  ["EASTERN"] = "114b54",
+  ["WESTERN"] = "e6b84a",
+}
+INNESCAPABLE_DECK_GUID                  = '3307b5'
+
+-- ██████╗░██╗░░░██╗████████╗████████╗░█████╗░███╗░░██╗
+-- ██╔══██╗██║░░░██║╚══██╔══╝╚══██╔══╝██╔══██╗████╗░██║
+-- ██████╦╝██║░░░██║░░░██║░░░░░░██║░░░██║░░██║██╔██╗██║
+-- ██╔══██╗██║░░░██║░░░██║░░░░░░██║░░░██║░░██║██║╚████║
+-- ██████╦╝╚██████╔╝░░░██║░░░░░░██║░░░╚█████╔╝██║░╚███║
+-- ╚═════╝░░╚═════╝░░░░╚═╝░░░░░░╚═╝░░░░╚════╝░╚═╝░░╚══╝
+
+BUTTON_SETUP_1                          = {
+  label          = "The expedition headed west. (Setup v.I)",
+  click_function = "act1SetupWest",
+  function_owner = self,
+  position       = { 0, 0.11, -0.5 },
+  height         = 150,
+  width          = 1800,
+  scale          = { x = 2, y = 2, z = 2 },
+  font_color     = { r = 0, g = 0, b = 0 },
+  color          = { r = 1, g = 1, b = 1 }
+}
+
+BUTTON_SETUP_2                          = {
+  label          = "The expedition headed east. (Setup v.II)",
+  click_function = "act1SetupEast",
+  function_owner = self,
+  position       = { 0, 0.11, 0.5 },
+  height         = 150,
+  width          = 1800,
+  scale          = { x = 2, y = 2, z = 2 },
+  font_color     = { r = 0, g = 0, b = 0 },
+  color          = { r = 1, g = 1, b = 1 }
+}
+
+BUTTON_ADVANCE_1                        = {
+  label          = "Advance to act II",
+  click_function = "act2Setup",
+  function_owner = self,
+  position       = { 0, 0.11, 0 },
+  height         = 150,
+  width          = 1800,
+  scale          = { x = 3, y = 3, z = 3 },
+  font_color     = { r = 0, g = 0, b = 0 },
+  color          = { r = 1, g = 1, b = 1 }
+}
+
+-- ██████╗░░█████╗░░██████╗██╗████████╗██╗░█████╗░███╗░░██╗░██████╗
+-- ██╔══██╗██╔══██╗██╔════╝██║╚══██╔══╝██║██╔══██╗████╗░██║██╔════╝
+-- ██████╔╝██║░░██║╚█████╗░██║░░░██║░░░██║██║░░██║██╔██╗██║╚█████╗░
+-- ██╔═══╝░██║░░██║░╚═══██╗██║░░░██║░░░██║██║░░██║██║╚████║░╚═══██╗
+-- ██║░░░░░╚█████╔╝██████╔╝██║░░░██║░░░██║╚█████╔╝██║░╚███║██████╔╝
+-- ╚═╝░░░░░░╚════╝░╚═════╝░╚═╝░░░╚═╝░░░╚═╝░╚════╝░╚═╝░░╚══╝╚═════╝░
+
+local ACT1_LOCATION_POSITIONS           = {
+  { x = 0,  y = 0 },
+  { x = 1,  y = 1 },
+  { x = 1,  y = -1 },
+  { x = 2,  y = 1 },
+  { x = 2,  y = -1 },
+  { x = 2,  y = 0 },
+  { x = -1, y = 1 }
+}
+
+ACT1_ALL_POSITIONS                      = {
+  { x = -1, y = -1 },
+  { x = -1, y = 0 },
+  { x = -1, y = 1 },
+  { x = 0,  y = 1 },
+  { x = 0,  y = 0 },
+  { x = 0,  y = -1 },
+  { x = 1,  y = 1 },
+  { x = 1,  y = 0 },
+  { x = 1,  y = -1 },
+  { x = 2,  y = 1 },
+  { x = 2,  y = 0 },
+  { x = 2,  y = -1 }
+}
+
+local ACT2_ALL_POSITIONS                = {
+  { x = -2, y = -1 },
+  { x = -2, y = 0 },
+  { x = -2, y = 1 },
+  { x = -1, y = -1 },
+  { x = -1, y = 0 },
+  { x = -1, y = 1 },
+  { x = 0,  y = 1 },
+  { x = 0,  y = 0 },
+  { x = 0,  y = -1 },
+  { x = 1,  y = 1 },
+  { x = 1,  y = 0 },
+  { x = 1,  y = -1 },
+  { x = 2,  y = 1 },
+  { x = 2,  y = 0 },
+  { x = 2,  y = -1 }
+}
+
+local ACT3_ALL_POSITIONS                = {
+  { x = -2, y = -1 },
+  { x = -2, y = 0 },
+  { x = -2, y = 1 },
+  { x = -2, y = -2 },
+  { x = -1, y = -1 },
+  { x = -1, y = 0 },
+  { x = -1, y = 1 },
+  { x = -1, y = -2 },
+  { x = 0,  y = 1 },
+  { x = 0,  y = 0 },
+  { x = 0,  y = -1 },
+  { x = 0,  y = -2 },
+  { x = 1,  y = 1 },
+  { x = 1,  y = 0 },
+  { x = 1,  y = -1 },
+  { x = 1,  y = -2 },
+  { x = 2,  y = 1 },
+  { x = 2,  y = 0 },
+  { x = 2,  y = -1 },
+  { x = 2,  y = -2 }
+}
+
+local ACT2_INITIAL_SPIRE                = { x = -2, y = 0 }
+
+local ACT3_INITIAL_SPIRE                = { x = -2, y = 1 }
+
+local ACT2_OPEN_SKIES_INITIAL_POSITIONS = {
+  { x = -2, y = -1 },
+  { x = -1, y = 1 },
+  { x = 0,  y = 0 },
+  { x = 2,  y = 1 },
+  { x = 2,  y = -1 }
+}
+
+local ACT3_OPEN_SKIES_INITIAL_POSITIONS = {
+  { x = -2, y = 0 },
+  { x = -1, y = 1 },
+  { x = -1, y = -1 },
+  { x = 0,  y = -2 },
+  { x = 0,  y = 1 }
+}
+
+
+function onSave()
+  return JSON.encode({
+    currentAct = currentAct,
+    expeditionDirection = expeditionDirection
+  })
+end
+
+function loadFromSaveTable(savedData)
+  for var, val in pairs(JSON.decode(savedData)) do
+    _G[var] = val
+  end
+end
+
+function onLoad(savedData)
+  if savedData and savedData ~= "" then
+    loadFromSaveTable(savedData)
+  else
+    currentAct = 0
+    expeditionDirection = nil
+  end
+
+  local trash = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+  if not trash then
+    log('Error onLoad. Trash not found.')
+    return
+  end
+
+  aboveTrash = trash.getPosition() + Vector(0, 1, 0)
+  if currentAct == 0 then
+    self.createButton(BUTTON_SETUP_1)
+    self.createButton(BUTTON_SETUP_2)
+  elseif currentAct == 1 then
+    self.createButton(BUTTON_ADVANCE_1)
+  end
+end
+
+-- Advancing acts
+
+function act1SetupEast(_, color)
+  -- function to be called by a button
+  act1Setup('eastern')
+end
+
+function act1SetupWest(_, color)
+  -- function to be called by a button
+  act1Setup('western')
+end
+
+function act1Setup(param)
+  expeditionDirection = param
+  if param ~= 'western' and param ~= 'eastern' then
+    return
+  end
+
+  if currentAct ~= 0 then
+    return
+  end
+
+  function coroutineact1Setup()
+    -- Long function that does all that appear in the Campaign Guide
+    local escapePreventative = false
+
+    -- Step 0. Find bags
+    if expeditionDirection == 'eastern' then
+      bag = getObjectFromGUID(BAG_GUIDS['EASTERN'])
+    elseif expeditionDirection == 'western' then
+      bag = getObjectFromGUID(BAG_GUIDS['WESTERN'])
+    end
+    if not bag then escapePreventative = true end
+
+    -- Place fixed cards
+    if #bag.getObjects() > 0 then
+      bag.call("buttonClick_place")
+    end
+
+    escapePreventative = areDecksUnavailable()
+
+    -- Did anything went wrong?
+    if escapePreventative then
+      log('At least something went wrong.')
+      return
+    end
+
+    -- From now on, we assume that the setup can be done.
+    local summitDeck = getObjectByName(SUMMIT_DECK_NAME)
+
+    -- Fill each empty space in the diagram with the bottom card of the
+    local pos = nil
+    for _, coords in ipairs(ACT1_LOCATION_POSITIONS) do
+      pos = PlayAreaApi.gridToWorld(coords)
+      summitDeck.takeObject({ position = pos })
+      CoroutineLib.yieldSeconds(0.02)
+    end
+    drawRowNumber()
+
+    -- Shuffle the set-aside Central Spire into the top three cards of the
+    -- Summit deck.
+    local centralSpire = getObjectByName(CENTRAL_SPIRE_NAME)
+    if centralSpire then
+      DeckLib.shuffleIntoTopOrBottomX(centralSpire, summitDeck, false, 3, true)
+      printToAll('Spire shuffled in the top three cards.')
+    else
+      printToAll('Central Spire cannot be found.')
+    end
+
+
+    -- Each investigator begins play at R’lyeh Streets
+    moveMiniCardSomewhere({ position = PlayAreaApi.gridToWorld({ x = -1.2, y = -1.2 }) })
+    printToAll('Each investigator begins play at R’lyeh Streets.')
+
+
+    -- Find the double-sided Eastern Winds/Western Winds story card and
+    -- put it into play, X side faceup.
+    -- Place beautiful but discrete arrows to simbolize wind directions
+    local windCard = getObjectByName(WINDS_CARD_NAME)
+    if not windCard then
+      printToAll('Wind card was not found.')
+    else
+      if expeditionDirection == 'western' then
+        makeSureIsFaceDown(windCard)
+        printToAll('Eastern Winds side faceup.', 'Green')
+      elseif expeditionDirection == 'eastern' then
+        makeSureIsFaceUp(windCard)
+        printToAll('Western Winds side faceup.', 'Blue')
+      end
+    end
+
+    -- Build the act and agenda decks using agenda
+    -- Done
+    if expeditionDirection == 'western' then
+      printToAll('Agenda and Act placed. There are three acts.')
+    elseif expeditionDirection == 'eastern' then
+      printToAll('Agenda and Act placed. There are two acts.')
+    end
+
+    -- Shuffle each enemy from the Star Spawn encounter set and remove
+    -- two at random from the game.
+    placeStarSpawnOnDeck()
+
+
+    -- If the creature was defeated
+    if expeditionDirection == 'western' then
+      printToAll('If the creature was defeated, remove The Inescapable encounter set.')
+      printToAll('Otherwise, spawn The Inescapable enemy at the location farthest from all investigators, exhausted.')
+    end
+
+    -- Last lines of the page 34 setup
+    printToAll('Each player takes one Artifact or Item from the expedition encounter set.')
+    printToAll('Shuffle the encounter deck. You are ready to begin.')
+
+    -- Transform this objetct from Act 0 into Act I mode
+    self.removeButton(0)
+    self.removeButton(1)
+    currentAct = 1
+
+    self.createButton(BUTTON_ADVANCE_1)
+
+    -- Inform wind helper of the new geometry
+    informWindHelperAct(1)
+    -- Inform windcontroller of the expedition helper of the new geometry
+    informWindHelperExpeditionDirection(expeditionDirection)
+  end
+
+  CoroutineLib.start(coroutineact1Setup)
+end
+
+function act2Setup(_, color)
+  if expeditionDirection ~= 'western' and expeditionDirection ~= 'eastern' then
+    log('Value error.')
+    return
+  end
+
+  if currentAct ~= 1 then
+    log('Logic error. This should only be called during act I.')
+    return
+  end
+
+  function coroutineAct2Setup()
+    -- This does this and that
+    local escapePreventative = false
+    local ready = false
+
+    -- Step 0.1. Are the decks available? Is the chest available?
+    escapePreventative = areDecksUnavailable()
+    if escapePreventative then return end
+    escapePreventative = isChestUnavailable()
+    if escapePreventative then return end
+    -- Get them
+    local chest = MythosAreaApi.getSetAsideChest()
+    local summitDeck = getObjectByName(SUMMIT_DECK_NAME)
+    local openSkiesDeck = getObjectByName(OPEN_SKIES_DECK_NAME)
+
+    -- Step 0.2. Verify if the spire is visible
+    ready = verifyExistenceAndVisibilityOfLocation({ name = CENTRAL_SPIRE_NAME })
+    if not ready then
+      printToAll("You cant advance, since you haven't found the Central Spire.", 'Red')
+      return
+    end
+
+    -- Paragraph 0. If setup version II, then spawn the Inescapable.
+    if expeditionDirection == 'eastern' then
+      chest.takeObject({ guid = INNESCAPABLE_DECK_GUID, position = PlayAreaApi.gridToWorld({ x = 0.5, y = -2.5 }) })
+      CoroutineLib.yieldSeconds(0.2)
+      local innescapableDeck = getObjectFromGUID(INNESCAPABLE_DECK_GUID)
+      local pos2 = PlayAreaApi.gridToWorld(ACT2_INITIAL_SPIRE) + Vector(0.5, 0, 0.5)
+      innescapableDeck.takeObject({ guid = INNESCAPABLE_ENEMY_GUID, position = pos2, rotation = { x = 0, y = 0, z = 0 } })
+      printToAll('Spawned the The Inescapable enemy at Central Spire, exhausted and unengaged.')
+      CoroutineLib.yieldSeconds(0.3)
+      DeckLib.placeOrMergeIntoDeck(innescapableDeck, MythosAreaApi.getEncounterDeckPosition(),
+        { x = 0, y = 270, z = 180 },
+        false, false, false)
+      printToAll('Shuffled the rest of the Innescapable encounter set in the encounter deck.')
+      MythosAreaApi.reshuffleEncounterDeck(false)
+      
+    end
+
+    -- Paragraph one. Remove R'lyeh Streets from the game, ignoring its text box.
+    -- Shuffle each open sky and Summit location in play except for Central Spire into the Summit deck.
+    -- Each card and token at those locations is discarded.
+    local rlyehStreets = getObjectFromGUID(RLYEH_STREETS_GUID)
+    if not rlyehStreets then
+      printToAll("R'lyeh Streets was not found", 'Red')
+      return
+    end
+    cleanLocation(rlyehStreets)
+    rlyehStreets.setPosition(aboveTrash)
+    printToAll("R'lyeh Streets was removed", 'White')
+
+    -- Take almost all remaining locations and openskies and place them on the Summit deck
+    local locationsToMove = findLocationsToMoveExcept(ACT1_ALL_POSITIONS, CENTRAL_SPIRE_NAME)
+    shuffleSafelyLocationsInDeck(locationsToMove, summitDeck)
+    printToAll('Locations shuffled into the Summit deck.', 'White')
+    printToAll('Make sure to clean manually any remaining token.', 'White')
+
+    -- Step 3. Place locations in the new shape
+    -- Step 3.1 Placing the Central Spire in the correct space
+    local centralSpire = getObjectByName(CENTRAL_SPIRE_NAME)
+    transportSafelyToCoordinates(centralSpire, ACT2_INITIAL_SPIRE)
+    makeSureIsFaceUp(centralSpire)
+
+    -- Step 3.2
+    -- Move minicards to starting position
+    local miniPosition = PlayAreaApi.gridToWorld(ACT2_INITIAL_SPIRE) + Vector(0.5, 0, 0)
+    moveMiniCardSomewhere({ position = miniPosition })
+
+    -- Step 3.3. Place five Open Skies
+    for _, coords in ipairs(ACT2_OPEN_SKIES_INITIAL_POSITIONS) do
+      openSkiesDeck.takeObject({ position = PlayAreaApi.gridToWorld(coords) })
+      CoroutineLib.yieldSeconds(0.22)
+    end
+
+    -- Step 3.4.
+    local freePlaces = exclude_pairs(ACT2_ALL_POSITIONS, ACT2_OPEN_SKIES_INITIAL_POSITIONS)
+    freePlaces = exclude_pairs(freePlaces, { ACT2_INITIAL_SPIRE })
+    for i, coords in ipairs(freePlaces) do
+      summitDeck.takeObject({ position = PlayAreaApi.gridToWorld(coords) })
+      CoroutineLib.yieldSeconds(0.22)
+    end
+
+    -- Paragraph four. Shuffle the set-aside X and Aerial Waterfall locations,
+    -- along with each remaining set-aside open sky card, into the top 5 cards of the Summit deck.
+    chest.takeObject({
+      guid = AERIAL_WATERFALL_GUID,
+      position = PlayAreaApi.gridToWorld({ x = 2.1, y = -2.1 })
+    })
+    local aerial = getObjectFromGUID(AERIAL_WATERFALL_GUID)
+    CoroutineLib.yieldSeconds(0.22)
+
+    local secondThing = nil
+    if expeditionDirection == 'eastern' then
+      chest.takeObject({
+        guid = ANCIENT_DOME_GUID,
+        position = PlayAreaApi.gridToWorld({ x = 2.3, y = -2.3 })
+      })
+      secondThing = getObjectFromGUID(ANCIENT_DOME_GUID)
+      CoroutineLib.yieldSeconds(0.24)
+    else
+      chest.takeObject({
+        guid = FLOATING_SPIRE_GUID,
+        position = PlayAreaApi.gridToWorld({ x = 2.3, y = -2.3 })
+      })
+      secondThing = getObjectFromGUID(FLOATING_SPIRE_GUID)
+      CoroutineLib.yieldSeconds(0.24)
+    end
+
+    if expeditionDirection == 'western' then
+      toShuffle = { aerial, secondThing }
+      number = 2
+      numberWord = 'three'
+    else
+      --Shuffle the set-aside Ancient Dome and Aerial Waterfall locations,
+      -- along with each remaining set-aside open sky card, into the top 5 cards of the Summit deck.
+      toShuffle = { aerial, secondThing, openSkiesDeck }
+      number = 5
+      numberWord = 'five'
+    end
+
+    if not aerial or not secondThing then
+      printToAll('Please, shuffle the two locations manually.')
+      return
+    end
+
+    CoroutineLib.yieldSeconds(0.10)
+    DeckLib.shuffleIntoTopOrBottomX(toShuffle, summitDeck, false, number, true)
+    printToAll('Two locations were shuffled with the top ' .. numberWord .. ' cards of the Summit deck.')
+    printToAll('You can continue playing.')
+    currentAct = 2
+    -- Transform this helper into Act II helper
+
+    self.removeButton(0)
+
+    if expeditionDirection == 'western' then
+      self.createButton({
+        label          = "Advance to act III.",
+        click_function = "act3Setup",
+        function_owner = self,
+        position       = { 0, 0.11, 0 },
+        height         = 150,
+        width          = 1800,
+        scale          = { x = 2, y = 2, z = 2 },
+        font_color     = { r = 0, g = 0, b = 0 },
+        color          = { r = 1, g = 1, b = 1 }
+      })
+    else
+      self.createButton({
+        label          = "No more setup to do",
+        click_function = "doNothing",
+        function_owner = self,
+        position       = { 0, 0.11, 0 },
+        height         = 175,
+        width          = 1200,
+        scale          = { x = 2, y = 2, z = 2 },
+        font_color     = { r = 0, g = 0, b = 0 },
+        color          = { r = 1, g = 1, b = 1 }
+      })
+    end
+
+    -- Inform wind helper of the new geometry
+    informWindHelperAct(2)
+  end
+
+  CoroutineLib.start(coroutineAct2Setup)
+end
+
+function act3Setup(_, color)
+  -- Function called by clicking
+
+  -- Verify if logic is correct
+  if expeditionDirection ~= 'western' and expeditionDirection ~= 'eastern' then
+    return
+  end
+  if currentAct ~= 2 then
+    return
+  end
+
+  function coroutineAct3Setup()
+    local escapePreventative = false
+    local ready = false
+
+    -- Step 0.0
+    -- Step 0.1. Are the decks available? Is the chest available?
+    escapePreventative = areDecksUnavailable()
+    if escapePreventative then return end
+    escapePreventative = isChestUnavailable()
+    if escapePreventative then return end
+    -- Grab them
+    local summitDeck = getObjectByName(SUMMIT_DECK_NAME)
+    local openSkiesDeck = getObjectByName(OPEN_SKIES_DECK_NAME)
+    local chest = MythosAreaApi.getSetAsideChest()
+
+    -- Step 0.2
+    -- Verify if the Floating Spire is visible
+    ready = verifyExistenceAndVisibilityOfLocation({ name = FLOATING_SPIRE_NAME })
+    if not ready then
+      printToAll("You cant advance, since you haven't found the Floating Spire.", 'Red')
+      return
+    end
+
+    -- Step 1. Remove Central Spire. Send it to the trash.
+    local centralSpire = getObjectByName(CENTRAL_SPIRE_NAME)
+    if not centralSpire then
+      printToAll("Central Spire not found", 'Red')
+      return
+    end
+    cleanLocation(centralSpire)
+    centralSpire.setPosition(aboveTrash)
+    printToAll("Central Spire was removed", 'White')
+
+
+    -- Step 2. Take almost all remaining locations and openskies and place them on the Summit deck.
+    local locationsToMove = findLocationsToMoveExcept(ACT2_ALL_POSITIONS, FLOATING_SPIRE_NAME)
+    shuffleSafelyLocationsInDeck(locationsToMove, summitDeck)
+    CoroutineLib.yieldSeconds(0.22)
+    printToAll('Locations shuffled into the Summit deck.', 'White')
+    printToAll('Make sure to clean manually any remaining token or card.', 'White')
+
+    -- Step 3. Place locations in the new 4x5 rectangular shape.
+
+    -- Step 3.1 Placing the Floating Spire in the correct space.
+    local floatingSpire = getObjectByName(FLOATING_SPIRE_NAME)
+    transportSafelyToCoordinates(floatingSpire, ACT3_INITIAL_SPIRE)
+    CoroutineLib.yieldSeconds(0.11)
+    if floatingSpire.is_face_down then
+      floatingSpire.flip()
+      CoroutineLib.yieldSeconds(0.11)
+    end
+
+    -- Step 3.2. Move minicards to starting position, the Spire location.
+    local position = PlayAreaApi.gridToWorld(ACT3_INITIAL_SPIRE) + Vector(0.6, 0, 0)
+    moveMiniCardSomewhere({ position = position })
+
+    -- Step 3.3. Place five Open Skies. This should leave the Open Skies deck empty and destroyed.
+    for i, coords in ipairs(ACT3_OPEN_SKIES_INITIAL_POSITIONS) do
+      openSkiesDeck = takeObjectRobust(openSkiesDeck, { position = PlayAreaApi.gridToWorld(coords) })
+    end
+
+    -- Step 3.4. Place 18 cards in the grid.
+    local freePlaces = exclude_pairs(ACT3_ALL_POSITIONS, ACT3_OPEN_SKIES_INITIAL_POSITIONS)
+    freePlaces = exclude_pairs(freePlaces, { ACT3_INITIAL_SPIRE })
+    for i, coords in ipairs(freePlaces) do
+      summitDeck = takeObjectRobust(summitDeck, { position = PlayAreaApi.gridToWorld(coords) })
+      CoroutineLib.yieldSeconds(0.11)
+    end
+
+    -- Step 4. Shuffle one location on the top of the Summit deck
+
+    chest.takeObject({
+      guid = WESTERN_WALL_GUID,
+      position = PlayAreaApi.gridToWorld({ x = 2.3, y = -2.3 })
+    })
+    local westernWall = getObjectFromGUID(WESTERN_WALL_GUID)
+    CoroutineLib.yieldSeconds(0.22)
+    if not westernWall then
+      printToAll('Error in the last step. Taking the Western wall locations out of the bag.')
+      printToAll('Please, shuffle it manually.')
+      return
+    end
+
+    CoroutineLib.yieldSeconds(0.10)
+    DeckLib.shuffleIntoTopOrBottomX(westernWall, summitDeck, false, 3, true)
+    currentAct = 3
+
+    printToAll('Western wall was shuffled with the top three cards of the Summit deck.')
+    printToAll('You can continue playing.')
+
+    self.removeButton(0)
+    self.createButton({
+      label          = "No more setup to do",
+      click_function = "doNothing",
+      function_owner = self,
+      position       = { 0, 0.11, 0 },
+      height         = 175,
+      width          = 1200,
+      scale          = { x = 2, y = 2, z = 2 },
+      font_color     = { r = 0, g = 0, b = 0 },
+      color          = { r = 1, g = 1, b = 1 }
+    })
+
+    -- Inform wind helper of the new geometry
+    informWindHelperAct(3)
+  end
+
+  CoroutineLib.start(coroutineAct3Setup)
+end
+
+function doNothing(_, color)
+  -- function to be called by a button
+  -- This function exists to create a button that does nothing, but raises no error
+end
+
+-- HELPERS TO MOVE CARDS AND TOKENS
+
+function takeObjectRobust(deck, params)
+  -- This function makes deck.takeObject even if deck was reduced to one element, which fails
+
+  if deck.tag == 'Deck' then
+    deck.takeObject(params)
+    if deck.remainder ~= nil then -- only one card remaining, return it
+      deck = deck.remainder
+    end
+  elseif deck.tag == 'Card' then
+    deck.setPosition(params.position)
+  end
+  return deck
+end
+
+function transportSafelyToCoordinates(card, coordinates)
+  -- This moves a card and the things on it, like clues to the coordinates in the objective
+  card.setLock(false)
+  CoroutineLib.yieldSeconds(0.11)
+  moveCardToCoordinates(card, coordinates)
+  CoroutineLib.yieldSeconds(0.22)
+end
+
+function shuffleSafelyLocationsInDeck(tableo, deck)
+  -- This allows getting a lot of locations quickly into a deck, like the Summit Deck
+  local aboveDeck = deck.getPosition() + Vector(0, 0.8, 0)
+  for _, obj in ipairs(tableo) do
+    cleanLocation(obj)
+    CoroutineLib.yieldSeconds(0.02)
+    DeckLib.placeOrMergeIntoDeck(obj, aboveDeck, { x = 0, y = 270, z = 180 }, false, false, true)
+    CoroutineLib.yieldSeconds(0.02)
+  end
+
+  CoroutineLib.yieldSeconds(0.10)
+  deck.shuffle()
+  CoroutineLib.yieldSeconds(0.10)
+end
+
+function moveMiniCardSomewhere(params)
+  local minis = getObjectsWithTag("Minicard")
+  local deltaV = params.delta or Vector(0.5, 0, 0.5)
+  local destination = params.position
+  if not destination or not minis then
+    return
+  end
+  for _, mini in ipairs(minis) do
+    destination = destination + deltaV
+    mini.setPosition(destination)
+  end
+end
+
+function makeSureIsFaceUp(card)
+  if card.is_face_down then
+    card.flip()
+  end
+end
+
+function makeSureIsFaceDown(card)
+  if not card.is_face_down then
+    card.flip()
+  end
+end
+
+function cleanLocation(location)
+  -- remove tokens from the card (does not remove chaos tokens)
+  local trash = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+  for _, obj in ipairs(SearchLib.onObject(location, "isTileOrToken")) do
+    if not obj.getLock() and obj.interactable then
+      trash.putObject(obj)
+    end
+  end
+end
+
+function placeStarSpawnOnDeck()
+  local starSpawnDeck = getObjectFromGUID(STAR_SPAWN_DECK_GUID)
+  if not starSpawnDeck then
+    printToAll('Star Spawn encounter set not found in the table.')
+    return
+  end
+  starSpawnDeck.shuffle()
+  CoroutineLib.yieldSeconds(0.10)
+  local numberToTheTrash = nil
+  if expeditionDirection == 'western' then
+    numberToTheTrash = 2
+  elseif expeditionDirection == 'eastern' then
+    numberToTheTrash = 3
+  end
+
+  for j = 1, numberToTheTrash do
+    starSpawnDeck = takeObjectRobust(starSpawnDeck, { position = aboveTrash })
+    CoroutineLib.yieldSeconds(0.20)
+  end
+
+  -- Right here starSpawnDeck is either a deck or a card
+
+  DeckLib.placeOrMergeIntoDeck(starSpawnDeck, MythosAreaApi.getEncounterDeckPosition(),
+    { x = 0, y = 270, z = 180 },
+    false, false, true)
+  CoroutineLib.yieldSeconds(0.1)
+end
+
+function moveCardToCoordinates(card, coordinates)
+    if currentlyMoving then return end
+    currentlyMoving = true
+    Wait.time(function() currentlyMoving = false end, 0.9)
+
+    local currentGrid  = LocationLib.getCurrentGrid(card)
+    local currentPos   = PlayAreaApi.gridToWorld(currentGrid)
+    local objectivePos = PlayAreaApi.gridToWorld(coordinates)
+    local moveVector   = objectivePos - currentPos
+
+    moveObjectsByOffset(LocationLib.getObjectsAt(currentGrid), moveVector)
+end
+
+function moveObjectsByOffset(objects, offset)
+  for _, obj in ipairs(objects) do
+    if obj ~= nil then
+      local pos = obj.getPosition() + offset
+      obj.setLock(true)
+
+      if obj.type == "Card" or obj.type == "Deck" then
+        -- move cards / decks + objects on them
+        GlobalApi.moveCardWithTokens(obj, pos)
+      else
+        -- move other objects
+        obj.setPosition(pos)
+      end
+
+      Wait.time(function()
+        if obj ~= nil then
+          obj.setLock(false)
+          obj.setPosition(pos)
+          obj.resting = true
+        end
+      end, 0.9)
+    end
+  end
+end
+
+-- HELPERS TO IDENTIFY LOCATIONS AND OBJECTS
+
+function isLocationOrOpenSkies(obj)
+  local rawNotes = obj.getGMNotes() or "{}"
+  local md = JSON.decode(rawNotes) or {}
+  local type = md['type'] or ''
+  return type == 'Location' or obj.getName() == 'Open Sky'
+end
+
+function verifyExistenceAndVisibilityOfLocation(params)
+  -- This asumes the params make reference to a location card
+  local guid = params.guid
+  local name = nil
+  obj = nil
+  if not guid then
+    name = params.name
+    if not name then
+      return
+    end
+  end
+
+  if guid then
+    obj = getObjectFromGUID(guid)
+  elseif name then
+    obj = getObjectByName(name)
+  end
+
+  if not obj then
+    return false
+  end
+
+  if obj.is_face_down then
+    return false
+  end
+
+  return true
+end
+
+function findLocationsToMoveExcept(tableo, name)
+  local locationsToMove = {}
+  for _, coords in ipairs(tableo) do
+    local found = {}
+    found = LocationLib.getObjectsAt(coords)
+    for _, obj in ipairs(found) do
+      if isLocationOrOpenSkies(obj) then
+        if obj.getName() ~= name then
+          table.insert(locationsToMove, obj)
+        end
+      end
+    end
+  end
+  return locationsToMove
+end
+
+function areDecksUnavailable()
+  -- Very specific function
+  local escape = false
+  local summitDeck = getObjectByName(SUMMIT_DECK_NAME)
+  local openSkiesDeck = getObjectByName(OPEN_SKIES_DECK_NAME)
+  if not summitDeck then
+    log("The Summit deck was not found.")
+    escape = true
+  end
+  if not openSkiesDeck then
+    log("The Open Skies deck was not found.")
+    escape = true
+  end
+  return escape
+end
+
+function isChestUnavailable()
+  if MythosAreaApi.getSetAsideChest() then
+    return false
+  end
+  return true
+end
+
+function informWindHelperAct(number)
+  local windhelper = getObjectFromGUID(WIND_CONTROLLER_GUID)
+  if windhelper then
+    if number == 1 then
+      windhelper.call('updateToAct1')
+    elseif number == 2 then
+      windhelper.call('updateToAct2')
+    elseif number == 3 then
+      windhelper.call('updateToAct3')
+    end
+  else
+    printToAll('The Wind controller was not found. It will not work.')
+  end
+end
+
+function informWindHelperExpeditionDirection(expeditionDirectionP)
+  local windhelper = getObjectFromGUID(WIND_CONTROLLER_GUID)
+  if expeditionDirectionP ~= 'eastern' and expeditionDirectionP ~= 'western' then
+    log('informWindHelperExpeditionDirection::value errror')
+  end
+  if windhelper then
+    windhelper.setVar('expeditionDirection', expeditionDirectionP)
+  else
+    printToAll('The Wind controller was not found. It will not work.')
+  end
+end
+
+-- GENERIC HELPERS
+
+function getObjectByName(name)
+  for _, obj in ipairs(getObjects()) do
+    if obj.getName() == name then
+      return obj
+    end
+  end
+end
+
+function exclude_pairs(listA, listB)
+  -- This function performs the exclusion operation on a set
+  -- And that set is made of pairs
+
+  local function same_pos(a, b)
+    return a.x == b.x and a.y == b.y
+  end
+
+  local result = {}
+
+  for _, a in ipairs(listA) do
+    local found = false
+    for _, b in ipairs(listB) do
+      if same_pos(a, b) then
+        found = true
+        break
+      end
+    end
+    if not found then
+      table.insert(result, a)
+    end
+  end
+
+  return result
+end
+
+function drawRowNumber()
+-- Definir las posiciones Y y sus números correspondientes
+  local posiciones = {
+    { y = 1,  texto = "1" },
+    { y = 0,  texto = "2" },
+    { y = -1, texto = "3" }
+    -- { y = -2, texto = "4" }
+  }
+
+  -- Coordenada X fija
+  local x_fijo = 0.5
+
+  -- Colocar cada número
+  for _, posData in ipairs(posiciones) do
+    -- Crear coordenadas de grid
+    local gridCoords = { x = x_fijo, y = posData.y }
+
+    -- Convertir a posición mundial de TTS
+    local worldPos = PlayAreaApi.gridToWorld(gridCoords)
+
+    -- Crear el texto en esa posición
+    local textoObj = spawnObject({
+      type = "3DText",
+      position = worldPos,
+      rotation = { x = 90, y = 90, z = 0 },
+      scale = { x = 1, y = 1, z = 1 }
+    })
+
+    textoObj.TextTool.setValue(posData.texto)
+    textoObj.TextTool.setFontSize(100)                        -- Tamaño grande para mejor visibilidad
+    textoObj.TextTool.setFontColor({ r = 0.2, g = 0.2, b = 0.6 })   -- Light blueish grey
+
+    -- Opcional: Ajustar altura para que quede mejor visualmente
+    local ajusteAltura = { x = 0, y = 0.5, z = 0 }
+    textoObj.setPosition({
+      x = worldPos.x + ajusteAltura.x,
+      y = worldPos.y + ajusteAltura.y,
+      z = worldPos.z + ajusteAltura.z
+    })
+  end
+
+end
+

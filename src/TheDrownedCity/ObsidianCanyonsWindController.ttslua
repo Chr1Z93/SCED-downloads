@@ -1,0 +1,519 @@
+local CoroutineLib     = require("util/CoroutineLib")
+local DeckLib          = require("util/DeckLib")
+local PlayAreaApi      = require("playarea/PlayAreaApi")
+local SearchLib        = require("util/SearchLib")
+local LocationLib      = require("LocationLib")
+local GUIDReferenceApi = require("core/GUIDReferenceApi")
+
+
+-- GUIDS
+local WIND_CARD_GUID_EASTERN               = "682cd3"
+local WIND_CARD_GUID_WESTERN               = "82b859"
+
+-- Non movable locations
+local CENTRAL_SPIRE_NAME                   = "Central Spire"
+local RLYEH_STREETS_NAME                   = "Rylieh Streets"
+local WESTERN_WALL_NAME                    = "Western Wall"
+local FLOATING_SPIRE_NAME                  = "Floating Spire"
+-- Decks
+local SUMMIT_DECK_NAME                     = "Summit Deck"
+local ROTATION                             = { x = 0, y = 270, z = 180 }
+local LIGHT_BLUE = {r=0.8, g=0.9, b=1}
+local LIGHT_GREEN                           = { r = 0.8, g = 1, b = 0.9 }
+-- Act 1
+
+local ACT1_RIGHTMOST_POSITIONS             = {
+  { x = 2, y = 0 }
+}
+local ACT1_LEFTMOST_POSITIONS              = {
+  { x = -1, y = 1 },
+  { x = 0,  y = -1 },
+}
+
+local ACT1_NotRIGHTMOST_POSITIONS          = { -- this has to be sorted
+  { x = 1,  y = 0 },
+  { x = 0,  y = 0 },
+  { x = -1, y = 0 }
+}
+
+local ACT1_NotLEFTMOST_POSITIONS_BOTTOMROW = { -- this has to be sorted
+  { x = 1, y = -1 },
+  { x = 2, y = -1 },
+}
+
+local ACT1_NotLEFTMOST_POSITIONS_TOPROW    = { -- this has to be sorted
+  { x = 0, y = 1 },
+  { x = 1, y = 1 },
+  { x = 2, y = 1 },
+}
+
+-- Act 2
+
+local ACT2_RIGHTMOST_POSITIONS             = ACT1_RIGHTMOST_POSITIONS
+
+local ACT2_LEFTMOST_POSITIONS              = {
+  { x = -2, y = 1 },
+  { x = -2, y = -1 },
+}
+
+local ACT2_NotRIGHTMOST_POSITIONS          = { -- this has to be sorted
+  { x = 1,  y = 0 },
+  { x = 0,  y = 0 },
+  { x = -1, y = 0 }
+}
+
+local ACT2_NotLEFTMOST_POSITIONS_BOTTOMROW = { -- this has to be sorted
+  { x = -1, y = -1 },
+  { x = 0,  y = -1 },
+  { x = 1,  y = -1 },
+  { x = 2,  y = -1 },
+}
+
+local ACT2_NotLEFTMOST_POSITIONS_TOPROW    = { -- this has to be sorted
+  { x = -1, y = 1 },
+  { x = 0,  y = 1 },
+  { x = 1,  y = 1 },
+  { x = 2,  y = 1 },
+}
+
+-- Act 3
+
+local ACT3_RIGHTMOST_POSITIONS             = {
+  { x = 2, y = 0 },
+  { x = 2, y = -2 }
+}
+
+local ACT3_LEFTMOST_POSITIONS              = {
+  { x = -1, y = 1 },
+  { x = -2, y = -1 },
+}
+
+ACT3_NotRIGHTMOST_POSITIONS_BOTTOMROW      = {
+  { x = 1,  y = -2 },
+  { x = 0,  y = -2 },
+  { x = -1, y = -2 },
+  { x = -2, y = -2 }
+}
+
+ACT3_NotRIGHTMOST_POSITIONS_TOPROW         = {
+  { x = 1,  y = 0 },
+  { x = 0,  y = 0 },
+  { x = -1, y = 0 },
+  { x = -2, y = 0 }
+}
+
+ACT3_NotLEFTMOST_POSITIONS_BOTTOMROW       = {
+  { x = -1, y = -1 },
+  { x = 0,  y = -1 },
+  { x = 1,  y = -1 },
+  { x = 2,  y = -1 },
+}
+
+ACT3_NotLEFTMOST_POSITIONS_TOPROW          = {
+  { x = 0,  y = 1 },
+  { x = 1,  y = 1 },
+  { x = 2,  y = 1 },
+}
+
+function onSave()
+  return JSON.encode({
+    currentAct = currentAct,
+    expeditionDirection = expeditionDirection,
+    windDirection = windDirection
+  })
+end
+
+function loadFromSaveTable(savedData)
+  for var, val in pairs(JSON.decode(savedData)) do
+    _G[var] = val
+  end
+end
+
+function onLoad(savedData)
+  if savedData and savedData ~= "" then
+    loadFromSaveTable(savedData)
+  else
+    currentAct = 0
+    expeditionDirection = nil
+    windDirection = nil
+  end
+
+  self.createButton({
+    label          = "←Eastern Winds blow",
+    click_function = "easternWindsBlow",
+    function_owner = self,
+    position       = { 0, 0.11, -0.5 },
+    height         = 150,
+    width          = 1400,
+    scale          = { x = 2, y = 2, z = 2 },
+    font_color     = { r = 0, g = 0, b = 0 },
+    color          = { r = 1, g = 1, b = 1 }
+  })
+
+  self.createButton({
+    label          = "Western Winds blow→",
+    click_function = "westernWindsBlow",
+    function_owner = self,
+    position       = { 0, 0.11, 0.5 },
+    height         = 150,
+    width          = 1400,
+    scale          = { x = 2, y = 2, z = 2 },
+    font_color     = { r = 0, g = 0, b = 0 },
+    color          = { r = 1, g = 1, b = 1 }
+  })
+end
+
+function updateToAct1()
+  currentAct = 1
+end
+
+function updateToAct2()
+  currentAct = 2
+end
+
+function updateToAct3()
+  currentAct = 3
+end
+
+function genericWindsBlow()
+  if windDirection ~= 'western' and windDirection ~= 'eastern' then
+    return
+  end
+
+  function coroutineGenericWindsBlow()
+    -- Logical verification
+    if currentAct == 0 then
+      printToAll('Please, click setup before.')
+      return
+    end
+
+    local summitDeck = getObjectByName(SUMMIT_DECK_NAME)
+    local aboveSummitDeck = nil
+    if not summitDeck then
+      printToAll('We assume the Summit deck is on the topleft corner.')
+      aboveSummitDeck = PlayAreaApi.gridToWorld({ x = -2, y = 2 }) + Vector(0, 0.7, 0)
+    else
+      aboveSummitDeck = summitDeck.getPosition() + Vector(0, 0.7, 0)
+    end
+
+    -- Start of the program
+    if windDirection == 'western' then
+      printToAll('Western Winds blow strongly.', LIGHT_BLUE)
+    elseif windDirection == 'eastern' then
+      printToAll('Eastern Winds blow strongly.', LIGHT_GREEN)
+    end
+
+    -- Choose coordinates to remove.
+    local coordinatesToRemove = {}
+    local rowNumber = {}
+    local isFrozen = {}
+
+    if currentAct == 1 and windDirection == 'western' then
+      coordinatesToRemove = ACT1_RIGHTMOST_POSITIONS
+      rowNumber = { 2 }
+      isFrozen = { false }
+    elseif currentAct == 1 and windDirection == 'eastern' then
+      coordinatesToRemove = ACT1_LEFTMOST_POSITIONS
+      rowNumber = { 1, 3 }
+      isFrozen = { false, false }
+    elseif currentAct == 2 and windDirection == 'western' then
+      coordinatesToRemove = ACT2_RIGHTMOST_POSITIONS
+      rowNumber = { 2 }
+      isFrozen = { false }
+    elseif currentAct == 2 and windDirection == 'eastern' then
+      coordinatesToRemove = ACT2_LEFTMOST_POSITIONS
+      rowNumber = { 1, 3 }
+      isFrozen = { false, false }
+    elseif currentAct == 3 and windDirection == 'western' then
+      coordinatesToRemove = ACT3_RIGHTMOST_POSITIONS
+      rowNumber = { 2, 4 }
+      isFrozen = { false, false }
+    elseif currentAct == 3 and windDirection == 'eastern' then
+      coordinatesToRemove = ACT3_LEFTMOST_POSITIONS
+      rowNumber = { 1, 3 }
+      isFrozen = { false, false }
+    end
+
+    -- Step 2. Find if any of the to-move locations freezes the row
+    local locationsToRemove = {}
+    local params = canRemoveLocationsToSummitDeck(coordinatesToRemove, isFrozen)
+    isFrozen = params.isFrozen
+    locationsToRemove = params.locationsToRemove
+
+    -- Shuffle the Xmost opensky or summit location in rows X and Y and place them on top
+    -- of the summit deck, or place them into the victory
+    -- Shuffle the cards you remove
+    locationsToRemove = randomizeTwo(locationsToRemove)
+    placeOnDeckSafelyCoroutine(locationsToRemove, aboveSummitDeck)
+
+    -- Show message for user
+    if #locationsToRemove == 2 then
+      printToAll('Two locations were placed on top of the summit deck. Don\'t shuffle it.')
+    elseif #locationsToRemove == 1 then
+      printToAll('One location was placed on top of the summit deck. Don\'t shuffle it.')
+    elseif #locationsToRemove == 0 then
+      printToAll('No location was placed on top of the summit deck. Don\'t shuffle it.', 'Red')
+    end
+
+    -- Step 2. Choose what coordinates to move.
+    -- Depending on the act and the windDirection, we will move some coordinates or others
+    CoroutineLib.yieldSeconds(0.1)
+    if windDirection == 'western' and currentAct == 1 then
+      someRows = { ACT1_NotRIGHTMOST_POSITIONS }
+    elseif windDirection == 'eastern' and currentAct == 1 then
+      someRows = { ACT1_NotLEFTMOST_POSITIONS_TOPROW, ACT1_NotLEFTMOST_POSITIONS_BOTTOMROW }
+    elseif windDirection == 'western' and currentAct == 2 then
+      someRows = { ACT2_NotRIGHTMOST_POSITIONS }
+    elseif windDirection == 'eastern' and currentAct == 2 then
+      someRows = { ACT2_NotLEFTMOST_POSITIONS_TOPROW, ACT2_NotLEFTMOST_POSITIONS_BOTTOMROW }
+    elseif windDirection == 'western' and currentAct == 3 then
+      someRows = { ACT3_NotRIGHTMOST_POSITIONS_TOPROW, ACT3_NotRIGHTMOST_POSITIONS_BOTTOMROW }
+    elseif windDirection == 'eastern' and currentAct == 3 then
+      someRows = { ACT2_NotLEFTMOST_POSITIONS_TOPROW, ACT2_NotLEFTMOST_POSITIONS_BOTTOMROW }
+    end
+
+    -- Step 2.1 We have to find if any row is frozen because of the presence of a not movable object
+    -- Double for loop, we run row by row, then right to left
+    for i = 1, #coordinatesToRemove do
+      if not isFrozen[i] then
+        for _, coordinates in ipairs(someRows[i]) do
+          found = LocationLib.getObjectsAt(coordinates)
+          -- Studying a determinate coordinate
+          for _, obj in ipairs(found) do
+            if isLocationOrOpenSkies(obj) and cannotBeMovedLocation(obj) then
+              isFrozen[i] = true
+            end
+          end
+        end
+      end
+    end
+
+    -- Winds::Slide each open sky and Summit location in rows X and Y once to the direction
+    moveCardsCarefully(someRows, isFrozen, rowNumber)
+
+    -- Winds:: Flip this card
+    if windDirection == 'western' then
+      newDirection = 'eastern'
+    else
+      newDirection = 'eastern'
+    end
+
+    log('█░█░█ █ █▄░█ █▀▄ █▀▀ ▄▀█ █▀█')
+    log('▀▄▀▄▀ █ █░▀█ █▄▀ █▄▄ █▀█ █▀▄')
+
+    placeWindCardAccordingly()
+  end
+
+  CoroutineLib.start(coroutineGenericWindsBlow)
+end
+
+function westernWindsBlow()
+  -- To be called by clicking a button
+  windDirection = 'western'
+  genericWindsBlow()
+end
+
+function easternWindsBlow()
+  -- To be called by clicking a button
+  windDirection = 'eastern'
+  genericWindsBlow()
+end
+
+-- HELPER, LOCATION IDENTIFICATION
+
+function isLocationOrOpenSkies(obj)
+  local rawNotes = obj.getGMNotes() or "{}"
+  local md = JSON.decode(rawNotes) or {}
+  local type = md['type'] or ''
+  return type == 'Location' or obj.getName() == 'Open Sky'
+end
+
+function isVisibleVPlocation(obj)
+  -- In this algorithm, if a VP card is visible it might not be removedTokens
+  -- We need this logic
+  local rawNotes = obj.getGMNotes() or "{}"
+  local md = JSON.decode(rawNotes) or {}
+  local type = md['type'] or ''
+  local victory = md['victory'] or ''
+  if type ~= 'Location' then
+    return false
+  end
+  if obj.is_face_down then
+    return false
+  end
+  if not victory then
+    return false
+  end
+  if victory then
+    return true
+  end
+end
+
+function cannotBeMovedLocation(obj)
+  if obj.is_face_down then
+    return false -- can be moved
+  end
+  if obj.getName() == RLYEH_STREETS_NAME then
+    return true
+  elseif obj.getName() == CENTRAL_SPIRE_NAME then
+    return true
+  elseif obj.getName() == FLOATING_SPIRE_NAME then
+    return true
+  elseif obj.getName() == WESTERN_WALL_NAME then
+    return true
+  end
+  return false
+end
+
+-- HELPER MOVER
+
+function moveCardsCarefully(someRows, isFrozen, rowNumber)
+  -- someRows is a table of tables
+
+  if #isFrozen ~= #someRows or #isFrozen ~= #rowNumber or #someRows ~= #rowNumber then
+    log("moveCardsCarefully::incorrect call")
+  end
+
+  -- Consult object variable
+  if windDirection == 'western' then
+    directionToMove = 'east'
+  elseif windDirection == 'eastern' then
+    directionToMove = 'west'
+  end
+
+  for i = 1, #someRows do
+    if isFrozen[i] == false then
+      printToAll('Moving row number ' .. tostring(rowNumber[i]))
+      for _, coordinates in ipairs(someRows[i]) do
+        found = LocationLib.getObjectsAt(coordinates) -- The pair of coordinates is well defined
+        for _, obj in ipairs(found) do
+          if isLocationOrOpenSkies(obj) and not cannotBeMovedLocation(obj) then
+            obj.highlightOn('Orange', 0.1)
+            LocationLib.moveCardInDirection(obj, directionToMove)
+            CoroutineLib.yieldSeconds(1)
+          end
+        end
+      end
+    elseif isFrozen[i] == true then
+      printToAll('We dont move the row number ' .. tostring(rowNumber[i]) .. ', because there is a "locked" location.')
+      printToAll('Please, move row card manually.')
+    end
+  end
+end
+
+function placeWindCardAccordingly()
+  local thidGuid = nil
+  if expeditionDirection == 'western' then
+    thidGuid = WIND_CARD_GUID_WESTERN
+  elseif expeditionDirection == 'eastern' then
+    thidGuid = WIND_CARD_GUID_EASTERN
+  else
+    error('placeWindCardAccordingly:: expeditionDirection has a wrong value', 2)
+  end
+
+  local card = getObjectFromGUID(thidGuid)
+  if not card then
+    error('placeWindCardAccordingly::card not found', 2)
+  end
+
+  if windDirection == 'eastern' then
+    makeSureIsFaceUp(card)
+    printToAll('→→ Winds will blow westwards →→.')
+  elseif windDirection == 'western' then
+    makeSureIsFaceDown(card)
+    printToAll('←← Eastern winds will blow ←←.')
+  else
+    error('placeWindCardAccordingly:: wind direction has a wrong value', 2)
+  end
+end
+
+function canRemoveLocationsToSummitDeck(coordinatesToRemove, isFrozen)
+  -- This answers the question Which locations are going to be removed and
+  -- what rows are frozen
+
+  if #coordinatesToRemove ~= #isFrozen then
+    log('canRemoveLocationsToSummitDeck::logic error')
+    return
+  end
+
+  local locationsToRemove = {}
+
+  for i = 1, #coordinatesToRemove do
+    local found = LocationLib.getObjectsAt(coordinatesToRemove[i])
+    for _, obj in ipairs(found) do
+      if isVisibleVPlocation(obj) then
+        isFrozen[i] = true
+      elseif isLocationOrOpenSkies(obj) and not cannotBeMovedLocation(obj) then
+        table.insert(locationsToRemove, obj)
+      elseif isLocationOrOpenSkies(obj) and cannotBeMovedLocation(obj) then
+        isFrozen[i] = true
+      end
+    end
+  end
+
+  return { locationsToRemove = locationsToRemove, isFrozen = isFrozen }
+end
+
+function placeOnDeckSafelyCoroutine(locations, deckLocation)
+  -- Places location-cards on a position slowly
+  for j = 1, #locations do
+    local obj = locations[j]
+    obj.highlightOn({ r = 1, g = 1, b = 0 }, 0.1)
+    cleanLocation(obj)
+    CoroutineLib.yieldSeconds(0.05)
+    makeSureIsFaceDown(obj)
+    CoroutineLib.yieldSeconds(0.05)
+    DeckLib.placeOrMergeIntoDeck(obj, deckLocation, ROTATION, false, false, true)
+    CoroutineLib.yieldSeconds(0.05)
+  end
+end
+
+-- HELPER, GENERIC
+
+function getObjectByName(name)
+  -- Just checks if a location has some kind of victory
+  for _, obj in ipairs(getObjects()) do
+    if obj.getName() == name then
+      return obj
+    end
+  end
+end
+
+function cleanLocation(location)
+  -- remove tokens from the card (does not remove chaos tokens)
+  local trash = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+  for _, obj in ipairs(SearchLib.onObject(location, "isTileOrToken")) do
+    if obj.memo and not obj.getLock() and obj.interactable then
+      trash.putObject(obj)
+    end
+  end
+end
+
+function makeSureIsFaceUp(card)
+  if card.is_face_down then
+    card.flip()
+  end
+end
+
+function makeSureIsFaceDown(card)
+  if not card.is_face_down then
+    card.flip()
+  end
+end
+
+function randomizeTwo(pairOrNot)
+  if #pairOrNot == 0 then
+    return pairOrNot
+  end
+  if #pairOrNot == 1 then
+    return pairOrNot
+  end
+
+  assert(#pairOrNot == 2, "Implementation error.")
+
+  if math.random(2) == 1 then
+    return { pairOrNot[1], pairOrNot[2] }
+  else
+    return { pairOrNot[2], pairOrNot[1] }
+  end
+end
