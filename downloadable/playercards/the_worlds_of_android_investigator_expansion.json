@@ -39,8 +39,584 @@
     }
   },
   "LuaScript": "-- Bundled by luabundle {\"version\":\"1.6.0\"}\nlocal __bundle_require, __bundle_loaded, __bundle_register, __bundle_modules = (function(superRequire)\n\tlocal loadingPlaceholder = {[{}] = true}\n\n\tlocal register\n\tlocal modules = {}\n\n\tlocal require\n\tlocal loaded = {}\n\n\tregister = function(name, body)\n\t\tif not modules[name] then\n\t\t\tmodules[name] = body\n\t\tend\n\tend\n\n\trequire = function(name)\n\t\tlocal loadedModule = loaded[name]\n\n\t\tif loadedModule then\n\t\t\tif loadedModule == loadingPlaceholder then\n\t\t\t\treturn nil\n\t\t\tend\n\t\telse\n\t\t\tif not modules[name] then\n\t\t\t\tif not superRequire then\n\t\t\t\t\tlocal identifier = type(name) == 'string' and '\\\"' .. name .. '\\\"' or tostring(name)\n\t\t\t\t\terror('Tried to require ' .. identifier .. ', but no such module has been registered')\n\t\t\t\telse\n\t\t\t\t\treturn superRequire(name)\n\t\t\t\tend\n\t\t\tend\n\n\t\t\tloaded[name] = loadingPlaceholder\n\t\t\tloadedModule = modules[name](require, loaded, register, modules)\n\t\t\tloaded[name] = loadedModule\n\t\tend\n\n\t\treturn loadedModule\n\tend\n\n\treturn require, loaded, register, modules\nend)(nil)\n__bundle_register(\"MemoryBag\", function(require, _LOADED, __bundle_register, __bundle_modules)\nfunction updateSave()\n  self.script_state = JSON.encode({ ml = memoryList, setupButton = setupButton })\nend\n\nfunction onLoad(savedData)\n  if savedData and savedData ~= \"\" then\n    local loadedData = JSON.decode(savedData)\n    memoryList = loadedData.ml\n    setupButton = loadedData.setupButton\n  end\n\n  memoryList = memoryList or {}\n  self.addContextMenuItem(\"Toggle setup button\", toggleSetupButton)\n\n  -- make sure the model is loaded so that we can use the bounds\n  Wait.condition(function()\n    Wait.frames(function()\n      generateButtonData()\n      createMemoryActionButtons()\n    end, 5)\n  end, function() return not self.loading_custom end)\nend\n\nfunction generateButtonData()\n  local selfScale = self.getScale()\n  local selfBounds = self.getBoundsNormalized()\n  buttonScale = Vector(1 / selfScale.x, 1, 1 / selfScale.z)\n\n  buttonX = math.max(selfBounds.size.x / 5, 1.5) / selfScale.x\n  buttonY = -(selfBounds.size.y / 2 + selfBounds.offset.y) / selfScale.y + 0.5\n  buttonZ = {}\n  for i = 1, 4 do\n    buttonZ[i] = (selfBounds.size.z / 2 + i * 1.15 - 0.15) / selfScale.z\n  end\n\n  local upperButtonMult = 1.1\n  buttonData = {\n    [\"Add\"]       = {\n      tooltip = \"Add highlighted objects to memory\",\n      pos = { buttonX * upperButtonMult, buttonY, -buttonZ[1] },\n      fColor = { 0.25, 1, 0.25 }\n    },\n    [\"Cancel\"]    = {\n      tooltip = \"Abort setup mode\",\n      pos = { -buttonX * upperButtonMult, buttonY, -buttonZ[1] },\n    },\n    [\"Internal\"]    = {\n      tooltip = \"Copy memory from internal bags\",\n      pos = { -buttonX * upperButtonMult, buttonY, -buttonZ[4] },\n    },\n    [\"Place\"]     = {\n      pos = { buttonX, buttonY, buttonZ[1] },\n      fSize = 350,\n      w = 1200\n    },\n    [\"Recall\"]    = {\n      pos = { -buttonX, buttonY, buttonZ[1] },\n      fSize = 350,\n      w = 1200\n    },\n    [\"Remove\"]    = {\n      tooltip = \"Remove highlighted objects from memory\",\n      pos = { buttonX * upperButtonMult, buttonY, -buttonZ[2] },\n      fColor = { 1, 0.25, 0.25 }\n    },\n    [\"Reset\"]     = {\n      tooltip = \"Completely reset memory\",\n      pos = { -buttonX * upperButtonMult, buttonY, -buttonZ[3] },\n    },\n    [\"Selection\"] = {\n      tooltip = \"Add / Remove highlight for selected objects\",\n      pos = { -buttonX * upperButtonMult, buttonY, -buttonZ[2] },\n    },\n    [\"Setup\"]     = {\n      pos = { 0, buttonY, -buttonZ[1] },\n      fSize = 350\n    },\n    [\"Update\"]   = {\n      tooltip = \"Update memory for placed objects\",\n      pos = { buttonX * upperButtonMult, buttonY, -buttonZ[3] },\n      fColor = { 0.75, 0.75, 1 }\n    }\n  }\nend\n\nfunction createButtonByName(label)\n  self.createButton({\n    label = label,\n    tooltip = buttonData[label].tooltip or \"\",\n    position = buttonData[label].pos,\n    height = buttonData[label].h or 500,\n    width = buttonData[label].w or 1500,\n    font_size = buttonData[label].fSize or 325,\n    font_color = buttonData[label].fColor or { 1, 1, 1 },\n    function_owner = self,\n    color = { 0, 0, 0 },\n    scale = buttonScale,\n    click_function = \"buttonClick_\" .. string.lower(string.gsub(label, \"%s+\", \"\"))\n  })\nend\n\n-- context menu function to toggle the setup button visibility\nfunction toggleSetupButton()\n  if setupButton then\n    setupButton = false\n    broadcastToAll(\"Setup button disabled\")\n  else\n    setupButton = true\n    broadcastToAll(\"Setup button enabled\")\n  end\n  updateSave()\n  removeAllHighlights()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_setup()\n  tempList = {}\n  self.clearButtons()\n  createButtonsOnAllObjects()\n  createSetupActionButtons()\nend\n\nfunction broadcastFeedback(str1, count, name, str2, color)\n  local bcStr = count .. \" \" .. name\n  if str1 then\n    bcStr = str1 .. \" \" .. bcStr\n  end\n  if count ~= 1 then\n    bcStr = bcStr .. \"s\"\n  end\n  if str2 then\n    bcStr = bcStr .. \" \" .. str2\n  end\n  broadcastToAll(bcStr, color)\nend\n\nfunction createButtonsOnAllObjects()\n  buttonIndexMap = {}\n\n  local buttonCount = 0\n  for _, obj in ipairs(getObjects()) do\n    if obj ~= self and obj.type ~= \"Scripting\" and obj.type ~= \"Hand\" then\n      local objPos = obj.getPosition()\n      local objBounds = obj.getBounds()\n      local offSet = Vector(0, objBounds.size.y / 2 + 1, 0)\n      local scaleVec = Vector(-1, 1, 1)\n      local buttonPos = self.positionToLocal(objPos + offSet):scale(scaleVec)\n\n      local fName = \"selectButton_\" .. buttonCount\n      _G[fName] = function() buttonClick_selectObject(obj) end\n      self.createButton({\n        click_function = fName,\n        function_owner = self,\n        position = buttonPos,\n        height = 600,\n        width = 600,\n        color = { 0.75, 0.25, 0.25, 0.75 },\n        scale = buttonScale\n      })\n      buttonIndexMap[obj.getGUID()] = buttonCount\n      buttonCount = buttonCount + 1\n    end\n  end\nend\n\nfunction createSetupActionButtons()\n  createButtonByName(\"Cancel\")\n  createButtonByName(\"Selection\")\n  createButtonByName(\"Reset\")\n  createButtonByName(\"Internal\")\n  createButtonByName(\"Add\")\n\n  if next(memoryList) then\n    createButtonByName(\"Remove\")\n    createButtonByName(\"Update\")\n  end\nend\n\nfunction buttonClick_selectObject(obj)\n  local guid = obj.getGUID()\n  local index = buttonIndexMap[guid]\n  if not index then return end\n\n  if tempList[guid] == nil then\n    self.editButton({ index = index, color = { 0, 1, 0, 0.75 } })\n    tempList[guid] = {\n      pos = roundVector(obj.getPosition(), 3),\n      rot = roundVector(obj.getRotation(), 0),\n      lock = obj.getLock()\n    }\n    obj.highlightOn({ 0, 1, 0 })\n  else\n    self.editButton({ index = index, color = { 0.75, 0.25, 0.25, 0.75 } })\n    tempList[guid] = nil\n    obj.highlightOff()\n  end\nend\n\nfunction buttonClick_cancel()\n  broadcastToAll(\"Setup Canceled\")\n  removeAllHighlights()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_selection(_, playerColor)\n  local objList = Player[playerColor].getSelectedObjects()\n\n  if #objList == 0 then\n    broadcastToAll(\"No objects selected!\")\n  else\n    broadcastFeedback(\"Toggled selection for\", #objList, \"object\")\n    for _, obj in ipairs(objList) do\n      buttonClick_selectObject(obj)\n    end\n  end\nend\n\nfunction buttonClick_add()\n  local count = 0\n  for _ in pairs(tempList) do\n    count = count + 1\n  end\n  broadcastFeedback(\"Added\", count, \"Object\", \"from selection\")\n\n  -- copy data from tempList to memoryList\n  for guid, entry in pairs(tempList) do\n    memoryList[guid] = entry\n  end\n\n  updateSave()\n  removeAllHighlights()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_update()\n  local count = 0\n  for guid, entry in pairs(memoryList) do\n    local obj = getObjectFromGUID(guid)\n    if obj ~= nil then\n      count = count + 1\n      memoryList[guid] = {\n        pos = roundVector(obj.getPosition(), 3),\n        rot = roundVector(obj.getRotation(), 0),\n        lock = obj.getLock()\n      }\n    end\n  end\n  broadcastFeedback(\"Updated data for\", count, \"Object\")\n  updateSave()\nend\n\nfunction buttonClick_remove()\n  local count = 0\n  for guid in pairs(tempList) do\n    count = count + 1\n    memoryList[guid] = nil\n  end\n  broadcastFeedback(_, count, \"Object\", \"Removed\", { 1, 1, 1 })\n\n  updateSave()\n  removeAllHighlights()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_setNew()\n  local count = 0\n  for _, obj in ipairs(getObjects()) do\n    if memoryList[obj.guid] then\n      count = count + 1\n      memoryList[obj.guid].pos = roundVector(obj.getPosition(), 3)\n      memoryList[obj.guid].rot = roundVector(obj.getRotation(), 0)\n      memoryList[obj.guid].lock = obj.getLock()\n    end\n  end\n  broadcastFeedback(\"Updated Data for\", count, \"Object\", _, { 1, 1, 1 })\n  updateSave()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_reset()\n  memoryList = {}\n  updateSave()\n  removeAllHighlights()\n  broadcastToAll(\"Tool Reset\", { 1, 1, 1 })\n  self.clearButtons()\n\n  if setupButton then\n    createButtonByName(\"Setup\")\n  end\nend\n\nfunction buttonClick_internal()\n  local count = 0\n  for _, bagObj in ipairs(self.getObjects()) do\n    local data = bagObj.lua_script_state\n    if data ~= nil then\n      local j = JSON.decode(data)\n      if j ~= nil and j.ml ~= nil then\n        count = count + 1\n        for guid, entry in pairs(j.ml) do\n          memoryList[guid] = entry\n        end\n      end\n    end\n  end\n\n  if count > 0 then\n    broadcastFeedback(\"Added\", count, \"internal bag\", \"to existing memory\")\n  end\nend\n\nfunction createMemoryActionButtons()\n  self.clearButtons()\n\n  if next(memoryList) then\n    createButtonByName(\"Place\")\n    createButtonByName(\"Recall\")\n  end\n\n  if setupButton then\n    createButtonByName(\"Setup\")\n  end\nend\n\n-- Sends objects from bag/table to their saved position/rotation\nfunction buttonClick_place()\n  local data = self.getData()\n\n  -- get names of contained objects\n  local guidToName = {}\n  for _, bagObjData in ipairs(data.ContainedObjects or {}) do\n    guidToName[bagObjData[\"GUID\"]] = bagObjData[\"Nickname\"]\n  end\n\n  local updateGuids = {}\n  local placeCount = 0\n  local moveCount = 0\n  for guid, entry in pairs(memoryList) do\n    local obj = getObjectFromGUID(guid)\n    if obj ~= nil and (obj.getName() == guidToName[guid] or guidToName[guid] == nil) then\n      -- If obj is out on the table and has the same name (or there's no contained copy), move it\n      moveCount = moveCount + 1\n      obj.setPositionSmooth(entry.pos)\n      obj.setRotationSmooth(entry.rot)\n      obj.setLock(entry.lock)\n    elseif guidToName[guid] then\n      -- If obj is inside of the bag\n      placeCount = placeCount + 1\n      local item = self.takeObject({\n        guid = guid,\n        position = entry.pos,\n        rotation = entry.rot,\n        smooth = false\n      })\n      item.setLock(entry.lock)\n\n      if obj ~= nil then\n        updateGuids[guid] = item.getGUID()\n      end\n    end\n  end\n\n  -- update memoryList if we placed an item that got a new GUID\n  if next(updateGuids) then\n    for oldGuid, newGuid in pairs(updateGuids) do\n      memoryList[newGuid] = memoryList[oldGuid]\n      memoryList[oldGuid] = nil\n    end\n    updateSave()\n  end\n\n  if placeCount > 0 then\n    broadcastFeedback(_, placeCount, \"Object\", \"Placed\", { 1, 1, 1 })\n  end\n\n  if moveCount > 0 then\n    broadcastFeedback(_, moveCount, \"Object\", \"Moved\", { 1, 1, 1 })\n  end\n\n  if placeCount == 0 and moveCount == 0 then\n    broadcastToAll(\"Bag is empty and no matching objects were found in play\", { 1, 1, 1 })\n  end\nend\n\nfunction buttonClick_recall()\n  local count = 0\n  for guid, _ in pairs(memoryList) do\n    local obj = getObjectFromGUID(guid)\n    if obj ~= nil then\n      self.putObject(obj)\n      count = count + 1\n    end\n  end\n  broadcastFeedback(_, count, \"Object\", \"Recalled\", { 1, 1, 1 })\nend\n\nfunction removeAllHighlights()\n  for _, obj in ipairs(getObjects()) do\n    obj.highlightOff()\n  end\nend\n\n-- Round vector to the Nth decimal\nfunction roundVector(vec, dec)\n  local mult = 10 ^ (dec or 0)\n  local t = {}\n  for _, k in ipairs({ \"x\", \"y\", \"z\" }) do\n    t[k] = math.floor(vec[k] * mult + 0.5) / mult\n  end\n  return t\nend\nend)\n__bundle_register(\"__root\", function(require, _LOADED, __bundle_register, __bundle_modules)\nrequire(\"MemoryBag\")\nend)\nreturn __bundle_require(\"__root\")",
-  "LuaScriptState": "{\"ml\":{\"02cd17\":{\"lock\":false,\"pos\":{\"x\":52.432,\"y\":1.495,\"z\":5.342},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"0cfc38\":{\"lock\":false,\"pos\":{\"x\":46.126,\"y\":1.495,\"z\":13.256},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"0fb03d\":{\"lock\":false,\"pos\":{\"x\":46.086,\"y\":1.495,\"z\":9.402},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"13aae5\":{\"lock\":false,\"pos\":{\"x\":42.855,\"y\":1.495,\"z\":17.187},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"1456f4\":{\"lock\":false,\"pos\":{\"x\":43.478,\"y\":1.522,\"z\":-9.972},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"1999ce\":{\"lock\":false,\"pos\":{\"x\":46.174,\"y\":1.526,\"z\":17.166},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"1a8528\":{\"lock\":false,\"pos\":{\"x\":52.477,\"y\":1.495,\"z\":17.223},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"1b123e\":{\"lock\":false,\"pos\":{\"x\":46.225,\"y\":1.495,\"z\":-6.095},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"20d80b\":{\"lock\":false,\"pos\":{\"x\":49.472,\"y\":1.495,\"z\":1.409},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"242210\":{\"lock\":false,\"pos\":{\"x\":52.406,\"y\":1.495,\"z\":1.427},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"29c29c\":{\"lock\":false,\"pos\":{\"x\":49.542,\"y\":1.495,\"z\":13.232},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"2fff5c\":{\"lock\":false,\"pos\":{\"x\":52.157,\"y\":1.495,\"z\":-17.977},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"321b10\":{\"lock\":false,\"pos\":{\"x\":46.774,\"y\":1.495,\"z\":-10.004},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"3a5d8e\":{\"lock\":false,\"pos\":{\"x\":49.48,\"y\":1.495,\"z\":-6.097},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"407173\":{\"lock\":false,\"pos\":{\"x\":45.978,\"y\":1.495,\"z\":-13.945},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"44c353\":{\"lock\":false,\"pos\":{\"x\":49.396,\"y\":1.495,\"z\":5.341},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"48dad2\":{\"lock\":false,\"pos\":{\"x\":46.192,\"y\":1.495,\"z\":1.431},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"4ddd6c\":{\"lock\":false,\"pos\":{\"x\":42.874,\"y\":1.495,\"z\":1.423},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"522601\":{\"lock\":false,\"pos\":{\"x\":49.232,\"y\":1.495,\"z\":-17.926},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"616639\":{\"lock\":false,\"pos\":{\"x\":40.018,\"y\":1.495,\"z\":-9.974},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"6246e4\":{\"lock\":false,\"pos\":{\"x\":49.708,\"y\":1.495,\"z\":-9.874},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"67674c\":{\"lock\":false,\"pos\":{\"x\":49.515,\"y\":1.495,\"z\":17.191},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"6a03a2\":{\"lock\":false,\"pos\":{\"x\":39.469,\"y\":1.495,\"z\":17.164},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"6cedf1\":{\"lock\":false,\"pos\":{\"x\":49.549,\"y\":1.495,\"z\":21.06},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"78b154\":{\"lock\":false,\"pos\":{\"x\":46.244,\"y\":1.495,\"z\":-2.45},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"83834f\":{\"lock\":false,\"pos\":{\"x\":52.415,\"y\":1.495,\"z\":9.305},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"911e79\":{\"lock\":false,\"pos\":{\"x\":52.419,\"y\":1.495,\"z\":21.077},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"970f89\":{\"lock\":false,\"pos\":{\"x\":52.156,\"y\":1.495,\"z\":-21.669},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"9a18cc\":{\"lock\":false,\"pos\":{\"x\":49.235,\"y\":1.495,\"z\":-21.736},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"9e2d19\":{\"lock\":false,\"pos\":{\"x\":52.472,\"y\":1.495,\"z\":13.298},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"a36e37\":{\"lock\":false,\"pos\":{\"x\":45.993,\"y\":1.495,\"z\":-21.66},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"a3f387\":{\"lock\":false,\"pos\":{\"x\":46.071,\"y\":1.495,\"z\":5.371},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"b4a01a\":{\"lock\":false,\"pos\":{\"x\":46.198,\"y\":1.495,\"z\":21.085},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"bb431f\":{\"lock\":false,\"pos\":{\"x\":52.373,\"y\":1.495,\"z\":-6.146},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"bf4bc0\":{\"lock\":false,\"pos\":{\"x\":52.321,\"y\":1.495,\"z\":-9.926},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"bfb897\":{\"lock\":false,\"pos\":{\"x\":52.366,\"y\":1.495,\"z\":-2.439},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"cc9b0a\":{\"lock\":false,\"pos\":{\"x\":46.03,\"y\":1.495,\"z\":-17.87},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"daa0dd\":{\"lock\":false,\"pos\":{\"x\":49.412,\"y\":1.495,\"z\":9.355},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"eb9282\":{\"lock\":false,\"pos\":{\"x\":49.275,\"y\":1.495,\"z\":-13.902},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"f04097\":{\"lock\":false,\"pos\":{\"x\":49.499,\"y\":1.495,\"z\":-2.452},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"fc8a40\":{\"lock\":false,\"pos\":{\"x\":52.185,\"y\":1.495,\"z\":-13.933},\"rot\":{\"x\":0,\"y\":180,\"z\":0}}},\"setupButton\":false}",
+  "LuaScriptState": "{\"ml\":{\"0072e4\":{\"lock\":false,\"pos\":{\"x\":52.875,\"y\":1.495,\"z\":5.394},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"02cd17\":{\"lock\":false,\"pos\":{\"x\":50.792,\"y\":1.495,\"z\":5.333},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"0cfc38\":{\"lock\":false,\"pos\":{\"x\":44.486,\"y\":1.495,\"z\":13.247},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"0fb03d\":{\"lock\":false,\"pos\":{\"x\":44.446,\"y\":1.495,\"z\":9.393},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"13aae5\":{\"lock\":false,\"pos\":{\"x\":41.215,\"y\":1.495,\"z\":17.178},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"1456f4\":{\"lock\":false,\"pos\":{\"x\":41.838,\"y\":1.522,\"z\":-9.981},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"1999ce\":{\"lock\":false,\"pos\":{\"x\":44.534,\"y\":1.526,\"z\":17.157},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"1a8528\":{\"lock\":false,\"pos\":{\"x\":50.837,\"y\":1.495,\"z\":17.214},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"1b123e\":{\"lock\":false,\"pos\":{\"x\":44.585,\"y\":1.495,\"z\":-6.104},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"1b844d\":{\"lock\":false,\"pos\":{\"x\":52.745,\"y\":1.495,\"z\":-21.857},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"20d80b\":{\"lock\":false,\"pos\":{\"x\":47.832,\"y\":1.495,\"z\":1.4},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"242210\":{\"lock\":false,\"pos\":{\"x\":50.766,\"y\":1.495,\"z\":1.418},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"29c29c\":{\"lock\":false,\"pos\":{\"x\":47.902,\"y\":1.495,\"z\":13.223},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"2fff5c\":{\"lock\":false,\"pos\":{\"x\":50.517,\"y\":1.495,\"z\":-17.986},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"321b10\":{\"lock\":false,\"pos\":{\"x\":45.134,\"y\":1.495,\"z\":-10.013},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"3a5d8e\":{\"lock\":false,\"pos\":{\"x\":47.84,\"y\":1.495,\"z\":-6.106},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"407173\":{\"lock\":false,\"pos\":{\"x\":44.338,\"y\":1.495,\"z\":-13.954},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"44c353\":{\"lock\":false,\"pos\":{\"x\":47.756,\"y\":1.495,\"z\":5.332},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"48dad2\":{\"lock\":false,\"pos\":{\"x\":44.552,\"y\":1.495,\"z\":1.422},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"4b8a7e\":{\"lock\":false,\"pos\":{\"x\":52.935,\"y\":1.495,\"z\":9.238},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"4ddd6c\":{\"lock\":false,\"pos\":{\"x\":41.234,\"y\":1.495,\"z\":1.414},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"522601\":{\"lock\":false,\"pos\":{\"x\":47.592,\"y\":1.495,\"z\":-17.935},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"60b3e2\":{\"lock\":false,\"pos\":{\"x\":52.777,\"y\":1.495,\"z\":-14.022},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"616639\":{\"lock\":false,\"pos\":{\"x\":38.378,\"y\":1.495,\"z\":-9.983},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"6246e4\":{\"lock\":false,\"pos\":{\"x\":48.068,\"y\":1.495,\"z\":-9.883},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"63ab71\":{\"lock\":false,\"pos\":{\"x\":52.922,\"y\":1.495,\"z\":-2.432},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"67674c\":{\"lock\":false,\"pos\":{\"x\":47.875,\"y\":1.495,\"z\":17.182},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"6a03a2\":{\"lock\":false,\"pos\":{\"x\":37.829,\"y\":1.495,\"z\":17.155},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"6cedf1\":{\"lock\":false,\"pos\":{\"x\":47.909,\"y\":1.495,\"z\":21.051},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"78b154\":{\"lock\":false,\"pos\":{\"x\":44.604,\"y\":1.495,\"z\":-2.459},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"83834f\":{\"lock\":false,\"pos\":{\"x\":50.775,\"y\":1.495,\"z\":9.297},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"864daa\":{\"lock\":false,\"pos\":{\"x\":50.744,\"y\":1.495,\"z\":21.006},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"970f89\":{\"lock\":false,\"pos\":{\"x\":50.516,\"y\":1.495,\"z\":-21.678},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"9a18cc\":{\"lock\":false,\"pos\":{\"x\":47.595,\"y\":1.495,\"z\":-21.745},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"9a3dc6\":{\"lock\":false,\"pos\":{\"x\":52.937,\"y\":1.495,\"z\":-6.099},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"9e2d19\":{\"lock\":false,\"pos\":{\"x\":50.832,\"y\":1.495,\"z\":13.289},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"a36e37\":{\"lock\":false,\"pos\":{\"x\":44.353,\"y\":1.495,\"z\":-21.669},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"a3f387\":{\"lock\":false,\"pos\":{\"x\":44.431,\"y\":1.495,\"z\":5.362},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"b4a01a\":{\"lock\":false,\"pos\":{\"x\":44.558,\"y\":1.495,\"z\":21.076},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"bb431f\":{\"lock\":false,\"pos\":{\"x\":50.733,\"y\":1.495,\"z\":-6.155},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"bbfd42\":{\"lock\":false,\"pos\":{\"x\":52.992,\"y\":1.495,\"z\":17.166},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"bf4bc0\":{\"lock\":false,\"pos\":{\"x\":50.681,\"y\":1.495,\"z\":-9.935},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"bfb897\":{\"lock\":false,\"pos\":{\"x\":50.726,\"y\":1.495,\"z\":-2.448},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"c4dd13\":{\"lock\":false,\"pos\":{\"x\":52.848,\"y\":1.495,\"z\":-9.989},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"cc9b0a\":{\"lock\":false,\"pos\":{\"x\":44.39,\"y\":1.495,\"z\":-17.879},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"d61de2\":{\"lock\":false,\"pos\":{\"x\":52.979,\"y\":1.495,\"z\":13.279},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"daa0dd\":{\"lock\":false,\"pos\":{\"x\":47.772,\"y\":1.495,\"z\":9.346},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"eb9282\":{\"lock\":false,\"pos\":{\"x\":47.635,\"y\":1.495,\"z\":-13.911},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"f04097\":{\"lock\":false,\"pos\":{\"x\":47.859,\"y\":1.495,\"z\":-2.461},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"f5cf9d\":{\"lock\":false,\"pos\":{\"x\":52.829,\"y\":1.495,\"z\":1.356},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"fb0bb7\":{\"lock\":false,\"pos\":{\"x\":52.892,\"y\":1.495,\"z\":21.151},\"rot\":{\"x\":0,\"y\":270,\"z\":0}},\"fc8a40\":{\"lock\":false,\"pos\":{\"x\":50.545,\"y\":1.495,\"z\":-13.942},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"ffe0e7\":{\"lock\":false,\"pos\":{\"x\":52.756,\"y\":1.495,\"z\":-17.952},\"rot\":{\"x\":0,\"y\":270,\"z\":0}}},\"setupButton\":false}",
   "ContainedObjects": [
+    {
+      "GUID": "fb0bb7",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 0.587234735,
+        "scaleY": 1.0,
+        "scaleZ": 0.587234735
+      },
+      "Nickname": "Sunny Lebeau",
+      "GMNotes": "{\n  \"id\": \"20002700-m\",\n  \"type\": \"Minicard\"\n}",
+      "Tags": [
+        "Minicard"
+      ],
+      "HideWhenFaceDown": false,
+      "CardID": 8903500,
+      "CustomDeck": {
+        "89035": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/35572915138448220/72B95080E6A6A469B25BAFF241CD73B4A5647957/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/35572915138449712/D67F69640EC5246640C3A6DEB38DEAB35D5F921D/",
+          "NumWidth": 7,
+          "NumHeight": 2,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "bbfd42",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 0.587234735,
+        "scaleY": 1.0,
+        "scaleZ": 0.587234735
+      },
+      "Nickname": "Reina Roja",
+      "GMNotes": "{\n  \"id\": \"net01-m\",\n  \"type\": \"Minicard\"\n}",
+      "Tags": [
+        "Minicard"
+      ],
+      "HideWhenFaceDown": false,
+      "CardID": 8903501,
+      "CustomDeck": {
+        "89035": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/35572915138448220/72B95080E6A6A469B25BAFF241CD73B4A5647957/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/35572915138449712/D67F69640EC5246640C3A6DEB38DEAB35D5F921D/",
+          "NumWidth": 7,
+          "NumHeight": 2,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "d61de2",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 0.587234735,
+        "scaleY": 1.0,
+        "scaleZ": 0.587234735
+      },
+      "Nickname": "Hayley Kaplan",
+      "GMNotes": "{\n  \"id\": \"net02-m\",\n  \"type\": \"Minicard\"\n}",
+      "Tags": [
+        "Minicard"
+      ],
+      "HideWhenFaceDown": false,
+      "CardID": 8903502,
+      "CustomDeck": {
+        "89035": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/35572915138448220/72B95080E6A6A469B25BAFF241CD73B4A5647957/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/35572915138449712/D67F69640EC5246640C3A6DEB38DEAB35D5F921D/",
+          "NumWidth": 7,
+          "NumHeight": 2,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "4b8a7e",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 0.587234735,
+        "scaleY": 1.0,
+        "scaleZ": 0.587234735
+      },
+      "Nickname": "Rielle \"Kit\" Peddler",
+      "GMNotes": "{\n  \"id\": \"net03-m\",\n  \"type\": \"Minicard\"\n}",
+      "Tags": [
+        "Minicard"
+      ],
+      "HideWhenFaceDown": false,
+      "CardID": 8903503,
+      "CustomDeck": {
+        "89035": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/35572915138448220/72B95080E6A6A469B25BAFF241CD73B4A5647957/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/35572915138449712/D67F69640EC5246640C3A6DEB38DEAB35D5F921D/",
+          "NumWidth": 7,
+          "NumHeight": 2,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "0072e4",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 0.587234735,
+        "scaleY": 1.0,
+        "scaleZ": 0.587234735
+      },
+      "Nickname": "Gabriel Santiago",
+      "GMNotes": "{\n  \"id\": \"net04-m\",\n  \"type\": \"Minicard\"\n}",
+      "Tags": [
+        "Minicard"
+      ],
+      "HideWhenFaceDown": false,
+      "CardID": 8903504,
+      "CustomDeck": {
+        "89035": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/35572915138448220/72B95080E6A6A469B25BAFF241CD73B4A5647957/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/35572915138449712/D67F69640EC5246640C3A6DEB38DEAB35D5F921D/",
+          "NumWidth": 7,
+          "NumHeight": 2,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "f5cf9d",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 0.587234735,
+        "scaleY": 1.0,
+        "scaleZ": 0.587234735
+      },
+      "Nickname": "Armand \"Geist\" Walker",
+      "GMNotes": "{\n  \"id\": \"net05-m\",\n  \"type\": \"Minicard\"\n}",
+      "Tags": [
+        "Minicard"
+      ],
+      "HideWhenFaceDown": false,
+      "CardID": 8903505,
+      "CustomDeck": {
+        "89035": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/35572915138448220/72B95080E6A6A469B25BAFF241CD73B4A5647957/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/35572915138449712/D67F69640EC5246640C3A6DEB38DEAB35D5F921D/",
+          "NumWidth": 7,
+          "NumHeight": 2,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "63ab71",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 0.587234735,
+        "scaleY": 1.0,
+        "scaleZ": 0.587234735
+      },
+      "Nickname": "Quetzal",
+      "GMNotes": "{\n  \"id\": \"net06-m\",\n  \"type\": \"Minicard\"\n}",
+      "Tags": [
+        "Minicard"
+      ],
+      "HideWhenFaceDown": false,
+      "CardID": 8903506,
+      "CustomDeck": {
+        "89035": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/35572915138448220/72B95080E6A6A469B25BAFF241CD73B4A5647957/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/35572915138449712/D67F69640EC5246640C3A6DEB38DEAB35D5F921D/",
+          "NumWidth": 7,
+          "NumHeight": 2,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "9a3dc6",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 0.587234735,
+        "scaleY": 1.0,
+        "scaleZ": 0.587234735
+      },
+      "Nickname": "Tāo Salonga",
+      "GMNotes": "{\n  \"id\": \"net07-m\",\n  \"type\": \"Minicard\"\n}",
+      "Tags": [
+        "Minicard"
+      ],
+      "HideWhenFaceDown": false,
+      "CardID": 8903507,
+      "CustomDeck": {
+        "89035": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/35572915138448220/72B95080E6A6A469B25BAFF241CD73B4A5647957/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/35572915138449712/D67F69640EC5246640C3A6DEB38DEAB35D5F921D/",
+          "NumWidth": 7,
+          "NumHeight": 2,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "c4dd13",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 0.6,
+        "scaleY": 1.0,
+        "scaleZ": 0.6
+      },
+      "Nickname": "Hoshiko Shiro",
+      "GMNotes": "{\n  \"id\": \"net08-m\",\n  \"type\": \"Minicard\"\n}",
+      "Tags": [
+        "Minicard"
+      ],
+      "HideWhenFaceDown": false,
+      "CardID": 8903508,
+      "CustomDeck": {
+        "89035": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/35572915138448220/72B95080E6A6A469B25BAFF241CD73B4A5647957/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/35572915138449712/D67F69640EC5246640C3A6DEB38DEAB35D5F921D/",
+          "NumWidth": 7,
+          "NumHeight": 2,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "States": {
+        "2": {
+          "GUID": "a7b8f6",
+          "Name": "Card",
+          "Transform": {
+            "rotY": 270,
+            "scaleX": 0.6,
+            "scaleY": 1.0,
+            "scaleZ": 0.6
+          },
+          "Nickname": "Hoshiko Shiro",
+          "GMNotes": "{\n  \"id\": \"net09-m\",\n  \"type\": \"Minicard\"\n}",
+          "Tags": [
+            "Minicard"
+          ],
+          "HideWhenFaceDown": false,
+          "CardID": 8903509,
+          "CustomDeck": {
+            "89035": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/35572915138448220/72B95080E6A6A469B25BAFF241CD73B4A5647957/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/35572915138449712/D67F69640EC5246640C3A6DEB38DEAB35D5F921D/",
+              "NumWidth": 7,
+              "NumHeight": 2,
+              "BackIsHidden": false,
+              "UniqueBack": true,
+              "Type": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "GUID": "60b3e2",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 0.587234735,
+        "scaleY": 1.0,
+        "scaleZ": 0.587234735
+      },
+      "Nickname": "Zahya Sadeghi",
+      "GMNotes": "{\n  \"id\": \"net10-m\",\n  \"type\": \"Minicard\"\n}",
+      "Tags": [
+        "Minicard"
+      ],
+      "HideWhenFaceDown": false,
+      "CardID": 8903510,
+      "CustomDeck": {
+        "89035": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/35572915138448220/72B95080E6A6A469B25BAFF241CD73B4A5647957/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/35572915138449712/D67F69640EC5246640C3A6DEB38DEAB35D5F921D/",
+          "NumWidth": 7,
+          "NumHeight": 2,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "ffe0e7",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 0.587234735,
+        "scaleY": 1.0,
+        "scaleZ": 0.587234735
+      },
+      "Nickname": "MaxX",
+      "GMNotes": "{\n  \"id\": \"net11-m\",\n  \"type\": \"Minicard\"\n}",
+      "Tags": [
+        "Minicard"
+      ],
+      "HideWhenFaceDown": false,
+      "CardID": 8903511,
+      "CustomDeck": {
+        "89035": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/35572915138448220/72B95080E6A6A469B25BAFF241CD73B4A5647957/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/35572915138449712/D67F69640EC5246640C3A6DEB38DEAB35D5F921D/",
+          "NumWidth": 7,
+          "NumHeight": 2,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "1b844d",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 0.587234735,
+        "scaleY": 1.0,
+        "scaleZ": 0.587234735
+      },
+      "Nickname": "Fenris",
+      "GMNotes": "{\n  \"id\": \"net12-m\",\n  \"type\": \"Minicard\"\n}",
+      "Tags": [
+        "Minicard"
+      ],
+      "HideWhenFaceDown": false,
+      "CardID": 8903512,
+      "CustomDeck": {
+        "89035": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/35572915138448220/72B95080E6A6A469B25BAFF241CD73B4A5647957/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/35572915138449712/D67F69640EC5246640C3A6DEB38DEAB35D5F921D/",
+          "NumWidth": 7,
+          "NumHeight": 2,
+          "BackIsHidden": false,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "970f89",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 180,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Fenris",
+      "Description": "The DJ",
+      "GMNotes": "{\"id\":\"net12\",\"traits\":\"G-Mod. Drifter. Performer.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Investigator\",\"class\":\"Neutral\",\"willpowerIcons\":2,\"intellectIcons\":2,\"combatIcons\":2,\"agilityIcons\":2}",
+      "Tags": [
+        "Investigator",
+        "PlayerCard"
+      ],
+      "CardID": 4312,
+      "SidewaysCard": true,
+      "CustomDeck": {
+        "43": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11182810638004598349/768CD6BF01F8F98A73984993A45F7C546844C140/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/9399600553949912837/D32B0C78083492BBA49D384CE7AF9CCE13B86E4B/",
+          "NumWidth": 10,
+          "NumHeight": 2,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "2fff5c",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 180,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "MaxX",
+      "Description": "The Punk",
+      "GMNotes": "{\"id\":\"net11\",\"traits\":\"G-Mod. Drifter.\",\"cycle\":\"The Worlds of Android\",\"extraToken\": \"FreeTrigger\", \"type\":\"Investigator\",\"class\":\"Survivor\",\"willpowerIcons\":3,\"intellectIcons\":2,\"combatIcons\":2,\"agilityIcons\":3}",
+      "Tags": [
+        "Investigator",
+        "PlayerCard"
+      ],
+      "CardID": 4311,
+      "SidewaysCard": true,
+      "CustomDeck": {
+        "43": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11182810638004598349/768CD6BF01F8F98A73984993A45F7C546844C140/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/9399600553949912837/D32B0C78083492BBA49D384CE7AF9CCE13B86E4B/",
+          "NumWidth": 10,
+          "NumHeight": 2,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "fc8a40",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 180,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Zahya Sadeghi",
+      "Description": "The Versatile Smuggler",
+      "GMNotes": "{\"id\":\"net10\",\"traits\":\"Cyborg. Criminal. Entrepreneur.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Investigator\",\"class\":\"Survivor\",\"willpowerIcons\":2,\"intellectIcons\":3,\"combatIcons\":3,\"agilityIcons\":4}",
+      "Tags": [
+        "Investigator",
+        "PlayerCard"
+      ],
+      "CardID": 4310,
+      "SidewaysCard": true,
+      "CustomDeck": {
+        "43": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11182810638004598349/768CD6BF01F8F98A73984993A45F7C546844C140/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/9399600553949912837/D32B0C78083492BBA49D384CE7AF9CCE13B86E4B/",
+          "NumWidth": 10,
+          "NumHeight": 2,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "bf4bc0",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 180,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Hoshiko Shiro",
+      "Description": "The Untold Protagonist",
+      "GMNotes": "{\"id\":\"net08\",\"traits\":\"Dreamer.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Investigator\",\"class\":\"Survivor\",\"willpowerIcons\":3,\"intellectIcons\":3,\"combatIcons\":3,\"agilityIcons\":3}",
+      "Tags": [
+        "Investigator",
+        "PlayerCard"
+      ],
+      "CardID": 4308,
+      "SidewaysCard": true,
+      "CustomDeck": {
+        "43": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11182810638004598349/768CD6BF01F8F98A73984993A45F7C546844C140/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/9399600553949912837/D32B0C78083492BBA49D384CE7AF9CCE13B86E4B/",
+          "NumWidth": 10,
+          "NumHeight": 2,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "bb431f",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 180,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Tāo Salonga",
+      "Description": "The Telepresence Magician",
+      "GMNotes": "{\"id\":\"net07\",\"traits\":\"Sorcerer.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Investigator\",\"class\":\"Mystic\",\"willpowerIcons\":4,\"intellectIcons\":3,\"combatIcons\":3,\"agilityIcons\":2}",
+      "Tags": [
+        "Investigator",
+        "PlayerCard"
+      ],
+      "CardID": 4307,
+      "SidewaysCard": true,
+      "CustomDeck": {
+        "43": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11182810638004598349/768CD6BF01F8F98A73984993A45F7C546844C140/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/9399600553949912837/D32B0C78083492BBA49D384CE7AF9CCE13B86E4B/",
+          "NumWidth": 10,
+          "NumHeight": 2,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "bfb897",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 180,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Quetzal",
+      "Description": "The Free Spirit",
+      "GMNotes": "{\"id\":\"net06\",\"traits\":\"G-Mod. Drifter.\",\"cycle\":\"The Worlds of Android\",\"extraToken\": \"Reaction\", \"type\":\"Investigator\",\"class\":\"Mystic\",\"willpowerIcons\":5,\"intellectIcons\":2,\"combatIcons\":3,\"agilityIcons\":2}",
+      "Tags": [
+        "Investigator",
+        "PlayerCard"
+      ],
+      "CardID": 4306,
+      "SidewaysCard": true,
+      "CustomDeck": {
+        "43": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11182810638004598349/768CD6BF01F8F98A73984993A45F7C546844C140/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/9399600553949912837/D32B0C78083492BBA49D384CE7AF9CCE13B86E4B/",
+          "NumWidth": 10,
+          "NumHeight": 2,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "242210",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 180,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Armand \"Geist\" Walker",
+      "Description": "The Tech Lord",
+      "GMNotes": "{\"id\":\"net05\",\"traits\":\"G-Mod. Criminal.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Investigator\",\"class\":\"Rogue\",\"willpowerIcons\":2,\"intellectIcons\":3,\"combatIcons\":4,\"agilityIcons\":3}",
+      "Tags": [
+        "Investigator",
+        "PlayerCard"
+      ],
+      "CardID": 4305,
+      "SidewaysCard": true,
+      "CustomDeck": {
+        "43": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11182810638004598349/768CD6BF01F8F98A73984993A45F7C546844C140/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/9399600553949912837/D32B0C78083492BBA49D384CE7AF9CCE13B86E4B/",
+          "NumWidth": 10,
+          "NumHeight": 2,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
     {
       "GUID": "02cd17",
       "Name": "Card",
@@ -52,7 +628,7 @@
       },
       "Nickname": "Gabriel Santiago",
       "Description": "<size=25><raised=-1>The Consummate Professional",
-      "GMNotes": "{\"id\":\"twoa20002704\",\"traits\":\"Cyborg. Criminal.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Investigator\",\"class\":\"Rogue\",\"willpowerIcons\":1,\"intellectIcons\":4,\"combatIcons\":3,\"agilityIcons\":4}",
+      "GMNotes": "{\"id\":\"net04\",\"traits\":\"Cyborg. Criminal.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Investigator\",\"class\":\"Rogue\",\"willpowerIcons\":1,\"intellectIcons\":4,\"combatIcons\":3,\"agilityIcons\":4}",
       "Tags": [
         "Investigator",
         "PlayerCard"
@@ -72,7 +648,127 @@
       }
     },
     {
-      "GUID": "0cfc38",
+      "GUID": "83834f",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 180,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Rielle \"Kit\" Peddler",
+      "Description": "The Transhuman",
+      "GMNotes": "{\"id\":\"net03\",\"traits\":\"Cyborg. Dreamer.\",\"cycle\":\"The Worlds of Android\",\"extraToken\": \"Reaction\", \"type\":\"Investigator\",\"class\":\"Seeker\",\"willpowerIcons\":4,\"intellectIcons\":4,\"combatIcons\":2,\"agilityIcons\":2}",
+      "Tags": [
+        "Investigator",
+        "PlayerCard"
+      ],
+      "CardID": 4303,
+      "SidewaysCard": true,
+      "CustomDeck": {
+        "43": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11182810638004598349/768CD6BF01F8F98A73984993A45F7C546844C140/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/9399600553949912837/D32B0C78083492BBA49D384CE7AF9CCE13B86E4B/",
+          "NumWidth": 10,
+          "NumHeight": 2,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "9e2d19",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 180,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Hayley Kaplan",
+      "Description": "The Universal Scholar",
+      "GMNotes": "{\"id\":\"net02\",\"traits\":\"G-Mod. Miskatonic. Scholar.\",\"cycle\":\"The Worlds of Android\",\"extraToken\": \"Reaction\", \"type\":\"Investigator\",\"class\":\"Seeker\",\"willpowerIcons\":3,\"intellectIcons\":4,\"combatIcons\":2,\"agilityIcons\":3}",
+      "Tags": [
+        "Investigator",
+        "PlayerCard"
+      ],
+      "CardID": 4302,
+      "SidewaysCard": true,
+      "CustomDeck": {
+        "43": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11182810638004598349/768CD6BF01F8F98A73984993A45F7C546844C140/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/9399600553949912837/D32B0C78083492BBA49D384CE7AF9CCE13B86E4B/",
+          "NumWidth": 10,
+          "NumHeight": 2,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "1a8528",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 180,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Reina Roja",
+      "Description": "The Freedom Fighter",
+      "GMNotes": "{\"id\":\"net01\",\"traits\":\"Cyborg. G-Mod. Veteran.\",\"cycle\":\"The Worlds of Android\",\"extraToken\": \"FreeTrigger\", \"type\":\"Investigator\",\"class\":\"Guardian\",\"willpowerIcons\":3,\"intellectIcons\":3,\"combatIcons\":5,\"agilityIcons\":1}",
+      "Tags": [
+        "Investigator",
+        "PlayerCard"
+      ],
+      "CardID": 4301,
+      "SidewaysCard": true,
+      "CustomDeck": {
+        "43": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11182810638004598349/768CD6BF01F8F98A73984993A45F7C546844C140/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/9399600553949912837/D32B0C78083492BBA49D384CE7AF9CCE13B86E4B/",
+          "NumWidth": 10,
+          "NumHeight": 2,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "864daa",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 180,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Sunny Lebeau",
+      "Description": "The Security Specialist",
+      "GMNotes": "{\"id\":\"net00\",\"traits\":\"Agency. Warden.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Investigator\",\"class\":\"Guardian\",\"willpowerIcons\":4,\"intellectIcons\":4,\"combatIcons\":4,\"agilityIcons\":4}",
+      "Tags": [
+        "Investigator",
+        "PlayerCard"
+      ],
+      "CardID": 4300,
+      "SidewaysCard": true,
+      "CustomDeck": {
+        "43": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11182810638004598349/768CD6BF01F8F98A73984993A45F7C546844C140/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/9399600553949912837/D32B0C78083492BBA49D384CE7AF9CCE13B86E4B/",
+          "NumWidth": 10,
+          "NumHeight": 2,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "6cedf1",
       "Name": "Card",
       "Transform": {
         "rotY": 270,
@@ -80,12 +776,13 @@
         "scaleY": 1.0,
         "scaleZ": 1.0
       },
-      "Nickname": "The Stars Are Wrong",
-      "GMNotes": "{\"id\":\"twoa10002711\",\"traits\":\"Omen. Endtimes.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Treachery\",\"class\":\"Neutral\",\"weakness\":true}",
+      "Nickname": "Another Day, Another Paycheck",
+      "GMNotes": "{\"id\":\"twoa10002700\",\"traits\":\"Job. Supply.\",\"cost\":\"0\",\"cycle\":\"The Worlds of Android\",\"type\":\"Asset\",\"class\":\"Neutral\",\"wildIcons\":2}",
       "Tags": [
+        "Asset",
         "PlayerCard"
       ],
-      "CardID": 4211,
+      "CardID": 4200,
       "CustomDeck": {
         "42": {
           "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
@@ -99,7 +796,7 @@
       }
     },
     {
-      "GUID": "0fb03d",
+      "GUID": "67674c",
       "Name": "Card",
       "Transform": {
         "rotY": 270,
@@ -107,12 +804,13 @@
         "scaleY": 1.0,
         "scaleZ": 1.0
       },
-      "Nickname": "Immolation Script",
-      "GMNotes": "{\"id\":\"twoa10002713\",\"traits\":\"Curse.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Treachery\",\"class\":\"Neutral\",\"weakness\":true}",
+      "Nickname": "Deep Red",
+      "GMNotes": "{\"id\":\"twoa10002702\",\"traits\":\"Item. Console.\",\"cost\":\"-\",\"cycle\":\"The Worlds of Android\",\"type\":\"Asset\",\"class\":\"Neutral\"}",
       "Tags": [
+        "Asset",
         "PlayerCard"
       ],
-      "CardID": 4213,
+      "CardID": 4202,
       "CustomDeck": {
         "42": {
           "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
@@ -126,7 +824,7 @@
       }
     },
     {
-      "GUID": "13aae5",
+      "GUID": "29c29c",
       "Name": "Card",
       "Transform": {
         "rotY": 270,
@@ -134,12 +832,375 @@
         "scaleY": 1.0,
         "scaleZ": 1.0
       },
-      "Nickname": "Checkmate",
-      "GMNotes": "{\"id\":\"twoa10002708\",\"traits\":\"Caïssa. Tactic.\",\"cost\":\"0\",\"cycle\":\"The Worlds of Android\",\"type\":\"Event\",\"class\":\"Neutral\"}",
+      "Nickname": "Comet",
+      "GMNotes": "{\"id\":\"twoa10002710\",\"traits\":\"Item. Console.\",\"cost\":\"4\",\"cycle\":\"The Worlds of Android\",\"type\":\"Asset\",\"class\":\"Neutral\",\"intellectIcons\":2}",
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "CardID": 4210,
+      "CustomDeck": {
+        "42": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 10,
+          "NumHeight": 4,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "daa0dd",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "False Echo",
+      "GMNotes": "{\"id\":\"twoa10002712\",\"traits\":\"Ritual.\",\"cost\":\"0\",\"cycle\":\"The Worlds of Android\",\"type\":\"Asset\",\"class\":\"Neutral\",\"slot\":\"Arcane\",\"willpowerIcons\":1,\"intellectIcons\":1,\"wildIcons\":1}",
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "CardID": 4212,
+      "CustomDeck": {
+        "42": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 10,
+          "NumHeight": 4,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "44c353",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Inside Job",
+      "GMNotes": "{\"id\":\"twoa10002714\",\"traits\":\"Trick. Illicit.\",\"cost\":\"2\",\"cycle\":\"The Worlds of Android\",\"type\":\"Event\",\"class\":\"Neutral\"}",
       "Tags": [
         "PlayerCard"
       ],
-      "CardID": 4208,
+      "CardID": 4214,
+      "CustomDeck": {
+        "42": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 10,
+          "NumHeight": 4,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "20d80b",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "The Supplier",
+      "GMNotes": "{\"id\":\"twoa10002716\",\"traits\":\"Connection. Illicit.\",\"cost\":\"1\",\"cycle\":\"The Worlds of Android\",\"type\":\"Asset\",\"class\":\"Neutral\",\"intellectIcons\":1,\"combatIcons\":1,\"agilityIcons\":1,\"wildIcons\":1}",
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "CardID": 4216,
+      "CustomDeck": {
+        "42": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 10,
+          "NumHeight": 4,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "f04097",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Data Folding",
+      "GMNotes": "{\"id\":\"twoa10002719\",\"traits\":\"Ritual.\",\"cost\":\"1\",\"cycle\":\"The Worlds of Android\",\"type\":\"Asset\",\"class\":\"Neutral\",\"willpowerIcons\":2}",
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "CardID": 4219,
+      "CustomDeck": {
+        "42": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 10,
+          "NumHeight": 4,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "3a5d8e",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "DZMZ Optimizer",
+      "GMNotes": "{\"id\":\"twoa10002721\",\"traits\":\"Item.\",\"cost\":\"1\",\"cycle\":\"The Worlds of Android\",\"type\":\"Asset\",\"class\":\"Neutral\",\"willpowerIcons\":1,\"wildIcons\":1}",
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "CardID": 4221,
+      "CustomDeck": {
+        "42": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 10,
+          "NumHeight": 4,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "6246e4",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 180,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Hoshiko Shiro",
+      "Description": "Mahou Shoujo",
+      "GMNotes": "{\"id\":\"net09\",\"traits\":\"Chosen. Resolute.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Investigator\",\"class\":\"Mystic\",\"willpowerIcons\":5,\"intellectIcons\":3,\"combatIcons\":3,\"agilityIcons\":3}",
+      "Tags": [
+        "Investigator",
+        "PlayerCard"
+      ],
+      "CardID": 4309,
+      "SidewaysCard": true,
+      "CustomDeck": {
+        "43": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11182810638004598349/768CD6BF01F8F98A73984993A45F7C546844C140/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/9399600553949912837/D32B0C78083492BBA49D384CE7AF9CCE13B86E4B/",
+          "NumWidth": 10,
+          "NumHeight": 2,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "eb9282",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Zahya's Ledger",
+      "GMNotes": "{\"id\":\"twoa10002729\",\"traits\":\"Item. Illicit.\",\"cost\":\"2\",\"cycle\":\"The Worlds of Android\",\"uses\":[{\"count\": 4,\"type\": \"Secret\",\"token\": \"resource\"}], \"type\":\"Asset\",\"class\":\"Neutral\",\"intellectIcons\":1,\"agilityIcons\":1,\"wildIcons\":1}",
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "CardID": 4229,
+      "CustomDeck": {
+        "42": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 10,
+          "NumHeight": 4,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "522601",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Amped Up",
+      "GMNotes": "{\"id\":\"twoa10002731\",\"traits\":\"Gambit. Illicit.\",\"cost\":\"1\",\"cycle\":\"The Worlds of Android\",\"type\":\"Event\",\"class\":\"Neutral\"}",
+      "Tags": [
+        "PlayerCard"
+      ],
+      "CardID": 4231,
+      "CustomDeck": {
+        "42": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 10,
+          "NumHeight": 4,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "9a18cc",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Wyldside",
+      "GMNotes": "{\"id\":\"twoa10002733\",\"traits\":\"Connection.\",\"cost\":\"-\",\"cycle\":\"The Worlds of Android\",\"type\":\"Asset\",\"class\":\"Neutral\"}",
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "CardID": 4233,
+      "CustomDeck": {
+        "42": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 10,
+          "NumHeight": 4,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "a36e37",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Ireress",
+      "Description": "WEAKNESS",
+      "GMNotes": "{\"id\":\"twoa10002734\",\"traits\":\"Program. Humanoid.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Enemy\",\"class\":\"Neutral\",\"weakness\":true}",
+      "Tags": [
+        "PlayerCard"
+      ],
+      "CardID": 4234,
+      "CustomDeck": {
+        "42": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 10,
+          "NumHeight": 4,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "cc9b0a",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Day Job",
+      "GMNotes": "{\"id\":\"twoa10002732\",\"traits\":\"Task.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Treachery\",\"class\":\"Neutral\",\"weakness\":true}",
+      "Tags": [
+        "PlayerCard"
+      ],
+      "CardID": 4232,
+      "CustomDeck": {
+        "42": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 10,
+          "NumHeight": 4,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "407173",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "\"More corp interference...\"",
+      "GMNotes": "{\"id\":\"twoa10002730\",\"traits\":\"Scheme.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Treachery\",\"class\":\"Neutral\",\"weakness\":true}",
+      "Tags": [
+        "PlayerCard"
+      ],
+      "CardID": 4230,
+      "CustomDeck": {
+        "42": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 10,
+          "NumHeight": 4,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "321b10",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Keiko",
+      "GMNotes": "{\"id\":\"twoa10002723\",\"traits\":\"Item. Console.\",\"cost\":\"2\",\"cycle\":\"The Worlds of Android\",\"type\":\"Asset\",\"class\":\"Neutral\"}",
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "CardID": 4223,
       "CustomDeck": {
         "42": {
           "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
@@ -298,6 +1359,223 @@
           }
         }
       ]
+    },
+    {
+      "GUID": "616639",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Isolation",
+      "GMNotes": "{\"id\":\"twoa10002728\",\"traits\":\"Flaw.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Treachery\",\"class\":\"Neutral\",\"weakness\":true}",
+      "Tags": [
+        "PlayerCard"
+      ],
+      "CardID": 4228,
+      "CustomDeck": {
+        "42": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 10,
+          "NumHeight": 4,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "1b123e",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Heartstrings",
+      "GMNotes": "{\"id\":\"twoa10002722\",\"traits\":\"Flaw. Task.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Treachery\",\"class\":\"Neutral\",\"weakness\":true}",
+      "Tags": [
+        "PlayerCard"
+      ],
+      "CardID": 4222,
+      "CustomDeck": {
+        "42": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 10,
+          "NumHeight": 4,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "78b154",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Sequencing Failure",
+      "GMNotes": "{\"id\":\"twoa10002720\",\"traits\":\"Injury.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Treachery\",\"class\":\"Neutral\",\"weakness\":true}",
+      "Tags": [
+        "PlayerCard"
+      ],
+      "CardID": 4220,
+      "CustomDeck": {
+        "42": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 10,
+          "NumHeight": 4,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "48dad2",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "\"I know just the guy...\"",
+      "GMNotes": "{\"id\":\"twoa10002717\",\"traits\":\"Favor. Trick.\",\"cost\":\"1\",\"cycle\":\"The Worlds of Android\",\"type\":\"Event\",\"class\":\"Neutral\"}",
+      "Tags": [
+        "PlayerCard"
+      ],
+      "CardID": 4217,
+      "CustomDeck": {
+        "42": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 10,
+          "NumHeight": 4,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "4ddd6c",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Raymond Flint",
+      "Description": "WEAKNESS",
+      "GMNotes": "{\"id\":\"twoa10002718\",\"traits\":\"Humanoid. Detective.\",\"cost\":\"\",\"cycle\":\"The Worlds of Android\",\"type\":\"Enemy\",\"class\":\"Neutral\",\"weakness\":true}",
+      "Tags": [
+        "PlayerCard"
+      ],
+      "CardID": 4218,
+      "CustomDeck": {
+        "42": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 10,
+          "NumHeight": 4,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "a3f387",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Malapert Memories",
+      "GMNotes": "{\"id\":\"twoa10002715\",\"traits\":\"Flaw.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Treachery\",\"class\":\"Neutral\",\"weakness\":true}",
+      "Tags": [
+        "PlayerCard"
+      ],
+      "CardID": 4215,
+      "CustomDeck": {
+        "42": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 10,
+          "NumHeight": 4,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "0fb03d",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Immolation Script",
+      "GMNotes": "{\"id\":\"twoa10002713\",\"traits\":\"Curse.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Treachery\",\"class\":\"Neutral\",\"weakness\":true}",
+      "Tags": [
+        "PlayerCard"
+      ],
+      "CardID": 4213,
+      "CustomDeck": {
+        "42": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 10,
+          "NumHeight": 4,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      }
+    },
+    {
+      "GUID": "0cfc38",
+      "Name": "Card",
+      "Transform": {
+        "rotY": 270,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "The Stars Are Wrong",
+      "GMNotes": "{\"id\":\"twoa10002711\",\"traits\":\"Omen. Endtimes.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Treachery\",\"class\":\"Neutral\",\"weakness\":true}",
+      "Tags": [
+        "PlayerCard"
+      ],
+      "CardID": 4211,
+      "CustomDeck": {
+        "42": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 10,
+          "NumHeight": 4,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      }
     },
     {
       "GUID": "1999ce",
@@ -470,37 +1748,7 @@
       ]
     },
     {
-      "GUID": "1a8528",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 180,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Reina Roja",
-      "Description": "The Freedom Fighter",
-      "GMNotes": "{\"id\":\"twoa20002701\",\"traits\":\"Cyborg. G-Mod. Veteran.\",\"cycle\":\"The Worlds of Android\",\"extraToken\": \"FreeTrigger\", \"type\":\"Investigator\",\"class\":\"Guardian\",\"willpowerIcons\":3,\"intellectIcons\":3,\"combatIcons\":5,\"agilityIcons\":1}",
-      "Tags": [
-        "Investigator",
-        "PlayerCard"
-      ],
-      "CardID": 4301,
-      "SidewaysCard": true,
-      "CustomDeck": {
-        "43": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11182810638004598349/768CD6BF01F8F98A73984993A45F7C546844C140/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/9399600553949912837/D32B0C78083492BBA49D384CE7AF9CCE13B86E4B/",
-          "NumWidth": 10,
-          "NumHeight": 2,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "1b123e",
+      "GUID": "13aae5",
       "Name": "Card",
       "Transform": {
         "rotY": 270,
@@ -508,405 +1756,12 @@
         "scaleY": 1.0,
         "scaleZ": 1.0
       },
-      "Nickname": "Heartstrings",
-      "GMNotes": "{\"id\":\"twoa10002722\",\"traits\":\"Flaw. Task.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Treachery\",\"class\":\"Neutral\",\"weakness\":true}",
+      "Nickname": "Checkmate",
+      "GMNotes": "{\"id\":\"twoa10002708\",\"traits\":\"Caïssa. Tactic.\",\"cost\":\"0\",\"cycle\":\"The Worlds of Android\",\"type\":\"Event\",\"class\":\"Neutral\"}",
       "Tags": [
         "PlayerCard"
       ],
-      "CardID": 4222,
-      "CustomDeck": {
-        "42": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-          "NumWidth": 10,
-          "NumHeight": 4,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "20d80b",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 270,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "The Supplier",
-      "GMNotes": "{\"id\":\"twoa10002716\",\"traits\":\"Connection. Illicit.\",\"cost\":\"1\",\"cycle\":\"The Worlds of Android\",\"type\":\"Asset\",\"class\":\"Neutral\",\"intellectIcons\":1,\"combatIcons\":1,\"agilityIcons\":1,\"wildIcons\":1}",
-      "Tags": [
-        "Asset",
-        "PlayerCard"
-      ],
-      "CardID": 4216,
-      "CustomDeck": {
-        "42": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-          "NumWidth": 10,
-          "NumHeight": 4,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "242210",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 180,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Armand \"Geist\" Walker",
-      "Description": "The Tech Lord",
-      "GMNotes": "{\"id\":\"twoa20002705\",\"traits\":\"G-Mod. Criminal.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Investigator\",\"class\":\"Rogue\",\"willpowerIcons\":2,\"intellectIcons\":3,\"combatIcons\":4,\"agilityIcons\":3}",
-      "Tags": [
-        "Investigator",
-        "PlayerCard"
-      ],
-      "CardID": 4305,
-      "SidewaysCard": true,
-      "CustomDeck": {
-        "43": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11182810638004598349/768CD6BF01F8F98A73984993A45F7C546844C140/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/9399600553949912837/D32B0C78083492BBA49D384CE7AF9CCE13B86E4B/",
-          "NumWidth": 10,
-          "NumHeight": 2,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "29c29c",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 270,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Comet",
-      "GMNotes": "{\"id\":\"twoa10002710\",\"traits\":\"Item. Console.\",\"cost\":\"4\",\"cycle\":\"The Worlds of Android\",\"type\":\"Asset\",\"class\":\"Neutral\",\"intellectIcons\":2}",
-      "Tags": [
-        "Asset",
-        "PlayerCard"
-      ],
-      "CardID": 4210,
-      "CustomDeck": {
-        "42": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-          "NumWidth": 10,
-          "NumHeight": 4,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "2fff5c",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 180,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "MaxX",
-      "Description": "The Punk",
-      "GMNotes": "{\"id\":\"twoa20002711\",\"traits\":\"G-Mod. Drifter.\",\"cycle\":\"The Worlds of Android\",\"extraToken\": \"FreeTrigger\", \"type\":\"Investigator\",\"class\":\"Survivor\",\"willpowerIcons\":3,\"intellectIcons\":2,\"combatIcons\":2,\"agilityIcons\":3}",
-      "Tags": [
-        "Investigator",
-        "PlayerCard"
-      ],
-      "CardID": 4311,
-      "SidewaysCard": true,
-      "CustomDeck": {
-        "43": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11182810638004598349/768CD6BF01F8F98A73984993A45F7C546844C140/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/9399600553949912837/D32B0C78083492BBA49D384CE7AF9CCE13B86E4B/",
-          "NumWidth": 10,
-          "NumHeight": 2,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "321b10",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 270,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Keiko",
-      "GMNotes": "{\"id\":\"twoa10002723\",\"traits\":\"Item. Console.\",\"cost\":\"2\",\"cycle\":\"The Worlds of Android\",\"type\":\"Asset\",\"class\":\"Neutral\"}",
-      "Tags": [
-        "Asset",
-        "PlayerCard"
-      ],
-      "CardID": 4223,
-      "CustomDeck": {
-        "42": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-          "NumWidth": 10,
-          "NumHeight": 4,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "3a5d8e",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 270,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "DZMZ Optimizer",
-      "GMNotes": "{\"id\":\"twoa10002721\",\"traits\":\"Item.\",\"cost\":\"1\",\"cycle\":\"The Worlds of Android\",\"type\":\"Asset\",\"class\":\"Neutral\",\"willpowerIcons\":1,\"wildIcons\":1}",
-      "Tags": [
-        "Asset",
-        "PlayerCard"
-      ],
-      "CardID": 4221,
-      "CustomDeck": {
-        "42": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-          "NumWidth": 10,
-          "NumHeight": 4,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "407173",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 270,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "\"More corp interference...\"",
-      "GMNotes": "{\"id\":\"twoa10002730\",\"traits\":\"Scheme.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Treachery\",\"class\":\"Neutral\",\"weakness\":true}",
-      "Tags": [
-        "PlayerCard"
-      ],
-      "CardID": 4230,
-      "CustomDeck": {
-        "42": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-          "NumWidth": 10,
-          "NumHeight": 4,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "44c353",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 270,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Inside Job",
-      "GMNotes": "{\"id\":\"twoa10002714\",\"traits\":\"Trick. Illicit.\",\"cost\":\"2\",\"cycle\":\"The Worlds of Android\",\"type\":\"Event\",\"class\":\"Neutral\"}",
-      "Tags": [
-        "PlayerCard"
-      ],
-      "CardID": 4214,
-      "CustomDeck": {
-        "42": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-          "NumWidth": 10,
-          "NumHeight": 4,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "48dad2",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 270,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "\"I know just the guy...\"",
-      "GMNotes": "{\"id\":\"twoa10002717\",\"traits\":\"Favor. Trick.\",\"cost\":\"1\",\"cycle\":\"The Worlds of Android\",\"type\":\"Event\",\"class\":\"Neutral\"}",
-      "Tags": [
-        "PlayerCard"
-      ],
-      "CardID": 4217,
-      "CustomDeck": {
-        "42": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-          "NumWidth": 10,
-          "NumHeight": 4,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "4ddd6c",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 270,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Raymond Flint",
-      "Description": "WEAKNESS",
-      "GMNotes": "{\"id\":\"twoa10002718\",\"traits\":\"Humanoid. Detective.\",\"cost\":\"\",\"cycle\":\"The Worlds of Android\",\"type\":\"Enemy\",\"class\":\"Neutral\",\"weakness\":true}",
-      "Tags": [
-        "PlayerCard"
-      ],
-      "CardID": 4218,
-      "CustomDeck": {
-        "42": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-          "NumWidth": 10,
-          "NumHeight": 4,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "522601",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 270,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Amped Up",
-      "GMNotes": "{\"id\":\"twoa10002731\",\"traits\":\"Gambit. Illicit.\",\"cost\":\"1\",\"cycle\":\"The Worlds of Android\",\"type\":\"Event\",\"class\":\"Neutral\"}",
-      "Tags": [
-        "PlayerCard"
-      ],
-      "CardID": 4231,
-      "CustomDeck": {
-        "42": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-          "NumWidth": 10,
-          "NumHeight": 4,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "616639",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 270,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Isolation",
-      "GMNotes": "{\"id\":\"twoa10002728\",\"traits\":\"Flaw.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Treachery\",\"class\":\"Neutral\",\"weakness\":true}",
-      "Tags": [
-        "PlayerCard"
-      ],
-      "CardID": 4228,
-      "CustomDeck": {
-        "42": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-          "NumWidth": 10,
-          "NumHeight": 4,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "6246e4",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 180,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Hoshiko Shiro",
-      "Description": "Mahou Shoujo",
-      "GMNotes": "{\"id\":\"twoa20002709\",\"traits\":\"Chosen. Resolute.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Investigator\",\"class\":\"Mystic\",\"willpowerIcons\":5,\"intellectIcons\":3,\"combatIcons\":3,\"agilityIcons\":3}",
-      "Tags": [
-        "Investigator",
-        "PlayerCard"
-      ],
-      "CardID": 4309,
-      "SidewaysCard": true,
-      "CustomDeck": {
-        "43": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11182810638004598349/768CD6BF01F8F98A73984993A45F7C546844C140/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/9399600553949912837/D32B0C78083492BBA49D384CE7AF9CCE13B86E4B/",
-          "NumWidth": 10,
-          "NumHeight": 2,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "67674c",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 270,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Deep Red",
-      "GMNotes": "{\"id\":\"twoa10002702\",\"traits\":\"Item. Console.\",\"cost\":\"-\",\"cycle\":\"The Worlds of Android\",\"type\":\"Asset\",\"class\":\"Neutral\"}",
-      "Tags": [
-        "Asset",
-        "PlayerCard"
-      ],
-      "CardID": 4202,
+      "CardID": 4208,
       "CustomDeck": {
         "42": {
           "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
@@ -947,264 +1802,6 @@
       }
     },
     {
-      "GUID": "6cedf1",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 270,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Another Day, Another Paycheck",
-      "GMNotes": "{\"id\":\"twoa10002700\",\"traits\":\"Job. Supply.\",\"cost\":\"0\",\"cycle\":\"The Worlds of Android\",\"type\":\"Asset\",\"class\":\"Neutral\",\"wildIcons\":2}",
-      "Tags": [
-        "Asset",
-        "PlayerCard"
-      ],
-      "CardID": 4200,
-      "CustomDeck": {
-        "42": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-          "NumWidth": 10,
-          "NumHeight": 4,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "78b154",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 270,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Sequencing Failure",
-      "GMNotes": "{\"id\":\"twoa10002720\",\"traits\":\"Injury.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Treachery\",\"class\":\"Neutral\",\"weakness\":true}",
-      "Tags": [
-        "PlayerCard"
-      ],
-      "CardID": 4220,
-      "CustomDeck": {
-        "42": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-          "NumWidth": 10,
-          "NumHeight": 4,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "83834f",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 180,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Rielle \"Kit\" Peddler",
-      "Description": "The Transhuman",
-      "GMNotes": "{\"id\":\"twoa20002703\",\"traits\":\"Cyborg. Dreamer.\",\"cycle\":\"The Worlds of Android\",\"extraToken\": \"Reaction\", \"type\":\"Investigator\",\"class\":\"Seeker\",\"willpowerIcons\":4,\"intellectIcons\":4,\"combatIcons\":2,\"agilityIcons\":2}",
-      "Tags": [
-        "Investigator",
-        "PlayerCard"
-      ],
-      "CardID": 4303,
-      "SidewaysCard": true,
-      "CustomDeck": {
-        "43": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11182810638004598349/768CD6BF01F8F98A73984993A45F7C546844C140/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/9399600553949912837/D32B0C78083492BBA49D384CE7AF9CCE13B86E4B/",
-          "NumWidth": 10,
-          "NumHeight": 2,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "911e79",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 180,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Sunny Lebeau",
-      "Description": "The Security Specialist",
-      "GMNotes": "{\"id\":\"twoa20002700\",\"traits\":\"Agency. Warden.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Investigator\",\"class\":\"Guardian\",\"willpowerIcons\":4,\"intellectIcons\":4,\"combatIcons\":4,\"agilityIcons\":4}",
-      "Tags": [
-        "Investigator",
-        "PlayerCard"
-      ],
-      "CardID": 4300,
-      "SidewaysCard": true,
-      "CustomDeck": {
-        "43": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11182810638004598349/768CD6BF01F8F98A73984993A45F7C546844C140/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/9399600553949912837/D32B0C78083492BBA49D384CE7AF9CCE13B86E4B/",
-          "NumWidth": 10,
-          "NumHeight": 2,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "970f89",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 180,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Fenris",
-      "Description": "The DJ",
-      "GMNotes": "{\"id\":\"twoa20002712\",\"traits\":\"G-Mod. Drifter. Performer.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Investigator\",\"class\":\"Neutral\",\"willpowerIcons\":2,\"intellectIcons\":2,\"combatIcons\":2,\"agilityIcons\":2}",
-      "Tags": [
-        "Investigator",
-        "PlayerCard"
-      ],
-      "CardID": 4312,
-      "SidewaysCard": true,
-      "CustomDeck": {
-        "43": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11182810638004598349/768CD6BF01F8F98A73984993A45F7C546844C140/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/9399600553949912837/D32B0C78083492BBA49D384CE7AF9CCE13B86E4B/",
-          "NumWidth": 10,
-          "NumHeight": 2,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "9a18cc",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 270,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Wyldside",
-      "GMNotes": "{\"id\":\"twoa10002733\",\"traits\":\"Connection.\",\"cost\":\"-\",\"cycle\":\"The Worlds of Android\",\"type\":\"Asset\",\"class\":\"Neutral\"}",
-      "Tags": [
-        "Asset",
-        "PlayerCard"
-      ],
-      "CardID": 4233,
-      "CustomDeck": {
-        "42": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-          "NumWidth": 10,
-          "NumHeight": 4,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "9e2d19",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 180,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Hayley Kaplan",
-      "Description": "The Universal Scholar",
-      "GMNotes": "{\"id\":\"twoa20002702\",\"traits\":\"G-Mod. Miskatonic. Scholar.\",\"cycle\":\"The Worlds of Android\",\"extraToken\": \"Reaction\", \"type\":\"Investigator\",\"class\":\"Seeker\",\"willpowerIcons\":3,\"intellectIcons\":4,\"combatIcons\":2,\"agilityIcons\":3}",
-      "Tags": [
-        "Investigator",
-        "PlayerCard"
-      ],
-      "CardID": 4302,
-      "SidewaysCard": true,
-      "CustomDeck": {
-        "43": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11182810638004598349/768CD6BF01F8F98A73984993A45F7C546844C140/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/9399600553949912837/D32B0C78083492BBA49D384CE7AF9CCE13B86E4B/",
-          "NumWidth": 10,
-          "NumHeight": 2,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "a36e37",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 270,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Ireress",
-      "Description": "WEAKNESS",
-      "GMNotes": "{\"id\":\"twoa10002734\",\"traits\":\"Program. Humanoid.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Enemy\",\"class\":\"Neutral\",\"weakness\":true}",
-      "Tags": [
-        "PlayerCard"
-      ],
-      "CardID": 4234,
-      "CustomDeck": {
-        "42": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-          "NumWidth": 10,
-          "NumHeight": 4,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "a3f387",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 270,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Malapert Memories",
-      "GMNotes": "{\"id\":\"twoa10002715\",\"traits\":\"Flaw.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Treachery\",\"class\":\"Neutral\",\"weakness\":true}",
-      "Tags": [
-        "PlayerCard"
-      ],
-      "CardID": 4215,
-      "CustomDeck": {
-        "42": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-          "NumWidth": 10,
-          "NumHeight": 4,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        }
-      }
-    },
-    {
       "GUID": "b4a01a",
       "Name": "Card",
       "Transform": {
@@ -1227,237 +1824,6 @@
           "NumHeight": 4,
           "BackIsHidden": true,
           "UniqueBack": false,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "bb431f",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 180,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Tāo Salonga",
-      "Description": "The Telepresence Magician",
-      "GMNotes": "{\"id\":\"twoa20002707\",\"traits\":\"Sorcerer.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Investigator\",\"class\":\"Mystic\",\"willpowerIcons\":4,\"intellectIcons\":3,\"combatIcons\":3,\"agilityIcons\":2}",
-      "Tags": [
-        "Investigator",
-        "PlayerCard"
-      ],
-      "CardID": 4307,
-      "SidewaysCard": true,
-      "CustomDeck": {
-        "43": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11182810638004598349/768CD6BF01F8F98A73984993A45F7C546844C140/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/9399600553949912837/D32B0C78083492BBA49D384CE7AF9CCE13B86E4B/",
-          "NumWidth": 10,
-          "NumHeight": 2,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "bf4bc0",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 180,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Hoshiko Shiro",
-      "Description": "The Untold Protagonist",
-      "GMNotes": "{\"id\":\"twoa20002708\",\"traits\":\"Dreamer.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Investigator\",\"class\":\"Survivor\",\"willpowerIcons\":3,\"intellectIcons\":3,\"combatIcons\":3,\"agilityIcons\":3}",
-      "Tags": [
-        "Investigator",
-        "PlayerCard"
-      ],
-      "CardID": 4308,
-      "SidewaysCard": true,
-      "CustomDeck": {
-        "43": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11182810638004598349/768CD6BF01F8F98A73984993A45F7C546844C140/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/9399600553949912837/D32B0C78083492BBA49D384CE7AF9CCE13B86E4B/",
-          "NumWidth": 10,
-          "NumHeight": 2,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "bfb897",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 180,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Quetzal",
-      "Description": "The Free Spirit",
-      "GMNotes": "{\"id\":\"twoa20002706\",\"traits\":\"G-Mod. Drifter.\",\"cycle\":\"The Worlds of Android\",\"extraToken\": \"Reaction\", \"type\":\"Investigator\",\"class\":\"Mystic\",\"willpowerIcons\":5,\"intellectIcons\":2,\"combatIcons\":3,\"agilityIcons\":2}",
-      "Tags": [
-        "Investigator",
-        "PlayerCard"
-      ],
-      "CardID": 4306,
-      "SidewaysCard": true,
-      "CustomDeck": {
-        "43": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11182810638004598349/768CD6BF01F8F98A73984993A45F7C546844C140/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/9399600553949912837/D32B0C78083492BBA49D384CE7AF9CCE13B86E4B/",
-          "NumWidth": 10,
-          "NumHeight": 2,
-          "BackIsHidden": true,
-          "UniqueBack": true,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "cc9b0a",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 270,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Day Job",
-      "GMNotes": "{\"id\":\"twoa10002732\",\"traits\":\"Task.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Treachery\",\"class\":\"Neutral\",\"weakness\":true}",
-      "Tags": [
-        "PlayerCard"
-      ],
-      "CardID": 4232,
-      "CustomDeck": {
-        "42": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-          "NumWidth": 10,
-          "NumHeight": 4,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "daa0dd",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 270,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "False Echo",
-      "GMNotes": "{\"id\":\"twoa10002712\",\"traits\":\"Ritual.\",\"cost\":\"0\",\"cycle\":\"The Worlds of Android\",\"type\":\"Asset\",\"class\":\"Neutral\",\"slot\":\"Arcane\",\"willpowerIcons\":1,\"intellectIcons\":1,\"wildIcons\":1}",
-      "Tags": [
-        "Asset",
-        "PlayerCard"
-      ],
-      "CardID": 4212,
-      "CustomDeck": {
-        "42": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-          "NumWidth": 10,
-          "NumHeight": 4,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "eb9282",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 270,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Zahya's Ledger",
-      "GMNotes": "{\"id\":\"twoa10002729\",\"traits\":\"Item. Illicit.\",\"cost\":\"2\",\"cycle\":\"The Worlds of Android\",\"uses\":[{\"count\": 4,\"type\": \"Secret\",\"token\": \"resource\"}], \"type\":\"Asset\",\"class\":\"Neutral\",\"intellectIcons\":1,\"agilityIcons\":1,\"wildIcons\":1}",
-      "Tags": [
-        "Asset",
-        "PlayerCard"
-      ],
-      "CardID": 4229,
-      "CustomDeck": {
-        "42": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-          "NumWidth": 10,
-          "NumHeight": 4,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "f04097",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 270,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Data Folding",
-      "GMNotes": "{\"id\":\"twoa10002719\",\"traits\":\"Ritual.\",\"cost\":\"1\",\"cycle\":\"The Worlds of Android\",\"type\":\"Asset\",\"class\":\"Neutral\",\"willpowerIcons\":2}",
-      "Tags": [
-        "Asset",
-        "PlayerCard"
-      ],
-      "CardID": 4219,
-      "CustomDeck": {
-        "42": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15489918105554553322/BCFE8CE50D21E507D6801838C5021289C1ADA5BF/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-          "NumWidth": 10,
-          "NumHeight": 4,
-          "BackIsHidden": true,
-          "UniqueBack": false,
-          "Type": 0
-        }
-      }
-    },
-    {
-      "GUID": "fc8a40",
-      "Name": "Card",
-      "Transform": {
-        "rotY": 180,
-        "scaleX": 1.0,
-        "scaleY": 1.0,
-        "scaleZ": 1.0
-      },
-      "Nickname": "Zahya Sadeghi",
-      "Description": "The Versatile Smuggler",
-      "GMNotes": "{\"id\":\"twoa20002710\",\"traits\":\"Cyborg. Criminal. Entrepreneur.\",\"cycle\":\"The Worlds of Android\",\"type\":\"Investigator\",\"class\":\"Survivor\",\"willpowerIcons\":2,\"intellectIcons\":3,\"combatIcons\":3,\"agilityIcons\":4}",
-      "Tags": [
-        "Investigator",
-        "PlayerCard"
-      ],
-      "CardID": 4310,
-      "SidewaysCard": true,
-      "CustomDeck": {
-        "43": {
-          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11182810638004598349/768CD6BF01F8F98A73984993A45F7C546844C140/",
-          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/9399600553949912837/D32B0C78083492BBA49D384CE7AF9CCE13B86E4B/",
-          "NumWidth": 10,
-          "NumHeight": 2,
-          "BackIsHidden": true,
-          "UniqueBack": true,
           "Type": 0
         }
       }
