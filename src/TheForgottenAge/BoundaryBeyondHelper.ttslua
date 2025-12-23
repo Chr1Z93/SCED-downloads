@@ -1,0 +1,666 @@
+-- This object has a scale = 5 to have space for its buttons
+-- For that reason, button dimensions are reduced in a factor 5
+local CoroutineLib          = require("util/CoroutineLib")
+local GUIDReferenceApi      = require("core/GUIDReferenceApi")
+local MythosAreaApi         = require("mythos/MythosAreaApi")
+local PlayAreaApi           = require("playarea/PlayAreaApi")
+local PlayermatApi          = require("playermat/PlayermatApi")
+local SearchLib             = require("util/SearchLib")
+local VictoryDisplayApi     = require("mythos/VictoryDisplayApi")
+
+local FIRST_BUTTON_POSITION = Vector(0, 1, -0.75)
+local DELTA                 = Vector(0, 0, 0.5)
+local EXPLORE_HELPER        = "8355c3"
+local COLOR_BLUE            = { 0.5, 0.5, 1 }
+local COLOR_RED             = { 0.8, 0.3, 0.3 }
+local ROTATION_VERTICAL     = { 0, 270, 0 }
+local ROTATION_HORIZONTAL   = { 0, 180, 0 }
+local SET_ASIDE_POSITION_2  = { x = -8.56, y = 1.53, z = 2 }
+local SET_ASIDE_POSITION    = { x = -8.56, y = 1.53, z = 0 }
+
+
+function onLoad()
+  helpersVisible = false
+  printedSymbols = false
+  indexes = {}
+  act3done = false
+
+  local buttonPosition = FIRST_BUTTON_POSITION
+  self.createButton({
+    label = "Highlight Ancient Locations in play",
+    click_function = "highlightAncient",
+    function_owner = self,
+    position = buttonPosition,
+    rotation = { 0, 0, 0 },
+    width = 1000,
+    height = 60,
+    font_size = 60,
+    color = COLOR_BLUE,
+    font_color = { 1, 1, 1 },
+    tooltip = ""
+  })
+  buttonPosition = buttonPosition + DELTA
+  self.createButton({
+    label = "Replace explored location",
+    click_function = "placeExploredLocation",
+    function_owner = self,
+    position = buttonPosition,
+    rotation = { 0, 0, 0 },
+    width = 1000,
+    height = 60,
+    font_size = 60,
+    color = COLOR_BLUE,
+    font_color = { 1, 1, 1 },
+    tooltip = ""
+  })
+  buttonPosition = buttonPosition + DELTA
+  self.createButton({
+    label = "Print symbols on table",
+    click_function = "toggleMarkSymbols",
+    function_owner = self,
+    position = buttonPosition,
+    rotation = { 0, 0, 0 },
+    width = 1000,
+    height = 60,
+    font_size = 60,
+    color = COLOR_BLUE,
+    font_color = { 1, 1, 1 },
+    tooltip = ""
+  })
+  buttonPosition = buttonPosition + DELTA
+  self.createButton({
+    label = "Agenda 2b, follow instructions",
+    click_function = "placeActAgenda3",
+    function_owner = self,
+    position = buttonPosition,
+    rotation = { 0, 0, 0 },
+    width = 1000,
+    height = 60,
+    font_size = 60,
+    color = { 0.5, 0.6, 0.9 },
+    font_color = { 1, 1, 1 },
+    tooltip = ""
+  })
+end
+
+-- Clicked functions
+
+function highlightAncient(_, playerColor)
+  -- Search for Ancient locations
+  local ancientLocations = {}
+  for _, obj in ipairs(getLocations('Ancient')) do
+    obj.highlightOn('White', 5)
+    table.insert(ancientLocations, obj)
+  end
+  if #ancientLocations == 10 then
+    printToAll('There is one Ancient location.')
+  elseif #ancientLocations > 1 then
+    printToAll('There are ' .. tostring(#ancientLocations) .. ' Ancient locations.')
+  end
+end
+
+function placeExploredLocation(_, playerColor)
+  -- Find a explored location and place it in place of a Present Day location
+  -- Move the present location out of the way
+
+  local ancientLocationExplored = getVisibleAncientLocation()
+  if ancientLocationExplored == nil then
+    printToAll('No Ancient location found in the explore helper.')
+    return
+  end
+
+  local symbol = getSymbol(ancientLocationExplored)
+
+  -- Search the Present location
+  local presentLocations = getLocations('Present')
+  local foundPresent = nil
+  for _, present in ipairs(presentLocations) do
+    if getSymbol(present) == symbol then
+      foundPresent = present
+      break
+    end
+  end
+  if not foundPresent then
+    printToAll('No Present-Day location with symbol ' .. symbol .. ' on the table.')
+    return
+  end
+
+  -- The operation can be DONE
+
+  if type(ancientLocationExplored) == 'table' then
+    -- The card can't be moved because it is in a deck, first take it out
+    ancientLocationExplored = takeOutVisibleAncientLocation()
+  end
+
+  assert(type(ancientLocationExplored) == 'userdata')
+  assert(ancientLocationExplored.tag == 'Card')
+
+  -- Lift things , see the other file
+  local posToPlace = foundPresent.getPosition()
+  local thingsAbove = SearchLib.onObject(foundPresent)
+  liftObjects(thingsAbove, 3)
+  foundPresent.setPositionSmooth(SET_ASIDE_POSITION)
+  printToAll(foundPresent.getName() .. " set aside, so its connections don't confuse the user.")
+  ancientLocationExplored.setPositionSmooth(posToPlace)
+  printToAll(ancientLocationExplored.getName() .. " placed in its place. Clues spawned.")
+end
+
+function toggleMarkSymbols(_, playerColor)
+  -- Remove lines
+  if printedSymbols == true then
+    removeLines(indexes)
+    printedSymbols = false
+    self.editButton({
+      index = 2,
+      label = "Print symbols on table",
+      color = COLOR_BLUE
+    })
+    return
+  end
+
+  for _, object in ipairs(getLocations()) do
+    local symbol = getSymbol(object)
+    local pos = object.getPosition()
+    if symbol ~= nil then
+      newIndexes = drawSymbol(pos, symbol)
+      indexes = append(indexes, newIndexes)
+    end
+  end
+
+  printedSymbols = true
+  self.editButton({
+    index = 2,
+    label = "Remove symbols on table",
+    color = COLOR_RED
+  })
+end
+
+function placeActAgenda3(_, playerColor)
+  function placeActAgenda3coroutine()
+    if act3done then
+      printToAll('Button was already clicked')
+      return
+    end
+    local chest = MythosAreaApi.getSetAsideChest() or nil
+    if not chest then
+      print("Chest not found")
+      return
+    end
+
+    local exploreHelper = getObjectFromGUID(EXPLORE_HELPER)
+    if not exploreHelper then
+      printToAll('Explore helper not found. Setup aborted.', 'Red')
+    end
+    local explorationDeck = getExplorationDeck(exploreHelper)
+    if not explorationDeck then
+      printToAll('Exploration deck was not found. Setup aborted.', 'Red')
+    end
+
+    -- find the bag inside the chest
+    local chestContents = chest.getObjects()
+    if #chestContents == 0 then
+      print("Set-Aside Chest is empty")
+      return
+    end
+
+    local bagData = nil
+    for _, data in ipairs(chestContents) do
+      if data.nickname == "Agenda 3 & Act 3" then
+        bagData = data
+        break
+      end
+    end
+
+    if not bagData then
+      print("Bag not found inside chest")
+      return
+    end
+
+    local trash = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+    if not trash then
+      print('Trash not found')
+      return
+    end
+    aboveTrash   = trash.getPosition() + Vector(0, 0.8, 0)
+
+    -- █▀█ █▀▀ ▄▀█ █▀▄ █▄█
+    -- █▀▄ ██▄ █▀█ █▄▀ ░█░ to start Act 2b setup
+
+    act3done     = true
+
+    -- Take out the bag near a reference position. Tint the bag white (it is black against black)
+    local bagPos = chest.getPosition() + Vector(0, 0, -5)
+    local bagObj = chest.takeObject({
+      guid = bagData.guid,
+      position = bagPos,
+      smooth = true
+    })
+    bagObj.setColorTint({ r = 1, g = 1, b = 1 })
+
+    -- Start the card instructions. Find each Location in play
+    -- █▀█ █▀▀ █▀▄▀█ █▀▀ █▀▄▀█ █▄▄ █▀▀ █▀█
+    -- █▀▄ ██▄ █░▀░█ ██▄ █░▀░█ █▄█ ██▄ █▀▄
+
+    local symbolPosition = {} -- This is a list of the removed locations, that have to be replaced
+
+    -- █▀█ █▀▀ █▀▄▀█ █▀█ █░█ █▀▀   ▀█▀ █▀█   █░█ █ █▀▀
+    -- █▀▄ ██▄ █░▀░█ █▄█ ▀▄▀ ██▄   ░█░ █▄█   ▀▄▀ █ █▄▄
+
+    local ancientLocations = getLocations('Ancient')
+    for _, location in ipairs(ancientLocations) do
+      if not cardHasClues(location) then
+        local thingsAbove = SearchLib.onObject(location)
+        liftObjects(thingsAbove)
+        -- update the rembering list
+        symbolPosition[getSymbol(location)] = location.getPosition()
+        PlayAreaApi.maybeUntrackLocation(location)
+        VictoryDisplayApi.placeCard(location)
+        CoroutineLib.yieldSeconds(0.5)
+      else
+        message = "This card has still some clues, we don't remove it: " .. location.getName()
+        log(message)
+      end
+    end
+
+    CoroutineLib.yieldSeconds(0.2)
+
+    -- █▀█ █▀▀ █▀▄▀█ █▀█ █░█ █▀▀   █▀█ █▀█ █▀▀ █▀ █▀▀ █▄░█ ▀█▀
+    -- █▀▄ ██▄ █░▀░█ █▄█ ▀▄▀ ██▄   █▀▀ █▀▄ ██▄ ▄█ ██▄ █░▀█ ░█░
+    local presentLocations = getLocations('Present')
+    for _, location in ipairs(presentLocations) do
+      local thingsAbove = SearchLib.onObject(location)
+      liftObjects(thingsAbove, 4)
+      symbolPosition[getSymbol(location)] = location.getPosition()
+      PlayAreaApi.maybeUntrackLocation(location)
+      location.setPositionSmooth(SET_ASIDE_POSITION_2)
+      CoroutineLib.yieldSeconds(0.2)
+      printToAll(location.getName() .. ' was placed aside.')
+      -- update the rembering list
+    end
+
+
+    -- search the exploration deck for a location with a matching location symbol
+    -- in the upper-left corner and place it on top of that location, taking its place.
+
+    for symbol, position in pairs(symbolPosition) do
+      local success = false
+      for _, obj in ipairs(explorationDeck.getObjects()) do
+        local symbol2 = getSymbol(obj)
+        if symbol2 == symbol then
+          explorationDeck.takeObject({ guid = obj.guid, position = position, rotation = ROTATION_VERTICAL })
+          success = true
+          break
+        end
+      end
+      if not success then
+        printToAll('Couldnt find the ' .. symbol .. ' in the exploration deck. It should be there.')
+      end
+    end
+    
+    PlayermatApi.removeClues("All")
+    CoroutineLib.yieldSeconds(0.2)
+
+    -- █▀█ ▄▀█ █▀▄ █▀▄▀█ █▀▀
+    -- █▀▀ █▀█ █▄▀ █░▀░█ ██▄
+
+    local success = false
+    local chestContents2 = chest.getObjects()
+    for _, data in ipairs(chestContents2) do
+      if data.nickname == "Padma Amrita" then
+        local targetPos = symbolPosition['Circle']
+        if targetPos then
+          local targetPos = {
+            x = targetPos.x,
+            y = targetPos.y + 4,
+            z = targetPos.z + 2.4
+          }
+
+          chest.takeObject({
+            guid     = data.guid,
+            position = targetPos,
+            rotation = ROTATION_VERTICAL,
+            smooth   = true,
+            flip     = false
+          })
+        end
+        success = true
+        break -- stop after finding Padma Amrita
+      end
+    end
+    if success then
+      printToAll('Padme placed in Templo Mayor.', 'Yellow')
+    elseif not success then
+      printToAll('Padme was not found in the Set-Aside chest.')
+    end
+
+    -- Remove Act deck and Agenda deck
+    local agendaPos = MythosAreaApi.getAgendaPosition()
+    local search1 = SearchLib.atPosition(agendaPos, "isCardOrDeck")
+    local actPos = MythosAreaApi.getActPosition()
+    local search2 = SearchLib.atPosition(actPos, "isCardOrDeck")
+    for _, objects in ipairs({ search1, search2 }) do
+      for j, object in ipairs(objects) do
+        object.setPositionSmooth(aboveTrash)
+        CoroutineLib.yieldSeconds(0.1)
+      end
+    end
+    printToAll('Old Act and Agenda decks removed.')
+
+    -- Place new Act and Agenda
+    local bagContents = bagObj.getObjects()
+    for _, item in ipairs(bagContents) do
+      if item.nickname == "The Return Trip" then
+        bagObj.takeObject({
+          guid     = item.guid,
+          position = MythosAreaApi.getActPosition(),
+          rotation = ROTATION_HORIZONTAL,
+          smooth   = true
+        })
+      elseif item.nickname == "Time Collapsing" then
+        local dest = getObjectFromGUID("652ff3").getPosition()
+        bagObj.takeObject({
+          guid     = item.guid,
+          position = MythosAreaApi.getAgendaPosition(),
+          rotation = ROTATION_HORIZONTAL,
+          smooth   = true
+        })
+      end
+    end
+
+    printToAll("Placed new Act 3 and Agenda 3.")
+    CoroutineLib.yieldSeconds(0.3)
+
+
+    showForcedEffect()
+  end
+
+  CoroutineLib.start(placeActAgenda3coroutine)
+end
+
+-- Location finder and inspectors
+
+---@return tts__Object|nil: The visible card, either an object or a card
+function getVisibleAncientLocation()
+  -- Looks at the explore helper, and searches for a visible Ancient location
+  local exploreHelper = getObjectFromGUID(EXPLORE_HELPER)
+  local pos = exploreHelper.positionToWorld(Vector(-0.5887, 0.5, 0))
+  local searchResult = SearchLib.atPosition(pos, "isCardOrDeck")
+
+  -- check if a deck was found
+  for _, obj in ipairs(searchResult) do
+    if obj.is_face_down then
+      return nil
+    elseif obj.tag == 'Card' then
+      return obj
+    elseif obj.tag == 'Deck' then
+      return obj.getObjects()[#obj.getObjects()] -- last one upper one
+    end
+  end
+  return nil
+end
+
+---@return tts__Object|nil: The taken out card, a card
+function takeOutVisibleAncientLocation()
+  -- Takes out the first card of the explore discard, if its visible
+  -- Returns the taken card
+  local exploreHelper = getObjectFromGUID(EXPLORE_HELPER)
+  local pos = exploreHelper.positionToWorld(Vector(-0.5887, 0.5, 0))
+  local searchResult = SearchLib.atPosition(pos, "isDeck")
+
+  -- check if a deck was found
+  for _, obj in ipairs(searchResult) do
+    if obj.tag == 'Card' and not obj.is_face_down then
+      ---pass
+    elseif obj.tag == 'Deck' and not obj.is_face_down then
+      local take = obj.getObjects()[#obj.getObjects()] -- last one upper one
+      local card = obj.takeObject({ guid = take.guid })
+      return card
+    end
+  end
+  return nil
+end
+
+---@return table: table of TTSObject
+function getLocations(trait)
+  assert(trait == 'Present' or trait == 'Ancient' or trait == nil, 'Error value in findLocations')
+  local allObjects = getAllObjects()
+  local locations = {}
+  for _, object in ipairs(allObjects) do
+    local rawNotes = object.getGMNotes() or "{}"
+    local metadata = JSON.decode(rawNotes) or {}
+    if PlayAreaApi.isInPlayArea(object) and metadata['type'] == 'Location' then
+      local descripcion = object.getDescription() or ""
+      if trait == nil then
+        table.insert(locations, object)
+      elseif trait ~= nil and string.find(descripcion, trait) then
+        table.insert(locations, object)
+      end
+    end
+  end
+  return locations
+end
+
+function getSymbol(obj)
+  -- It returns the symbol of a location, if it not a location, it returns nil
+  -- This works even for an object inside a deck
+  local rawNotes = nil
+  if type(obj) == 'table' then -- This object is inside a deck
+    rawNotes = obj.gm_notes or "{}"
+  else
+    rawNotes = obj.getGMNotes() or "{}"
+  end
+  local md = JSON.decode(rawNotes) or {}
+  if md['type'] ~= 'Location' then
+    return nil
+  end
+  local lf = md['locationFront']
+  if not lf then return nil end
+  local symbol = lf["icons"] or nil
+  return symbol
+end
+
+function cardHasClues(card)
+  local searchResult = SearchLib.onObject(card, "isClue")
+  return #searchResult > 0
+end
+
+function showForcedEffect()
+  local DATA = {
+    ["04174"] =
+    "Forced - After Templo Mayor enters play: Shuffle the encounter discard pile into the encounter deck. Discard cards from the top of the encounter deck until a Serpent enemy is discarded. Spawn that enemy here.",
+    ["04175"] =
+    "Forced - After Templo Mayor enters play: Shuffle your discard pile into your deck. Discard cards from the top of your deck until a weakness is discarded. Draw that weakness.",
+    ["04176"] =
+    "Forced - After Temples of Tenochtitlán enters play: Each investigator at this location takes 1 direct damage.",
+    ["04177"] = "Forced - After Temples of Tenochtitlán enters play: Place 1 doom on the nearest enemy.",
+    ["04178"] =
+    "Forced - After Chapultepec Hill enters play: Each investigator at this location discards 2 random cards from his or her hand.",
+    ["04181"] = "Forced - After Canals of Tenochtitlán enters play: Place 4 resources on it.",
+    ["04182"] =
+    "Forced - After Lake Xochimilco enters play: Each investigator at this location loses all of his or her remaining actions.",
+    ["04183"] =
+    "Forced - After Lake Xochimilco enters play: Each investigator at this location takes 1 direct horror.",
+    ["04184"] =
+    "Forced - After Sacred Woods enters play: Each investigator at this location discards the top 10 cards of his or her deck.",
+  }
+  local locations = getLocations('Ancient')
+  for _, location in ipairs(locations) do
+    local rawNotes = nil
+    if type(location) == 'table' then -- This object is inside a deck
+      rawNotes = location.gm_notes or "{}"
+    else
+      rawNotes = location.getGMNotes() or "{}"
+    end
+    local md = JSON.decode(rawNotes) or {}
+    local id = md['id']
+    if DATA[id] then
+      printToAll(DATA[id], 'Orange')
+      location.highlightOn('Orange', 5)
+    end
+  end
+end 
+
+-- Helper functions
+
+function drawSymbol(pos, symbol)
+  assert(type(pos) == 'table', 'Type error in drawSymbol')
+  assert(type(symbol) == 'string', 'Type error in drawSymbol')
+
+
+  local lineIndexes = {}
+
+  local center = { x = pos.x, y = pos.y, z = pos.z }
+
+  local thickness = 0.1
+  local color = { 1, 1, 0 }
+
+  local allLines = Global.getVectorLines() or {}
+
+  local function addLine(line)
+    table.insert(allLines, line)
+    table.insert(lineIndexes, #allLines)
+  end
+
+  if symbol == 'Star' then
+    color = 'Grey'
+    local radius = 2
+    local points = {}
+    for i = 0, 4 do
+      local angle = math.rad(72 * i - 90)
+      local px = center.x + radius * math.cos(angle)
+      local pz = center.z + radius * math.sin(angle)
+      table.insert(points, { x = px, y = center.y, z = pz })
+    end
+    local order = { 1, 3, 5, 2, 4, 1 }
+    for i = 1, #order - 1 do
+      local p1 = points[order[i]]
+      local p2 = points[order[i + 1]]
+      for i = 1, #order - 1 do
+        addLine({ points = { points[order[i]], points[order[i + 1]] }, color = color, thickness = thickness })
+      end
+    end
+  elseif symbol == 'Circle' then
+    color = 'Yellow'
+    local radius = 2
+    local segments = 24
+    local points = {}
+    for i = 0, segments do
+      local angle = math.rad((360 / segments) * i)
+      local px = center.x + radius * math.cos(angle)
+      local pz = center.z + radius * math.sin(angle)
+      table.insert(points, { x = px, y = center.y, z = pz })
+    end
+    for i = 1, #points - 1 do
+      addLine({ points = { points[i], points[i + 1] }, color = color, thickness = thickness })
+    end
+  elseif symbol == 'Diamond' then
+    color = 'Green'
+    local size = 2
+    local p1 = { x = center.x, y = center.y, z = center.z - size }
+    local p2 = { x = center.x + size, y = center.y, z = center.z }
+    local p3 = { x = center.x, y = center.y, z = center.z + size }
+    local p4 = { x = center.x - size, y = center.y, z = center.z }
+    addLine({ points = { p1, p2 }, color = color, thickness = thickness })
+    addLine({ points = { p2, p3 }, color = color, thickness = thickness })
+    addLine({ points = { p3, p4 }, color = color, thickness = thickness })
+    addLine({ points = { p4, p1 }, color = color, thickness = thickness })
+  elseif symbol == 'Square' then
+    local color = { 1, 0, 0 }
+    local size = 2
+    local p1 = { x = center.x - size, y = center.y, z = center.z - size }
+    local p2 = { x = center.x + size, y = center.y, z = center.z - size }
+    local p3 = { x = center.x + size, y = center.y, z = center.z + size }
+    local p4 = { x = center.x - size, y = center.y, z = center.z + size }
+    addLine({ points = { p1, p2 }, color = color, thickness = thickness })
+    addLine({ points = { p2, p3 }, color = color, thickness = thickness })
+    addLine({ points = { p3, p4 }, color = color, thickness = thickness })
+    addLine({ points = { p4, p1 }, color = color, thickness = thickness })
+  elseif symbol == 'Heart' then
+    color = { 1, 0.5, 0.5 }
+    local size = 1.5
+    local steps = 32
+    local points = {}
+    for i = 0, steps do
+      local t = (i / steps) * 2 * math.pi
+      local x = size * 16 * math.sin(t) ^ 3 / 16
+      local z = -size * (13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t)) / 16
+      table.insert(points, { x = center.x + x, y = center.y, z = center.z + z })
+    end
+    for i = 1, #points - 1 do
+      addLine({ points = { points[i], points[i + 1] }, color = color, thickness = thickness })
+    end
+  elseif symbol == 'Triangle' then
+    color = { 0, 0, 0.8 }
+    local size = 2
+    local p1 = { x = center.x, y = center.y, z = center.z - size }
+    local p2 = { x = center.x + size, y = center.y, z = center.z + size }
+    local p3 = { x = center.x - size, y = center.y, z = center.z + size }
+    addLine({ points = { p1, p2 }, color = color, thickness = thickness })
+    addLine({ points = { p2, p3 }, color = color, thickness = thickness })
+    addLine({ points = { p3, p1 }, color = color, thickness = thickness })
+  else
+    error('Not managed symbol', 2)
+  end
+
+  -- actualizar
+  Global.setVectorLines(allLines)
+  return lineIndexes
+end
+
+function removeLines(indexes)
+  if type(indexes) ~= "table" then return end
+
+  local lines = Global.getVectorLines() or {}
+  if #lines == 0 then return end
+
+  -- mark indexes to remove
+  local toRemove = {}
+  for _, idx in ipairs(indexes) do
+    toRemove[idx] = true
+  end
+
+  -- rebuild the list with only remaining lines
+  local remaining = {}
+  for i, line in ipairs(lines) do
+    if not toRemove[i] then
+      table.insert(remaining, line)
+    end
+  end
+
+  Global.setVectorLines(remaining)
+end
+
+function append(table1, table2)
+  -- Returns a new table
+  assert(type(table1) == 'table', 'Type error 1')
+  assert(type(table2) == 'table', 'Type error 2')
+  for _, el in ipairs(table2) do
+    table.insert(table1, el)
+  end
+  return table1
+end
+
+function getExplorationDeck(explorerHelper)
+  local objects = SearchLib.onObject(explorerHelper)
+  for _, object in ipairs(objects) do
+    if object.tag == 'Deck' and object.is_face_down then
+      return object
+    end
+  end
+  return nil
+end
+
+function liftObjects(objects, height)
+  height = height or 3
+
+  for _, obj in ipairs(objects) do
+    if obj and obj.getPosition then
+      local pos = obj.getPosition()
+      obj.setPositionSmooth({
+        pos.x,
+        pos.y + height,
+        pos.z
+      })
+    end
+  end
+end
