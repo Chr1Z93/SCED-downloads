@@ -30,7 +30,6 @@ local STAR_SPAWN_DECK_GUID    = "929cf9"
 local SUMMIT_DECK_NAME        = "Summit Deck"
 local VERTICAL_ROTATION       = { x = 0, y = 270, z = 180 }
 local WESTERN_WALL_ID         = "11651"
-local WIND_CONTROLLER_GUID    = 'fe9393'
 local WINDS_CARD_ID           = '11640'
 
 
@@ -308,7 +307,6 @@ function act1Setup(param)
       summitDeck.takeObject({ position = pos })
       CoroutineLib.yieldSeconds(0.02)
     end
-    printRowNumberOnTable()
 
     -- Shuffle the set-aside Central Spire into the top three cards of the
     -- Summit deck.
@@ -343,7 +341,6 @@ function act1Setup(param)
     elseif expeditionDirection == 'eastern' then
       printToAll('Agenda and Act placed. There are two acts.')
     end
-
     -- Shuffle each enemy from the Star Spawn encounter set and remove
     -- two (or more) at random from the game.
     placeStarSpawnOnDeck()
@@ -472,7 +469,7 @@ function act2Setup(_, color)
 
     -- Paragraph four. Shuffle the set-aside X and Aerial Waterfall locations,
     -- along with each remaining set-aside open sky card, into the top 5 cards of the Summit deck.
-    
+
     local aerial = takeObjectFromContainerById(chest, AERIAL_WATERFALL_ID,
       { position = PlayAreaApi.gridToWorld({ x = 2.1, y = -2.1 }) })
     CoroutineLib.yieldSeconds(0.19) --
@@ -637,7 +634,9 @@ function doNothing(_, color)
   -- This function exists to create a button that does nothing, but raises no error
 end
 
+------------------
 -- Deck handling helpers
+------------------
 
 ---@return tts__Object : returns either a deck or card
 function takeObjectRobust(deck, params)
@@ -768,53 +767,6 @@ function placeStarSpawnOnDeck()
   CoroutineLib.yieldSeconds(0.1)
 end
 
--- HELPERS TO IDENTIFY LOCATIONS AND OBJECTS
-
-function isLocationOrOpenSkies(obj)
-  local rawNotes = obj.getGMNotes() or "{}"
-  local md = JSON.decode(rawNotes) or {}
-  local type = md['type'] or ''
-  return type == 'Location' or obj.getName() == 'Open Sky'
-end
-
-function verifyExistenceAndVisibilityOfLocation(params)
-  -- This asumes the params make reference to a location card
-  local guid = params.guid or nil
-  local name = params.name or nil
-  local id = params.id or nil
-  local obj = nil
-  local found = false
-
-  obj = getObjectById(id)
-  if obj then
-    found = true
-  end
-
-  if not found then
-    obj = getObjectFromGUID(guid)
-    if obj then
-      found = true
-    end
-  end
-
-  if not found then
-    obj = getObjectByName(name)
-    if obj then
-      found = true
-    end
-  end
-
-  if not found then
-    return false
-  end
-
-  if obj.is_face_down then
-    return false
-  end
-
-  return found
-end
-
 ---@param tableCoords table table of coords
 ---@param id string id of the card to make exception
 function findLocationsToMoveExcept(tableCoords, id)
@@ -832,6 +784,57 @@ function findLocationsToMoveExcept(tableCoords, id)
     end
   end
   return locationsToMove
+end
+
+------------------
+-- Identify existence or types of cards
+------------------
+
+---@param obj tts__Object
+---@return boolean
+function isLocationOrOpenSkies(obj)
+  local rawNotes = obj.getGMNotes() or "{}"
+  local md = JSON.decode(rawNotes) or {}
+  local type_ = md['type'] or ''
+  return type_ == 'Location' or obj.getName() == 'Open Sky'
+end
+
+---@param params table
+---@return boolean
+function verifyExistenceAndVisibilityOfLocation(params)
+  -- This assumes params refer to a location card
+  local guid = params.guid
+  local name = params.name
+  local id   = params.id
+
+  local obj
+
+  -- 1) Find by custom ID
+  if id ~= nil then
+    obj = getObjectById(id)
+  end
+
+  -- 2) Fallback to GUID
+  if not obj and guid then
+    obj = getObjectFromGUID(guid)
+  end
+
+  -- 3) Fallback to name
+  if not obj and name then
+    obj = getObjectByName(name)
+  end
+
+  -- Not found at all
+  if not obj then
+    return false
+  end
+
+  -- Hidden / face down
+  if obj.is_face_down then
+    return false
+  end
+
+  return true
 end
 
 ---@return boolean
@@ -859,8 +862,12 @@ function isChestUnavailable()
   return true
 end
 
+------------------
+--- Comunication between objects
+------------------
+
 function informWindHelperAct(number)
-  local windhelper = getObjectFromGUID(WIND_CONTROLLER_GUID)
+  local windhelper = getObjectById(WINDS_CARD_ID)
   if windhelper then
     if number == 1 then
       windhelper.call('updateToAct1')
@@ -877,7 +884,7 @@ function informWindHelperAct(number)
 end
 
 function informWindHelperExpeditionDirection(expeditionDirectionP)
-  local windhelper = getObjectFromGUID(WIND_CONTROLLER_GUID)
+  local windhelper = getObjectById(WINDS_CARD_ID)
   if expeditionDirectionP ~= 'eastern' and expeditionDirectionP ~= 'western' then
     error('informWindHelperExpeditionDirection::value error in expeditionDirectionP', 2)
   end
@@ -888,49 +895,9 @@ function informWindHelperExpeditionDirection(expeditionDirectionP)
   end
 end
 
-function printRowNumberOnTable()
-  -- Definir las posiciones Y y sus números correspondientes
-  local posiciones = {
-    { y = 1,  texto = "1" },
-    { y = 0,  texto = "2" },
-    { y = -1, texto = "3" }
-    -- { y = -2, texto = "4" }
-  }
-
-  -- Coordenada X fija
-  local x_fijo = 0.5
-
-  -- Colocar cada número
-  for _, posData in ipairs(posiciones) do
-    -- Crear coordenadas de grid
-    local gridCoords = { x = x_fijo, y = posData.y }
-
-    -- Convertir a posición mundial de TTS
-    local worldPos = PlayAreaApi.gridToWorld(gridCoords)
-
-    -- Crear el texto en esa posición
-    local textoObj = spawnObject({
-      type = "3DText",
-      position = worldPos,
-      rotation = { x = 90, y = 90, z = 0 },
-      scale = { x = 1, y = 1, z = 1 }
-    })
-
-    textoObj.TextTool.setValue(posData.texto)
-    textoObj.TextTool.setFontSize(100)                            -- Tamaño grande para mejor visibilidad
-    textoObj.TextTool.setFontColor({ r = 0.2, g = 0.2, b = 0.6 }) -- Light blueish grey
-
-    -- Opcional: Ajustar altura para que quede mejor visualmente
-    local ajusteAltura = { x = 0, y = 0.5, z = 0 }
-    textoObj.setPosition({
-      x = worldPos.x + ajusteAltura.x,
-      y = worldPos.y + ajusteAltura.y,
-      z = worldPos.z + ajusteAltura.z
-    })
-  end
-end
-
--- GENERIC HELPERS -- this functions use no global -- can be copied
+------------------
+-- Generic getters
+------------------
 
 ---@param name string
 ---@return tts__Object|nil
@@ -963,16 +930,17 @@ end
 ---@return string|nil
 function getId(obj)
   local md = JSON.decode(obj.getGMNotes() or "{}")
-  local id = nil
-  if md then
-    id = md['id'] or nil
-  end
+  local id = md['id'] or nil
   return id
 end
 
----@param listA GridPos[]
----@param listB GridPos[]
----@return GridPos[]
+------------------
+--- Generic math operations
+------------------
+
+---@param listA table
+---@param listB table
+---@return table
 function exclude_pairs(listA, listB)
   -- This function performs the exclusion operation on a set
   -- And that set is made of pairs x,y
@@ -999,6 +967,10 @@ function exclude_pairs(listA, listB)
   return result
 end
 
+------------------
+-- Single card manipulation
+------------------
+
 ---@param card tts__Object
 function makeSureIsFaceUp(card)
   if card.is_face_down then
@@ -1012,6 +984,10 @@ function makeSureIsFaceDown(card)
     card.flip()
   end
 end
+
+------------------
+--- Bag manipulation
+------------------
 
 ---@param container Bag
 ---@param id string
