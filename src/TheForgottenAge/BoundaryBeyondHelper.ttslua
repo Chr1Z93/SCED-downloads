@@ -125,7 +125,7 @@ function placeExploredLocation(_, playerColor)
     return
   end
 
-  -- The operation can be DONE
+  -- The operation can be done
 
   if type(ancientLocationExplored) == 'table' then
     -- The card can't be moved because it is in a deck, first take it out
@@ -138,7 +138,8 @@ function placeExploredLocation(_, playerColor)
   -- Lift things , see the other file
   local posToPlace = foundPresent.getPosition()
   local thingsAbove = SearchLib.onObject(foundPresent)
-  liftObjects(thingsAbove, 3)
+  liftObjectsSafely(thingsAbove, 3)
+
   foundPresent.setPositionSmooth(SET_ASIDE_POSITION)
   printToAll(foundPresent.getName() .. " set aside, so its connections don't confuse the user.")
   ancientLocationExplored.setPositionSmooth(posToPlace)
@@ -178,12 +179,12 @@ end
 function placeActAgenda3(_, playerColor)
   function placeActAgenda3coroutine()
     if act3done then
-      printToAll('Button was already clicked')
+      printToAll('Button was already clicked.')
       return
     end
     local chest = MythosAreaApi.getSetAsideChest() or nil
     if not chest then
-      print("Chest not found")
+      print("Chest not found. Setup aborted.")
       return
     end
 
@@ -199,7 +200,7 @@ function placeActAgenda3(_, playerColor)
     -- find the bag inside the chest
     local chestContents = chest.getObjects()
     if #chestContents == 0 then
-      print("Set-Aside Chest is empty")
+      print("Set-Aside Chest is empty. Setup aborted.")
       return
     end
 
@@ -212,13 +213,13 @@ function placeActAgenda3(_, playerColor)
     end
 
     if not bagData then
-      print("Bag not found inside chest")
+      print("Bag not found inside chest.Setup aborted.")
       return
     end
 
     local trash = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
     if not trash then
-      print('Trash not found')
+      print('Trash not found. Setup aborted.')
       return
     end
     aboveTrash   = trash.getPosition() + Vector(0, 0.8, 0)
@@ -250,7 +251,7 @@ function placeActAgenda3(_, playerColor)
     for _, location in ipairs(ancientLocations) do
       if not cardHasClues(location) then
         local thingsAbove = SearchLib.onObject(location)
-        liftObjects(thingsAbove)
+        liftObjectsSafely(thingsAbove)
         -- update the rembering list
         symbolPosition[getSymbol(location)] = location.getPosition()
         PlayAreaApi.maybeUntrackLocation(location)
@@ -268,14 +269,13 @@ function placeActAgenda3(_, playerColor)
     -- █▀▄ ██▄ █░▀░█ █▄█ ▀▄▀ ██▄   █▀▀ █▀▄ ██▄ ▄█ ██▄ █░▀█ ░█░
     local presentLocations = getLocations('Present')
     for _, location in ipairs(presentLocations) do
-      local thingsAbove = SearchLib.onObject(location)
-      liftObjects(thingsAbove, 4)
       symbolPosition[getSymbol(location)] = location.getPosition()
+      liftObjectsSafely(SearchLib.onObject(location), 4)
       PlayAreaApi.maybeUntrackLocation(location)
+
       location.setPositionSmooth(SET_ASIDE_POSITION_2)
-      CoroutineLib.yieldSeconds(0.2)
+      CoroutineLib.yieldSeconds(0.4) -- Wait enough, so the onObject of the next loop doesnt interfere
       printToAll(location.getName() .. ' was placed aside.')
-      -- update the rembering list
     end
 
 
@@ -650,17 +650,52 @@ function getExplorationDeck(explorerHelper)
   return nil
 end
 
-function liftObjects(objects, height)
+-- Lifts objects vertically unless they are excluded
+-- Exclusion rules:
+-- 1) Object is not interactable (native TTS property)
+-- 2) Object has the tag "displacement_excluded"
+-- @param objects table List of TTS objects
+-- @param height number Vertical displacement (default: 3)
+function liftObjectsSafely(objects, height)
   height = height or 3
 
+  if type(objects) ~= "table" then
+    log("[liftObjects][ERROR] objects is not a table")
+    return
+  end
+
   for _, obj in ipairs(objects) do
-    if obj and obj.getPosition then
-      local pos = obj.getPosition()
-      obj.setPositionSmooth({
-        pos.x,
-        pos.y + height,
-        pos.z
-      })
+    -- Basic object validation
+    if obj == nil then
+      log("[liftObjects][WARN] Nil object skipped")
+      return
     end
+
+    if type(obj.getPosition) ~= "function" or type(obj.setPositionSmooth) ~= "function" then
+      log("[liftObjects][WARN] Object missing required functions, skipped")
+      return
+    end
+
+    -- Exclusion: not interactable
+    if obj.interactable == false then
+      return
+    end
+
+    -- Exclusion: tagged as displacement_excluded
+    if type(obj.hasTag) == "function" and obj.hasTag("displacement_excluded") then
+      return
+    end
+
+    -- Lift object
+    local pos = obj.getPosition()
+    if type(pos) ~= "table" or pos.y == nil then
+      return
+    end
+
+    obj.setPositionSmooth({
+      pos.x,
+      pos.y + height,
+      pos.z
+    })
   end
 end
