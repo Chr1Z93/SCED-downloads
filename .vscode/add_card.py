@@ -80,10 +80,6 @@ def construct_card_gmnotes(card_id, card_level):
 
 
 def save_file(data, file_path):
-    if os.path.exists(file_path):
-        print(f"Error: File already exists at this location.")
-        sys.exit(1)
-
     with open(file_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
         f.write("\n")
