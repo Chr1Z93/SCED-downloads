@@ -41,7 +41,7 @@ def get_path_at_depth(full_path, depth_to_skip):
 
 def construct_card_json(card_id, nickname, gmnotes_path):
     return {
-        "CardID": card_id + "00",
+        "CardID": int(card_id + "00"),
         "CustomDeck": {
             card_id: {
                 "BackIsHidden": True,
@@ -66,10 +66,15 @@ def construct_card_gmnotes(card_id, card_level):
     return {
         "id": card_id,
         "type": "Asset",
-        "slot": "Ally",
-        "class": "Rogue",
+        "slot": "",
+        "class": "",
         "level": int(card_level),
         "traits": "",
+        "agilityIcons": 1,
+        "combatIcons": 1,
+        "intellectIcons": 1,
+        "wildIcons": 1,
+        "willpowerIcons": 1,
         "cycle": "Core 2026",
     }
 
@@ -89,10 +94,13 @@ def add_card(active_file_path, card_title, card_level, card_id):
 
     if card_level != "0":
         nickname = card_title + " (" + card_level + ")"
-        base_file_name = card_title + card_level + "." + card_id
+        base_file_name = card_title + card_level
     else:
         nickname = card_title
-        base_file_name = card_title + "." + card_id
+        base_file_name = card_title
+
+    # add guid and remove spaces
+    base_file_name = (base_file_name + "." + card_id).replace(" ", "")
 
     # Construct the file paths
     json_path = os.path.join(folder_path, f"{base_file_name}.json")
@@ -123,9 +131,7 @@ def add_card(active_file_path, card_title, card_level, card_id):
                 parent_data["ContainedObjects_order"].insert(0, base_file_name)
 
             # Save the updated parent file
-            with open(parent_file_path, "w", encoding="utf-8") as f:
-                json.dump(parent_data, f, indent=2)
-                f.write("\n")
+            save_file(parent_data, parent_file_path)
 
         except Exception as e:
             print(f"Failed to update parent JSON: {e}")
