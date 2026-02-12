@@ -46,7 +46,7 @@ def construct_card_json(card_id, nickname, gmnotes_path):
             card_id: {
                 "BackIsHidden": True,
                 "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
-                "FaceURL": "",
+                "FaceURL": f"{card_id}.jpg",
                 "NumHeight": 1,
                 "NumWidth": 1,
                 "Type": 0
@@ -67,6 +67,7 @@ def construct_card_gmnotes(card_id, card_level):
         "type": "Asset",
         "slot": "",
         "class": "",
+        "cost": 1,
         "level": int(card_level),
         "traits": "",
         "agilityIcons": 1,
@@ -74,7 +75,7 @@ def construct_card_gmnotes(card_id, card_level):
         "intellectIcons": 1,
         "wildIcons": 1,
         "willpowerIcons": 1,
-        "cycle": "Core 2026",
+        "cycle": "Starters 2026",
     }
 
 
