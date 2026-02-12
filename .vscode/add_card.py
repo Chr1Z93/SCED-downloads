@@ -49,8 +49,7 @@ def construct_card_json(card_id, nickname, gmnotes_path):
                 "FaceURL": "",
                 "NumHeight": 1,
                 "NumWidth": 1,
-                "Type": 0,
-                "UniqueBack": False,
+                "Type": 0
             }
         },
         "GMNotes_path": str(get_path_at_depth(gmnotes_path, 3)),
