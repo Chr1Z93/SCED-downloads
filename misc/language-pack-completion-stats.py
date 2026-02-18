@@ -5,6 +5,7 @@ import logging
 import json
 import os
 import pathlib
+import re
 import requests
 import time
 
@@ -21,6 +22,8 @@ NOT_ORPHANS = {
     "PhaseReference",
     "RoundSequence",
     "RulesReference",
+    "89005", # Reality Acid Sheet
+    "CGWTWS01", # When The World Screamed scenario guide
 }
 
 LP_PATH = ROOT_PATH / "language-pack"
@@ -48,6 +51,7 @@ def load_card_data():
             item["id"]: item
             for item in response.json().get("data", {}).get("all_card", [])
             if item.get("deck_limit", 0) > 0
+            or item.get("real_text", "").startswith("Bonded")
         }
     except Exception as e:
         print(f"Error fetching card data: {e}")
@@ -160,7 +164,9 @@ def generate_id_map():
                 if card_id is None:  # data is the file path
                     files_without_id.append(data)
                 else:  # data is the main folder
-                    id_to_content_map[card_id] = data
+                    # skip mini cards
+                    if not card_id.endswith("-m"):
+                        id_to_content_map[card_id] = data
 
     processing_time = time.perf_counter()
     logging.info(f"Processing completed in {processing_time - scan_done:.2f}s")
@@ -256,7 +262,7 @@ def run_report(lang_ids, english_map):
 
         unsorted_report[content] = {
             "completion": f"{percent:.2f}%",
-            "stats": f"{count}/{total}",
+            "stats": f"{count} / {total}",
             "missing": sorted(list(missing)),
         }
 
@@ -267,8 +273,18 @@ def run_report(lang_ids, english_map):
     english_ids = set(english_map.keys())
     orphans = lang_ids - english_ids - NOT_ORPHANS
 
-    # Exclude fan-made content
-    filtered_orphans = [o for o in orphans if not (len(str(o)) > 15 and "-" in str(o))]
+    # Regex pattern for cards with suffix:
+    # ^ matches start, .{5,6} is 5-6 characters, - is a hyphen, .{1,2} is any 1-2 chars, $ matches end
+    pattern = re.compile(r"^.{5,6}-.{1,2}$")
+
+    # Exclude fan-made AND cards with suffix (mini cards, parallel, customizable)
+    filtered_orphans = []
+    for o in orphans:
+        if len(o) > 15 and "-" in o:  # Check exclusion 1: Fan-made
+            continue
+        if pattern.match(o) or o.endswith("-t-c"):  # Check exclusion 2: Suffix
+            continue
+        filtered_orphans.append(o)
 
     return sorted_report, sorted(list(filtered_orphans))
 
@@ -377,7 +393,7 @@ if __name__ == "__main__":
         # Aligned Console Output
         # Language: 20, Progress: 10 (8 for num + 2 for ' %'), Stats: 13, Orphans: 10, No-ID: 10
         pct_str = f"{overall_pct:>7.2f} %"
-        stats_str = f"{total_found}/{total_required}"
+        stats_str = f"{total_found} / {total_required}"
         print(
             f"{lang_name:<20} "  # Column 1
             f"{pct_str:>10} "  # Column 2
