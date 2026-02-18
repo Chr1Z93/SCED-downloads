@@ -7,7 +7,10 @@ import os
 import pathlib
 import time
 
-# Config
+# ==========================================
+# CONFIGURATION
+# ==========================================
+
 ROOT_PATH = pathlib.Path(r"C:\git\SCED-downloads\decomposed")
 REPORT_PATH = pathlib.Path(r"C:\git\SCED-downloads\misc\localization_reports")
 EXCLUDED_FOLDERS = {"language-pack", "misc", ".git", ".vscode"}
@@ -19,19 +22,21 @@ NOT_ORPHANS = {
     "RulesReference",
 }
 
-# Derived Data
 LP_PATH = ROOT_PATH / "language-pack"
 SCRIPT_DIR = pathlib.Path(__file__).parent.absolute()
 CACHE_FILE = SCRIPT_DIR / "language-pack-completion-stats_cache.json"
-
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
+# ==========================================
+# PROCESSING HELPERS
+# ==========================================
 
-# Skip fanmade content for now
+
 def get_id(gm_data):
+    # Skip fanmade content
     if "TtsZoopGuid" in gm_data:
         return None
     return gm_data.get("id")
@@ -42,46 +47,58 @@ def process_file(dirpath, filename):
     found_id = None
 
     try:
-        # Extract the ID (external .gmnotes)
+        # Attempt to get ID from external .gmnotes
         gmnotes_file = os.path.splitext(file_path)[0] + ".gmnotes"
         if os.path.exists(gmnotes_file):
             with open(gmnotes_file, "r", encoding="utf-8") as f:
                 gm_data = json.load(f)
                 found_id = get_id(gm_data)
+                if found_id:
+                    return return_with_folder(found_id, dirpath)
 
-        if not found_id:
-            # Extract the ID (internal)
-            with open(file_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                gm_notes_raw = data.get("GMNotes", "")
-                if gm_notes_raw:
-                    try:
-                        gm_data = json.loads(gm_notes_raw)
-                        found_id = get_id(gm_data)
-                    except (json.JSONDecodeError, TypeError):
-                        pass
+        # Attempt to get ID from embedded GM Notes
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
 
-        if not found_id:
+        gm_notes_raw = data.get("GMNotes", "")
+        if gm_notes_raw:
+            try:
+                gm_data = json.loads(gm_notes_raw)
+                found_id = get_id(gm_data)
+                if found_id:
+                    return return_with_folder(found_id, dirpath)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        # Handle ID-less objects (skip bags)
+        if "ContainedObjects_order" in data or "ContainedObjects" in data:
             return None
 
-        # Split the full path into a list of folder names
-        path_parts = dirpath.split(os.sep)
-
-        try:
-            # Find where "decomposed" sits in the path and grab the two levels after
-            # Example: .../decomposed/campaign/Night of the Zealot/cards -> "campaign/Night of the Zealot"
-            idx = path_parts.index("decomposed")
-            main_folder = os.path.join(path_parts[idx + 1], path_parts[idx + 2])
-            return str(found_id), main_folder
-        except (ValueError, IndexError):
-            return None
+        return None, file_path  # Track missing ID
 
     except Exception:
         return None
 
 
+def return_with_folder(found_id, dirpath):
+    """Helper to extract main folder."""
+    path_parts = dirpath.split(os.sep)
+    try:
+        idx = path_parts.index("decomposed")
+        main_folder = os.path.join(path_parts[idx + 1], path_parts[idx + 2])
+        return str(found_id), main_folder
+    except (ValueError, IndexError):
+        return str(found_id), "Unknown"
+
+
+# ==========================================
+# SCANNING ENGINES
+# ==========================================
+
+
 def generate_id_map():
     id_to_folder_map = {}
+    files_without_id = []
     tasks = []
 
     start_time = time.perf_counter()
@@ -106,14 +123,17 @@ def generate_id_map():
         for task in tasks:
             result = task.result()
             if result:
-                card_id, folder_path = result
-                id_to_folder_map[card_id] = folder_path
+                card_id, data = result
+                if card_id is None:  # data is the file path
+                    files_without_id.append(data)
+                else:  # data is the main folder
+                    id_to_folder_map[card_id] = data
 
     end_time = time.perf_counter()
     logging.info(f"Processing complete in {end_time - scan_done:.2f}s")
     logging.info(f"Total time: {end_time - start_time:.2f}s")
 
-    return id_to_folder_map
+    return id_to_folder_map, files_without_id
 
 
 def generate_lang_id_set(lang_root):
@@ -122,6 +142,7 @@ def generate_lang_id_set(lang_root):
     We reuse the 'process_file' logic but ignore the 'main_folder' return.
     """
     found_ids = set()
+    files_without_id = []
     tasks = []
 
     with ThreadPoolExecutor(max_workers=8) as executor:
@@ -135,10 +156,18 @@ def generate_lang_id_set(lang_root):
         for task in tasks:
             result = task.result()
             if result:
-                card_id, _ = result  # We ignore the folder here
-                found_ids.add(card_id)
+                card_id, data = result
+                if card_id is None:
+                    files_without_id.append(data)
+                else:
+                    found_ids.add(card_id)
 
-    return found_ids
+    return found_ids, files_without_id
+
+
+# ==========================================
+# REPORTING
+# ==========================================
 
 
 def get_master_map(force_refresh=False):
@@ -149,7 +178,7 @@ def get_master_map(force_refresh=False):
             return json.load(f)
 
     logging.info("Cache not found or refresh forced. Scanning English files...")
-    master_map = generate_id_map()
+    master_map, _ = generate_id_map()  # We ignore master ID-less files for the cache
 
     with open(CACHE_FILE, "w", encoding="utf-8") as f:
         json.dump(master_map, f, indent=2)
@@ -163,37 +192,43 @@ def run_report(lang_ids, english_map):
     Takes a pre-compiled set of language IDs and compares them
     against the English Master Map.
     """
-    # Map English IDs to their Campaigns for grouping
-    campaign_to_ids = defaultdict(set)
-    for card_id, campaign in english_map.items():
-        campaign_to_ids[campaign].add(card_id)
+    # Map English IDs to content name for grouping
+    content_to_ids = defaultdict(set)
+    for card_id, content in english_map.items():
+        content_to_ids[content].add(card_id)
 
     # Analyze
     unsorted_report = {}
-    english_ids = set(english_map.keys())
-    orphans = lang_ids - english_ids - NOT_ORPHANS
 
-    for campaign, required_ids in campaign_to_ids.items():
+    for content, required_ids in content_to_ids.items():
         found = required_ids.intersection(lang_ids)
         missing = required_ids - lang_ids
-
-        total = len(required_ids)
-        count = len(found)
+        total, count = len(required_ids), len(found)
         percent = (count / total * 100) if total > 0 else 0
 
-        unsorted_report[campaign] = {
+        unsorted_report[content] = {
             "completion": f"{percent:.2f}%",
             "stats": f"{count}/{total}",
             "missing": sorted(list(missing)),
         }
 
-    # Sort alphabetically by campaign name
+    # Sort alphabetically by content name
     sorted_report = {k: unsorted_report[k] for k in sorted(unsorted_report)}
 
-    return sorted_report, sorted(list(orphans))
+    # Calculate orphans
+    english_ids = set(english_map.keys())
+    orphans = lang_ids - english_ids - NOT_ORPHANS
+
+    # Exclude fan-made content
+    filtered_orphans = [o for o in orphans if not (len(str(o)) > 15 and "-" in str(o))]
+
+    return sorted_report, sorted(list(filtered_orphans))
 
 
-def save_report(campaign_data, lang_name, total_found, total_required):
+def save_report(
+    content_data, lang_name, orphans, no_id_files, total_found, total_required
+):
+    # Build dictionary with specific key order for easier reading
     final_output = {
         "metadata": {
             "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -207,13 +242,15 @@ def save_report(campaign_data, lang_name, total_found, total_required):
                 "total_found": total_found,
                 "total_required": total_required,
                 "orphan_count": len(orphans),
+                "files_missing_id": len(no_id_files),
             },
         },
-        "orphans": orphans,
-        "campaigns": campaign_data,
+        "orphans": sorted(orphans),
+        "files_without_id": sorted(no_id_files),
+        "content": content_data,
     }
 
-    filename = os.path.join(REPORT_PATH, f"{lang_name}_report.json")
+    filename = REPORT_PATH / f"{lang_name}_report.json"
     with open(filename, "w", encoding="utf-8") as f:
         json.dump(final_output, f, indent=2)
 
@@ -230,7 +267,7 @@ def find_language_folders():
         dirs = [
             d
             for d in os.listdir(LP_PATH)
-            if os.path.isdir(os.path.join(LP_PATH, d)) and d not in EXCLUDED_FOLDERS
+            if os.path.isdir(LP_PATH / d) and d not in EXCLUDED_FOLDERS
         ]
 
         for folder_name in dirs:
@@ -243,15 +280,17 @@ def find_language_folders():
                 continue
 
             lang_key = split[0].strip()
-            full_path = os.path.join(LP_PATH, folder_name)
-            languages[lang_key].append(full_path)
-
+            languages[lang_key].append(LP_PATH / folder_name)
     except FileNotFoundError:
         logging.error(f"Language pack path not found: {LP_PATH}")
         return {}
 
     return dict(languages)
 
+
+# ==========================================
+# MAIN LOOP
+# ==========================================
 
 if __name__ == "__main__":
     # Ensure a reports directory exists
@@ -264,21 +303,29 @@ if __name__ == "__main__":
     # Find and Group Folders
     all_languages = find_language_folders()
 
-    print("Reports for language pack completion have been created. Summary:\n")
-    for lang_name, paths in all_languages.items():
+    print("\n" + "=" * 67)
+    print(
+        f"{'Language':<20} {'Progress':>10} {'Stats':>13} {'Orphans':>10} {'No-ID':>10}"
+    )
+    print("-" * 67)
+
+    for lang_name, paths in sorted(all_languages.items()):
         # Aggregate IDs from all folders associated with this language
         aggregated_lang_ids = set()
+        aggregated_no_ids = []
+
         for folder_path in paths:
-            found_in_sub = generate_lang_id_set(folder_path)
-            aggregated_lang_ids.update(found_in_sub)
+            found_ids, no_ids = generate_lang_id_set(folder_path)
+            aggregated_lang_ids.update(found_ids)
+            aggregated_no_ids.extend(no_ids)
 
         # Run Analysis
-        campaign_report, orphans = run_report(aggregated_lang_ids, english_id_map)
+        content_report, orphans = run_report(aggregated_lang_ids, english_id_map)
 
-        # Console Summary
+        # Stats calculation
         total_found = 0
         total_required = 0
-        for data in campaign_report.values():
+        for data in content_report.values():
             found, required = map(int, data["stats"].split("/"))
             total_found += found
             total_required += required
@@ -286,14 +333,26 @@ if __name__ == "__main__":
         overall_pct = (total_found / total_required * 100) if total_required > 0 else 0
 
         # Aligned Console Output
-        # lang_name: left-aligned (20 chars), pct: right-aligned (6 chars)
-        # found/total: right-aligned (11 chars)
+        # Language: 20, Progress: 10 (8 for num + 2 for ' %'), Stats: 13, Orphans: 10, No-ID: 10
+        pct_str = f"{overall_pct:>7.2f} %"
+        stats_str = f"{total_found}/{total_required}"
         print(
-            f"{lang_name:<20} {overall_pct:>6.2f} %  ({total_found:>4}/{total_required:<4}) {len(orphans):>3} orphans"
+            f"{lang_name:<20} "  # Column 1
+            f"{pct_str:>10} "  # Column 2
+            f"{stats_str:>13} "  # Column 3
+            f"{len(orphans):>10} "  # Column 4
+            f"{len(aggregated_no_ids):>10}"  # Column 5
         )
 
         # Export
-        campaign_report["orphans"] = orphans
-        save_report(campaign_report, lang_name, total_found, total_required)
+        save_report(
+            content_report,
+            lang_name,
+            orphans,
+            aggregated_no_ids,
+            total_found,
+            total_required,
+        )
 
+    print("-" * 67)
     print(f"\nFull reports saved to: {REPORT_PATH}")
