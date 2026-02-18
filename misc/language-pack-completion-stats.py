@@ -5,6 +5,7 @@ import logging
 import json
 import os
 import pathlib
+import requests
 import time
 
 # ==========================================
@@ -25,6 +26,8 @@ NOT_ORPHANS = {
 LP_PATH = ROOT_PATH / "language-pack"
 SCRIPT_DIR = pathlib.Path(__file__).parent.absolute()
 CACHE_FILE = SCRIPT_DIR / "language-pack-completion-stats_cache.json"
+CARD_API_URL = "https://api.arkham.build/v1/cache/cards/en"
+METADATA_API_URL = "https://api.arkham.build/v1/cache/metadata"
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -33,6 +36,36 @@ logging.basicConfig(
 # ==========================================
 # PROCESSING HELPERS
 # ==========================================
+
+
+# This loads the data for player cards
+def load_card_data():
+    try:
+        response = requests.get(CARD_API_URL)
+        response.raise_for_status()
+
+        return {
+            item["id"]: item
+            for item in response.json().get("data", {}).get("all_card", [])
+            if item.get("deck_limit", 0) > 0
+        }
+    except Exception as e:
+        print(f"Error fetching card data: {e}")
+        return {}
+
+
+def get_pack_data():
+    try:
+        response = requests.get(METADATA_API_URL)
+        response.raise_for_status()
+
+        return {
+            item["code"]: item["real_name"]
+            for item in response.json().get("data", {}).get("pack", [])
+        }
+    except Exception as e:
+        print(f"Error fetching card data: {e}")
+        return {}
 
 
 def get_id(gm_data):
@@ -97,7 +130,7 @@ def return_with_folder(found_id, dirpath):
 
 
 def generate_id_map():
-    id_to_folder_map = {}
+    id_to_content_map = {}
     files_without_id = []
     tasks = []
 
@@ -127,13 +160,28 @@ def generate_id_map():
                 if card_id is None:  # data is the file path
                     files_without_id.append(data)
                 else:  # data is the main folder
-                    id_to_folder_map[card_id] = data
+                    id_to_content_map[card_id] = data
+
+    processing_time = time.perf_counter()
+    logging.info(f"Processing completed in {processing_time - scan_done:.2f}s")
+
+    # Add player card data
+    player_card_data = load_card_data()
+    pack_data = get_pack_data()
+
+    for card_id, data in player_card_data.items():
+        id_to_content_map[card_id] = "playercards\\" + pack_data.get(
+            data.get("pack_code"), "Unknown"
+        )
 
     end_time = time.perf_counter()
-    logging.info(f"Processing complete in {end_time - scan_done:.2f}s")
+
+    logging.info(
+        f"Loading player card data from API completed in: {end_time - processing_time:.2f}s"
+    )
     logging.info(f"Total time: {end_time - start_time:.2f}s")
 
-    return id_to_folder_map, files_without_id
+    return id_to_content_map, files_without_id
 
 
 def generate_lang_id_set(lang_root):
@@ -273,12 +321,6 @@ def find_language_folders():
         for folder_name in dirs:
             # Split "German - Campaigns" -> "German"
             split = folder_name.split("-")
-            type_key = split[1].strip()
-
-            # Skip player cards
-            if type_key == "Player Cards":
-                continue
-
             lang_key = split[0].strip()
             languages[lang_key].append(LP_PATH / folder_name)
     except FileNotFoundError:
