@@ -32,6 +32,10 @@ CACHE_FILE = SCRIPT_DIR / "language-pack-completion-stats_cache.json"
 CARD_API_URL = "https://api.arkham.build/v1/cache/cards/en"
 METADATA_API_URL = "https://api.arkham.build/v1/cache/metadata"
 
+# Regex pattern for cards with suffix:
+# ^ matches start, .{5,6} is 5-6 characters, - is a hyphen, .{1,2} is any 1-2 chars, $ matches end
+SUFFIX_PATTERN = re.compile(r"^.{5,6}-.{1,2}$")
+
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
@@ -44,7 +48,7 @@ logging.basicConfig(
 # This loads the data for player cards
 def load_card_data():
     try:
-        response = requests.get(CARD_API_URL)
+        response = requests.get(CARD_API_URL, timeout=10)
         response.raise_for_status()
 
         return {
@@ -60,7 +64,7 @@ def load_card_data():
 
 def get_pack_data():
     try:
-        response = requests.get(METADATA_API_URL)
+        response = requests.get(METADATA_API_URL, timeout=10)
         response.raise_for_status()
 
         return {
@@ -286,16 +290,12 @@ def run_report(lang_ids, english_map):
     english_ids = set(english_map.keys())
     orphans = lang_ids - english_ids - NOT_ORPHANS
 
-    # Regex pattern for cards with suffix:
-    # ^ matches start, .{5,6} is 5-6 characters, - is a hyphen, .{1,2} is any 1-2 chars, $ matches end
-    pattern = re.compile(r"^.{5,6}-.{1,2}$")
-
     # Exclude fan-made AND cards with suffix (mini cards, parallel, customizable)
     filtered_orphans = []
     for o in orphans:
         if len(o) > 15 and "-" in o:  # Check exclusion 1: Fan-made
             continue
-        if pattern.match(o) or o.endswith("-t-c"):  # Check exclusion 2: Suffix
+        if SUFFIX_PATTERN.match(o) or o.endswith("-t-c"):  # Check exclusion 2: Suffix
             continue
         filtered_orphans.append(o)
 
