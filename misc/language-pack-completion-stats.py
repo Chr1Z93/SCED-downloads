@@ -4,7 +4,7 @@ from datetime import datetime
 import logging
 import json
 import os
-import pathlib
+from pathlib import Path
 import re
 import requests
 import time
@@ -13,8 +13,8 @@ import time
 # CONFIGURATION
 # ==========================================
 
-ROOT_PATH = pathlib.Path(r"C:\git\SCED-downloads\decomposed")
-REPORT_PATH = pathlib.Path(r"C:\git\SCED-downloads\misc\localization_reports")
+ROOT_PATH = Path(r"C:\git\SCED-downloads\decomposed")
+REPORT_PATH = Path(r"C:\git\SCED-downloads\misc\localization_reports")
 EXCLUDED_FOLDERS = {"language-pack", "misc", ".git", ".vscode"}
 NOT_ORPHANS = {
     "LatestFAQ",
@@ -22,12 +22,12 @@ NOT_ORPHANS = {
     "PhaseReference",
     "RoundSequence",
     "RulesReference",
-    "89005", # Reality Acid Sheet
-    "CGWTWS01", # When The World Screamed scenario guide
+    "89005",  # Reality Acid Sheet
+    "CGWTWS01",  # When The World Screamed scenario guide
 }
 
 LP_PATH = ROOT_PATH / "language-pack"
-SCRIPT_DIR = pathlib.Path(__file__).parent.absolute()
+SCRIPT_DIR = Path(__file__).parent.absolute()
 CACHE_FILE = SCRIPT_DIR / "language-pack-completion-stats_cache.json"
 CARD_API_URL = "https://api.arkham.build/v1/cache/cards/en"
 METADATA_API_URL = "https://api.arkham.build/v1/cache/metadata"
@@ -79,22 +79,22 @@ def get_id(gm_data):
     return gm_data.get("id")
 
 
-def process_file(dirpath, filename):
-    file_path = os.path.join(dirpath, filename)
+def process_file(current_path, filename):
+    file_path = current_path / filename
     found_id = None
 
     try:
         # Attempt to get ID from external .gmnotes
-        gmnotes_file = os.path.splitext(file_path)[0] + ".gmnotes"
-        if os.path.exists(gmnotes_file):
-            with open(gmnotes_file, "r", encoding="utf-8") as f:
+        gmnotes_file = file_path.with_suffix(".gmnotes")
+        if gmnotes_file.exists():
+            with gmnotes_file.open("r", encoding="utf-8") as f:
                 gm_data = json.load(f)
                 found_id = get_id(gm_data)
                 if found_id:
-                    return return_with_folder(found_id, dirpath)
+                    return return_with_folder(found_id, file_path.parent)
 
         # Attempt to get ID from embedded GM Notes
-        with open(file_path, "r", encoding="utf-8") as f:
+        with file_path.open("r", encoding="utf-8") as f:
             data = json.load(f)
 
         gm_notes_raw = data.get("GMNotes", "")
@@ -103,7 +103,7 @@ def process_file(dirpath, filename):
                 gm_data = json.loads(gm_notes_raw)
                 found_id = get_id(gm_data)
                 if found_id:
-                    return return_with_folder(found_id, dirpath)
+                    return return_with_folder(found_id, current_path)
             except (json.JSONDecodeError, TypeError):
                 pass
 
@@ -117,15 +117,18 @@ def process_file(dirpath, filename):
         return None
 
 
-def return_with_folder(found_id, dirpath):
+def return_with_folder(found_id, path_obj):
     """Helper to extract main folder."""
-    path_parts = dirpath.split(os.sep)
     try:
-        idx = path_parts.index("decomposed")
-        main_folder = os.path.join(path_parts[idx + 1], path_parts[idx + 2])
-        return str(found_id), main_folder
+        # Find the index of "decomposed" in the path parts
+        parts = path_obj.parts
+        idx = parts.index("decomposed")
+
+        # Grab the next two folders and join them
+        main_folder = Path(*parts[idx + 1 : idx + 3])
+        return found_id, str(main_folder)
     except (ValueError, IndexError):
-        return str(found_id), "Unknown"
+        return found_id, "Unknown"
 
 
 # ==========================================
@@ -203,16 +206,26 @@ def generate_lang_id_set(lang_root):
         for dirpath, dirs, filenames in os.walk(lang_root):
             # Still exclude noise
             dirs[:] = [d for d in dirs if d not in EXCLUDED_FOLDERS]
+
+            current_path = Path(dirpath)
+
             for filename in filenames:
                 if filename.endswith(".json"):
-                    tasks.append(executor.submit(process_file, dirpath, filename))
+                    tasks.append(executor.submit(process_file, current_path, filename))
 
         for task in tasks:
             result = task.result()
             if result:
                 card_id, data = result
                 if card_id is None:
-                    files_without_id.append(data)
+                    anchor = "language-pack"
+
+                    # Find the part of the path relative to 'language-pack'
+                    if anchor in data.parts:
+                        relative_path = data.relative_to(
+                            Path(dirpath[: dirpath.find(anchor) + len(anchor)])
+                        )
+                        files_without_id.append(str(relative_path))
                 else:
                     found_ids.add(card_id)
 
@@ -226,7 +239,7 @@ def generate_lang_id_set(lang_root):
 
 def get_master_map(force_refresh=False):
     """Loads the map from disk if it exists, otherwise generates and saves it."""
-    if os.path.exists(CACHE_FILE) and not force_refresh:
+    if CACHE_FILE.exists() and not force_refresh:
         print(f"Loading master map from cache: {CACHE_FILE}")
         with open(CACHE_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -261,7 +274,7 @@ def run_report(lang_ids, english_map):
         percent = (count / total * 100) if total > 0 else 0
 
         unsorted_report[content] = {
-            "completion": f"{percent:.2f}%",
+            "completion": f"{percent:.2f} %",
             "stats": f"{count} / {total}",
             "missing": sorted(list(missing)),
         }
@@ -297,17 +310,15 @@ def save_report(
         "metadata": {
             "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "language": lang_name,
-            "stats": {
-                "overall_completion": (
-                    f"{(total_found / total_required * 100):.2f}%"
-                    if total_required > 0
-                    else "0%"
-                ),
-                "total_found": total_found,
-                "total_required": total_required,
-                "orphan_count": len(orphans),
-                "files_missing_id": len(no_id_files),
-            },
+            "overall_completion": (
+                f"{(total_found / total_required * 100):.2f} %"
+                if total_required > 0
+                else "0 %"
+            ),
+            "total_found": total_found,
+            "total_required": total_required,
+            "orphan_count": len(orphans),
+            "missing_id_count": len(no_id_files),
         },
         "orphans": sorted(orphans),
         "files_without_id": sorted(no_id_files),
@@ -329,9 +340,9 @@ def find_language_folders():
     try:
         # Get all folders directly inside LP_PATH
         dirs = [
-            d
-            for d in os.listdir(LP_PATH)
-            if os.path.isdir(LP_PATH / d) and d not in EXCLUDED_FOLDERS
+            d.name
+            for d in LP_PATH.iterdir()
+            if d.is_dir() and d.name not in EXCLUDED_FOLDERS
         ]
 
         for folder_name in dirs:
@@ -352,8 +363,7 @@ def find_language_folders():
 
 if __name__ == "__main__":
     # Ensure a reports directory exists
-    if not os.path.exists(REPORT_PATH):
-        os.makedirs(REPORT_PATH)
+    REPORT_PATH.mkdir(parents=True, exist_ok=True)
 
     # Get the English Source of Truth
     english_id_map = get_master_map()
