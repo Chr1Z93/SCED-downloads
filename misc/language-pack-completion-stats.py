@@ -154,9 +154,11 @@ def generate_id_map():
             # This modifies the dirs list in-place, so os.walk won't visit them
             dirs[:] = [d for d in dirs if d not in EXCLUDED_FOLDERS]
 
+            current_path = Path(dirpath)
+
             for filename in filenames:
                 if filename.endswith(".json"):
-                    tasks.append(executor.submit(process_file, dirpath, filename))
+                    tasks.append(executor.submit(process_file, current_path, filename))
 
         scan_done = time.perf_counter()
         logging.info(
