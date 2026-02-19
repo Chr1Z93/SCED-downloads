@@ -105,7 +105,7 @@ def decompose_saved_object(input_file):
 
     # Alternative path by sanitizing the nickname
     # This regex removes any character that is NOT a letter, number, or whitespace
-    sanitized_nickname = re.sub(r'[^\w\s.-]', '', nickname).strip()
+    sanitized_nickname = re.sub(r'[^\w\s]', '', nickname).strip()
     alternative_path = os.path.join(saved_objects_dir, f"{sanitized_nickname}.json")
     
     # Check which path exists, prioritizing the primary one
