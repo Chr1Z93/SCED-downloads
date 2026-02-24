@@ -81,7 +81,7 @@ def construct_card_gmnotes(card_id, card_level):
 
 def save_file(data, file_path):
     with open(file_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
+        json.dump(data, f, indent=2, ensure_ascii=False)
         f.write("\n")
 
 
