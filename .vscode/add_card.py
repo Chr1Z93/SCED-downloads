@@ -1,9 +1,11 @@
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
 BASE_PATH_IDENTIFIER = "SCED-downloads"
+CYCLE = "Starters 2026"
 
 
 def get_path_at_depth(full_path, depth_to_skip):
@@ -39,7 +41,17 @@ def get_path_at_depth(full_path, depth_to_skip):
         return "Error: Depth to skip exceeds available path length."
 
 
-def construct_card_json(card_id, nickname, gmnotes_path):
+def construct_card_json(card_id, nickname, card_type, gmnotes_path):
+    # Start with base tags
+    tags = []
+
+    # Only add "Asset" tag if the type is Asset
+    if card_type == "Asset":
+        tags.append("Asset")
+
+    # Assume player card
+    tags.append("PlayerCard")
+
     return {
         "CardID": int(card_id + "00"),
         "CustomDeck": {
@@ -49,22 +61,22 @@ def construct_card_json(card_id, nickname, gmnotes_path):
                 "FaceURL": f"{card_id}.jpg",
                 "NumHeight": 1,
                 "NumWidth": 1,
-                "Type": 0
+                "Type": 0,
             }
         },
         "GMNotes_path": str(get_path_at_depth(gmnotes_path, 3)),
         "GUID": card_id,
         "Name": "Card",
         "Nickname": nickname,
-        "Tags": ["Asset", "PlayerCard"],
+        "Tags": tags,
         "Transform": {"rotY": 270, "scaleX": 1, "scaleY": 1, "scaleZ": 1},
     }
 
 
-def construct_card_gmnotes(card_id, card_level):
-    return {
+def construct_card_gmnotes(card_id, card_level, card_type):
+    notes = {
         "id": card_id,
-        "type": "Asset",
+        "type": card_type.replace(" (Weakness)", ""),
         "slot": "",
         "class": "",
         "cost": 1,
@@ -73,10 +85,32 @@ def construct_card_gmnotes(card_id, card_level):
         "agilityIcons": 1,
         "combatIcons": 1,
         "intellectIcons": 1,
-        "wildIcons": 1,
         "willpowerIcons": 1,
-        "cycle": "Starters 2026",
+        "wildIcons": 1,
+        "weakness": True,
+        "cycle": CYCLE,
     }
+
+    # Keep slot only for Assets
+    if "Asset" not in card_type:
+        notes.pop("slot", None)
+
+    # Keep cost for Assets and Events
+    if not any(t in card_type for t in ["Asset", "Event"]):
+        notes.pop("cost", None)
+
+    # Keep level for standard Player Cards
+    if not any(t in card_type for t in ["Asset", "Event", "Skill"]):
+        notes.pop("level", None)
+
+    # Handle Weaknesses (remove level and set class)
+    if "Weakness" in card_type:
+        notes["class"] = "Neutral"
+        notes.pop("level", None)
+    else:
+        notes.pop("weakness", None)
+
+    return notes
 
 
 def save_file(data, file_path):
@@ -85,12 +119,12 @@ def save_file(data, file_path):
         f.write("\n")
 
 
-def add_card(active_file_path, card_title, card_level, card_id):
+def add_card(active_file_path, card_title, card_level, card_id, card_type):
     folder_path = os.path.dirname(active_file_path)
 
-    if card_level != "0":
-        nickname = card_title + " (" + card_level + ")"
-        base_file_name = card_title + card_level
+    if card_level != "0" and "Weakness" not in card_type:
+        nickname = f"{card_title} ({card_level})"
+        base_file_name = f"{card_title}{card_level}"
     else:
         nickname = card_title
         base_file_name = card_title
@@ -103,8 +137,8 @@ def add_card(active_file_path, card_title, card_level, card_id):
     gmnotes_path = os.path.join(folder_path, f"{base_file_name}.gmnotes")
 
     # Define the Tabletop Simulator data structures
-    json_data = construct_card_json(card_id, nickname, gmnotes_path)
-    gmnotes_data = construct_card_gmnotes(card_id, card_level)
+    json_data = construct_card_json(card_id, nickname, card_type, gmnotes_path)
+    gmnotes_data = construct_card_gmnotes(card_id, card_level, card_type)
 
     # Write the files
     save_file(json_data, json_path)
@@ -134,11 +168,18 @@ def add_card(active_file_path, card_title, card_level, card_id):
     else:
         print(f"Warning: Parent file {parent_file_path} not found.")
 
+    # Open the .gmnotes file in VS Code
+    try:
+        # 'code -r' opens the file in the current active window
+        subprocess.run(["code", "-r", gmnotes_path], check=True)
+    except Exception as e:
+        print(f"Could not open file in VS Code: {e}")
+
 
 if __name__ == "__main__":
-    if len(sys.argv) != 5:
-        print(f"Expected 3 arguments, got {len(sys.argv)-1}.")
+    if len(sys.argv) != 6:
+        print(f"Expected 5 arguments, got {len(sys.argv)-1}.")
         print("Use the VS Code task to execute this script.")
         sys.exit(1)
 
-    add_card(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
+    add_card(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5])
