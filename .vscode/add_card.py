@@ -73,12 +73,12 @@ def construct_card_json(card_id, nickname, card_type, gmnotes_path):
     }
 
 
-def construct_card_gmnotes(card_id, card_level, card_type):
+def construct_card_gmnotes(card_id, card_level, card_type, card_class):
     notes = {
         "id": card_id,
         "type": card_type.replace(" (Weakness)", ""),
         "slot": "",
-        "class": "",
+        "class": card_class,
         "cost": 1,
         "level": int(card_level),
         "traits": "",
@@ -119,7 +119,7 @@ def save_file(data, file_path):
         f.write("\n")
 
 
-def add_card(active_file_path, card_title, card_level, card_id, card_type):
+def add_card(active_file_path, card_id, card_title, card_level, card_type, card_class):
     folder_path = os.path.dirname(active_file_path)
 
     if card_level != "0" and "Weakness" not in card_type:
@@ -138,7 +138,7 @@ def add_card(active_file_path, card_title, card_level, card_id, card_type):
 
     # Define the Tabletop Simulator data structures
     json_data = construct_card_json(card_id, nickname, card_type, gmnotes_path)
-    gmnotes_data = construct_card_gmnotes(card_id, card_level, card_type)
+    gmnotes_data = construct_card_gmnotes(card_id, card_level, card_type, card_class)
 
     # Write the files
     save_file(json_data, json_path)
@@ -171,15 +171,17 @@ def add_card(active_file_path, card_title, card_level, card_id, card_type):
     # Open the .gmnotes file in VS Code
     try:
         # 'code -r' opens the file in the current active window
-        subprocess.run(["code", "-r", gmnotes_path], check=True)
+        subprocess.run(["code", "-r", gmnotes_path], check=True, shell=True)
     except Exception as e:
         print(f"Could not open file in VS Code: {e}")
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 6:
-        print(f"Expected 5 arguments, got {len(sys.argv)-1}.")
+    if len(sys.argv) != 7:
+        print(f"Expected 6 arguments, got {len(sys.argv)-1}.")
         print("Use the VS Code task to execute this script.")
         sys.exit(1)
 
-    add_card(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5])
+    add_card(
+        sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6]
+    )
