@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -129,8 +130,8 @@ def add_card(active_file_path, card_id, card_title, card_level, card_type, card_
         nickname = card_title
         base_file_name = card_title
 
-    # add guid and remove spaces
-    base_file_name = (base_file_name + "." + card_id).replace(" ", "")
+    # Add guid and remove special characters
+    base_file_name = re.sub(r'[^a-zA-Z0-9._-]', '', f"{base_file_name}.{card_id}")
 
     # Construct the file paths
     json_path = os.path.join(folder_path, f"{base_file_name}.json")
