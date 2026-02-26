@@ -10,6 +10,8 @@ from pathlib import Path
 
 PLATFORM = platform.system()
 
+# mac / linux build binary is for v1.3, windows binary uses dev state from 2026-02-26
+
 # --- Helper Functions ---
 
 
@@ -83,7 +85,6 @@ def validate_and_prepare_json(input_file):
     except Exception as e:
         print(f"Error validating JSON: {e}", file=sys.stderr)
         return None
-
 
 
 # --- Main Logic ---
@@ -160,7 +161,7 @@ def main():
             "-objin",
             str(prepared_source),
             "-objout",
-            str(input_path.parent),
+            str(input_path),
             "-reverse",
         ]
 
