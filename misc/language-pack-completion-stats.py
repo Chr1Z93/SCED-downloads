@@ -254,7 +254,7 @@ def get_master_map(force_refresh=False):
     master_map, _ = generate_id_map()  # We ignore master ID-less files for the cache
 
     with open(CACHE_FILE, "w", encoding="utf-8") as f:
-        json.dump(master_map, f, indent=2)
+        json.dump(master_map, f, indent=2, ensure_ascii=False)
 
     logging.info(f"Master map cached to {CACHE_FILE}")
     return master_map
@@ -329,7 +329,7 @@ def save_report(
 
     filename = REPORT_PATH / f"{lang_name}_report.json"
     with open(filename, "w", encoding="utf-8") as f:
-        json.dump(final_output, f, indent=2)
+        json.dump(final_output, f, indent=2, ensure_ascii=False)
 
 
 def find_language_folders():
