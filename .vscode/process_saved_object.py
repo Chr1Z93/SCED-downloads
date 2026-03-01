@@ -129,7 +129,7 @@ def main():
     temp_to_clean = None
 
     if args.action == "build":
-        output_file = saved_objects_dir / f"{nickname}.json"
+        output_file = saved_objects_dir / f"{sanitized_nickname}.json"
         full_cmd += [
             "-bonusdir",
             bonusdir,
