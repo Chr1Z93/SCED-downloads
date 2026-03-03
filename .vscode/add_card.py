@@ -78,7 +78,7 @@ def construct_card_gmnotes(card_id, card_level, card_type, card_class):
     notes = {
         "id": card_id,
         "type": card_type.replace(" (Weakness)", ""),
-        "slot": "",
+        "slot": "Hand",
         "class": card_class,
         "cost": 1,
         "level": int(card_level),
@@ -89,6 +89,7 @@ def construct_card_gmnotes(card_id, card_level, card_type, card_class):
         "willpowerIcons": 1,
         "wildIcons": 1,
         "weakness": True,
+        "basicWeaknessCount": 1,
         "cycle": CYCLE,
     }
 
@@ -100,9 +101,14 @@ def construct_card_gmnotes(card_id, card_level, card_type, card_class):
     if not any(t in card_type for t in ["Asset", "Event"]):
         notes.pop("cost", None)
 
-    # Keep level for standard Player Cards
+    # Remove fields for non Player Cards
     if not any(t in card_type for t in ["Asset", "Event", "Skill"]):
         notes.pop("level", None)
+        notes.pop("agilityIcons", None)
+        notes.pop("combatIcons", None)
+        notes.pop("intellectIcons", None)
+        notes.pop("willpowerIcons", None)
+        notes.pop("wildIcons", None)
 
     # Handle Weaknesses (remove level and set class)
     if "Weakness" in card_type:
@@ -110,6 +116,7 @@ def construct_card_gmnotes(card_id, card_level, card_type, card_class):
         notes.pop("level", None)
     else:
         notes.pop("weakness", None)
+        notes.pop("basicWeaknessCount", None)
 
     return notes
 
@@ -131,7 +138,7 @@ def add_card(active_file_path, card_id, card_title, card_level, card_type, card_
         base_file_name = card_title
 
     # Add guid and remove special characters
-    base_file_name = re.sub(r'[^a-zA-Z0-9._-]', '', f"{base_file_name}.{card_id}")
+    base_file_name = re.sub(r"[^a-zA-Z0-9._-]", "", f"{base_file_name}.{card_id}")
 
     # Construct the file paths
     json_path = os.path.join(folder_path, f"{base_file_name}.json")
