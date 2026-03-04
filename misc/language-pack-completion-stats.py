@@ -15,7 +15,40 @@ import time
 
 ROOT_PATH = Path(r"C:\git\SCED-downloads\decomposed")
 REPORT_PATH = Path(r"C:\git\SCED-downloads\misc\localization_reports")
-EXCLUDED_FOLDERS = {"language-pack", "misc", ".git", ".vscode"}
+EXCLUDED_FOLDERS = {
+    "language-pack",
+    "misc",
+    ".git",
+    ".vscode",
+    # fan campaigns
+    "Ages Unwound",
+    "Alice in Wonderland",
+    "Bloodborne - City of the Unseen",
+    "Call of the Plaguebearer",
+    "Circus Ex Mortis",
+    "Cyclopean Foundations",
+    "Dark Matter",
+    "Darkham Horror",
+    "Night of Vespers",
+    "Rise, Rapture, Rise",
+    "Starter Decks 2026 - Preview Cards",
+    "The Crown of Egil",
+    "The Ghosts of Onigawa",
+    "Unofficial Return to The Scarlet Keys",
+    # fan player cards
+    "Baldurs Gate III",
+    "Circus Ex Mortis",
+    "City of Secrets",
+    "Mass Effect Investigators",
+    "MythosBusters Campaign Play-Along Cards",
+    "Rabbit Hole Expansion",
+    "Touhou Project Investigators"
+    # fan scenarios
+    "Cosmic Pantheon",
+    "The Grand Oak Hotel",
+    "The Symphony of Erich Zann",
+    "The Woods of the Black Goat",
+}
 NOT_ORPHANS = {
     "LatestFAQ",
     "LearnToPlay",
@@ -52,7 +85,7 @@ def load_card_data():
         response.raise_for_status()
 
         return {
-            item["id"]: item
+            item["code"]: item
             for item in response.json().get("data", {}).get("all_card", [])
             if item.get("deck_limit", 0) > 0
             or item.get("real_text", "").startswith("Bonded")
@@ -152,7 +185,11 @@ def generate_id_map():
     with ThreadPoolExecutor(max_workers=8) as executor:
         for dirpath, dirs, filenames in os.walk(ROOT_PATH):
             # This modifies the dirs list in-place, so os.walk won't visit them
-            dirs[:] = [d for d in dirs if d not in EXCLUDED_FOLDERS]
+            dirs[:] = [
+                d
+                for d in dirs
+                if d not in EXCLUDED_FOLDERS and "Fan Campaigns" not in d
+            ]
 
             current_path = Path(dirpath)
 
@@ -211,7 +248,11 @@ def generate_lang_id_set(lang_root):
     with ThreadPoolExecutor(max_workers=8) as executor:
         for dirpath, dirs, filenames in os.walk(lang_root):
             # Still exclude noise
-            dirs[:] = [d for d in dirs if d not in EXCLUDED_FOLDERS]
+            dirs[:] = [
+                d
+                for d in dirs
+                if d not in EXCLUDED_FOLDERS and "Fan Campaigns" not in d
+            ]
 
             current_path = Path(dirpath)
 
@@ -344,7 +385,9 @@ def find_language_folders():
         dirs = [
             d.name
             for d in LP_PATH.iterdir()
-            if d.is_dir() and d.name not in EXCLUDED_FOLDERS
+            if d.is_dir()
+            and d.name not in EXCLUDED_FOLDERS
+            and "Fan Campaigns" not in d.name
         ]
 
         for folder_name in dirs:
