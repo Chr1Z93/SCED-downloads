@@ -6,13 +6,14 @@ import json
 import os
 from pathlib import Path
 import re
-import requests
 import time
 
 # ==========================================
 # CONFIGURATION
 # ==========================================
 
+PLAYER_CARD_PATH_1 = Path(r"C:\git\SCED\objects\AdditionalPlayerCards.2cba6b")
+PLAYER_CARD_PATH_2 = Path(r"C:\git\SCED\objects\AllPlayerCards.15bb07")
 ROOT_PATH = Path(r"C:\git\SCED-downloads\decomposed")
 REPORT_PATH = Path(r"C:\git\SCED-downloads\misc\localization_reports")
 EXCLUDED_FOLDERS = {
@@ -42,7 +43,7 @@ EXCLUDED_FOLDERS = {
     "Mass Effect Investigators",
     "MythosBusters Campaign Play-Along Cards",
     "Rabbit Hole Expansion",
-    "Touhou Project Investigators"
+    "Touhou Project Investigators",
     # fan scenarios
     "Cosmic Pantheon",
     "The Grand Oak Hotel",
@@ -56,18 +57,14 @@ NOT_ORPHANS = {
     "RoundSequence",
     "RulesReference",
     "89005",  # Reality Acid Sheet
+    "98019", # Gloria Goldberg Promo
     "CGWTWS01",  # When The World Screamed scenario guide
 }
 
+# Derived Paths
 LP_PATH = ROOT_PATH / "language-pack"
 SCRIPT_DIR = Path(__file__).parent.absolute()
 CACHE_FILE = SCRIPT_DIR / "language-pack-completion-stats_cache.json"
-CARD_API_URL = "https://api.arkham.build/v1/cache/cards/en"
-METADATA_API_URL = "https://api.arkham.build/v1/cache/metadata"
-
-# Regex pattern for cards with suffix:
-# ^ matches start, .{5,6} is 5-6 characters, - is a hyphen, .{1,2} is any 1-2 chars, $ matches end
-SUFFIX_PATTERN = re.compile(r"^.{5,6}-.{1,2}$")
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -79,34 +76,37 @@ logging.basicConfig(
 
 
 # This loads the data for player cards
-def load_card_data():
-    try:
-        response = requests.get(CARD_API_URL, timeout=10)
-        response.raise_for_status()
+def load_playercard_data(root_folder):
+    card_data = {}
+    for dirpath, dirs, filenames in os.walk(root_folder):
+        current_path = Path(dirpath)
 
-        return {
-            item["code"]: item
-            for item in response.json().get("data", {}).get("all_card", [])
-            if item.get("deck_limit", 0) > 0
-            or item.get("real_text", "").startswith("Bonded")
-        }
-    except Exception as e:
-        print(f"Error fetching card data: {e}")
-        return {}
+        for filename in filenames:
+            if filename.endswith(".json"):
+                file_path = current_path / filename
 
+                # Attempt to get ID from external .gmnotes
+                gmnotes_file = file_path.with_suffix(".gmnotes")
+                if gmnotes_file.exists():
+                    with gmnotes_file.open("r", encoding="utf-8") as f:
+                        gm_data = json.load(f)
+                        found_id = get_id(gm_data)
+                        if found_id:
+                            card_data[found_id] = gm_data.get("cycle", "Unknown")
+                            continue
 
-def get_pack_data():
-    try:
-        response = requests.get(METADATA_API_URL, timeout=10)
-        response.raise_for_status()
+                # Attempt to get ID from embedded GM Notes
+                with file_path.open("r", encoding="utf-8") as f:
+                    data = json.load(f)
 
-        return {
-            item["code"]: item["real_name"]
-            for item in response.json().get("data", {}).get("pack", [])
-        }
-    except Exception as e:
-        print(f"Error fetching card data: {e}")
-        return {}
+                gm_notes_raw = data.get("GMNotes", "")
+                if gm_notes_raw:
+                    gm_data = json.loads(gm_notes_raw)
+                    found_id = get_id(gm_data)
+                    if found_id:
+                        card_data[found_id] = gm_data.get("cycle", "Unknown")
+
+    return card_data
 
 
 def get_id(gm_data):
@@ -218,13 +218,12 @@ def generate_id_map():
     logging.info(f"Processing completed in {processing_time - scan_done:.2f}s")
 
     # Add player card data
-    player_card_data = load_card_data()
-    pack_data = get_pack_data()
+    data_1 = load_playercard_data(PLAYER_CARD_PATH_1)
+    data_2 = load_playercard_data(PLAYER_CARD_PATH_2)
+    player_card_data = data_1 | data_2
 
-    for card_id, data in player_card_data.items():
-        id_to_content_map[card_id] = "playercards\\" + pack_data.get(
-            data.get("pack_code"), "Unknown"
-        )
+    for card_id, cycle in player_card_data.items():
+        id_to_content_map[card_id] = "playercards\\" + cycle
 
     end_time = time.perf_counter()
 
@@ -333,12 +332,12 @@ def run_report(lang_ids, english_map):
     english_ids = set(english_map.keys())
     orphans = lang_ids - english_ids - NOT_ORPHANS
 
-    # Exclude fan-made AND cards with suffix (mini cards, parallel, customizable)
+    # Exclude fan-made AND mini cards
     filtered_orphans = []
     for o in orphans:
         if len(o) > 15 and "-" in o:  # Check exclusion 1: Fan-made
             continue
-        if SUFFIX_PATTERN.match(o) or o.endswith("-t-c"):  # Check exclusion 2: Suffix
+        if o.endswith("-m"):  # Check exclusion 2: Mini-cards
             continue
         filtered_orphans.append(o)
 
@@ -411,7 +410,7 @@ if __name__ == "__main__":
     REPORT_PATH.mkdir(parents=True, exist_ok=True)
 
     # Get the English Source of Truth
-    english_id_map = get_master_map()
+    english_id_map = get_master_map(True)  # Force refresh
 
     # Find and Group Folders
     all_languages = find_language_folders()
