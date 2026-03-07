@@ -26,6 +26,7 @@ EXCLUDED_FOLDERS = {
     "Alice in Wonderland",
     "Bloodborne - City of the Unseen",
     "Call of the Plaguebearer",
+    "Celtic Rising",
     "Circus Ex Mortis",
     "Cyclopean Foundations",
     "Dark Matter",
