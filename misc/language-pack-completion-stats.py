@@ -411,7 +411,7 @@ if __name__ == "__main__":
     REPORT_PATH.mkdir(parents=True, exist_ok=True)
 
     # Get the English Source of Truth
-    english_id_map = get_master_map(True)  # Force refresh
+    english_id_map = get_master_map()
 
     # Find and Group Folders
     all_languages = find_language_folders()
