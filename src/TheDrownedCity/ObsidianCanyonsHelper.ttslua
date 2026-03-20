@@ -2,6 +2,11 @@
 ---@field getObjects fun(): table
 ---@field takeObject fun(params: table): tts__Object
 
+-- To improve:
+-- use trash instead of aboveTrash
+-- Make sure that location memo is clean
+
+
 local CoroutineLib            = require("util/CoroutineLib")
 local DeckLib                 = require("util/DeckLib")
 local GlobalApi               = require("Global/GlobalApi")
@@ -10,6 +15,7 @@ local LocationLib             = require("LocationLib")
 local MythosAreaApi           = require("mythos/MythosAreaApi")
 local PlayAreaApi             = require("playarea/PlayAreaApi")
 local SearchLib               = require("util/SearchLib")
+local TokenSpawnTrackerApi    = require("tokens/TokenSpawnTrackerApi")
 local VictoryDisplayApi       = require("mythos/VictoryDisplayApi")
 
 local ANCIENT_DOME_ID         = "11652"
@@ -218,7 +224,7 @@ function onLoad(savedData)
     expeditionDirection = nil
   end
 
-  local trash = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+  trash = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
   if not trash then
     printToAll("Trash not found. Setup Helper won't work")
     return
@@ -282,14 +288,14 @@ function act1Setup(param)
 
     -- If this is not doable escape
     if escapePreventative then
-      printToAll('Setup couldnt be done. Aborting.')
+      printToAll("Setup couldn't be done. Aborting.")
       return
     end
 
     -- From now on, we assume that the setup can be done.
     -- Inform windcontroller of the new geometry
-    informWindHelperAct(1)
     -- Inform windcontroller of the expedition helper of the new geometry
+    informWindHelperAct(1)
     informWindHelperExpeditionDirection(expeditionDirection)
 
     local summitDeck = getSummitDeck()
@@ -298,24 +304,23 @@ function act1Setup(param)
     for _, coords in ipairs(ACT1_LOCATION_POSITIONS) do
       local pos = PlayAreaApi.gridToWorld(coords)
       summitDeck.takeObject({ position = pos })
-      CoroutineLib.yieldSeconds(0.05)
+      CoroutineLib.yieldSeconds(0.10)
     end
 
     -- Shuffle the set-aside Central Spire into the top three cards of the
     -- Summit deck.
     if centralSpire then
       DeckLib.shuffleIntoTopOrBottomX(centralSpire, summitDeck, false, 3, true)
-      printToAll('Spire shuffled with the top three cards.')
+      printToAll("Central Spire was shuffled with the top three cards.")
     end
 
     -- Each investigator begins play at R’lyeh Streets
     findMoveMiniCardS({ position = PlayAreaApi.gridToWorld({ x = -1.2, y = -1.2 }) })
     makeSureIsFaceUp(rlyehStreets)
-    printToAll('Each investigator begins play at R’lyeh Streets.')
+    printToAll("Each investigator begins play at R'lyeh Streets.")
 
     -- Find the double-sided Eastern Winds/Western Winds story card and
     -- put it into play, X side faceup.
-    -- Place beautiful but discrete arrows to simbolize wind directions
     local windCard = getObjectById(WINDS_CARD_ID)
     if not windCard then
       printToAll('Wind card was not found.')
@@ -327,8 +332,7 @@ function act1Setup(param)
       printToAll('Western Winds side faceup.', LIGHT_BLUE)
     end
 
-    -- Build the act and agenda decks using agenda
-    -- Done
+    -- Build the act and agenda decks using agenda. Almost done.
     if expeditionDirection == 'western' then
       printToAll('Agenda and Act placed. There are three acts.')
     elseif expeditionDirection == 'eastern' then
@@ -349,10 +353,9 @@ function act1Setup(param)
     printToAll('Shuffle the encounter deck. You are ready to begin.')
 
     -- Transform this objetct from Act 0 into Act I mode
-    self.removeButton(0)
-    self.removeButton(1)
+    
     currentAct = 1
-    self.createButton(BUTTON_ADVANCE_2)
+    refreshButtons()
   end
 
   CoroutineLib.start(coroutineact1Setup)
@@ -368,6 +371,8 @@ function act2Setup(_, color)
   end
 
   function coroutineAct2Setup()
+    local cautiousDealTime = 0.18
+    local stepTime = 0.4
     -- Does all the instructions in the back of the cards 11645 and 11643
 
     -- Verify if the spire is visible
@@ -392,87 +397,70 @@ function act2Setup(_, color)
     -- We asume we can advance
     -- Inform wind helper of the new geometry
     informWindHelperAct(2)
+    currentAct = 2
 
     -- Paragraph 0. If setup version II, then spawn the Inescapable.
-    if expeditionDirection == 'eastern' then
-      chest.takeObject({ guid = INNESCAPABLE_DECK_GUID, position = PlayAreaApi.gridToWorld({ x = 0.5, y = -2.5 }) })
-      CoroutineLib.yieldSeconds(0.1)
-      local innescapableDeck = getObjectFromGUID(INNESCAPABLE_DECK_GUID)
-      local centralSpire = getObjectById(CENTRAL_SPIRE_ID)
-      local pos2 = centralSpire.getPosition() + Vector(2.5, 1, 1.5)
-      innescapableDeck.takeObject({ guid = INNESCAPABLE_ENEMY_GUID, position = pos2, rotation = HORIZONTAL_ROTATION })
-      printToAll('Spawned the [88C999]The Inescapable enemy[-] at Central Spire, exhausted and unengaged.')
-      CoroutineLib.yieldSeconds(0.5)
-      DeckLib.placeOrMergeIntoDeck(innescapableDeck, MythosAreaApi.getEncounterDeckPosition(),
-        VERTICAL_ROTATION, false, false, false)
-      printToAll('Shuffled the rest of [88C999]The Innescapable[-] encounter set in the encounter deck.')
-      MythosAreaApi.reshuffleEncounterDeck(false) -- this fails if the discard is empty
-      printToAll('Please, make sure the encounter deck is shuffled.', 'Orange')
-      CoroutineLib.yieldSeconds(0.5)
-    end
+    spawnInescapableCoroutine(chest)
+    CoroutineLib.yieldSeconds(stepTime)
 
     -- Paragraph one. Remove R'lyeh Streets from the game, ignoring its text box.
-
-    local rlyehStreets = getObjectById(RLYEH_STREETS_ID)
-    if not rlyehStreets then
-      printToAll("R'lyeh Streets was not found", 'Red')
-      return
-    end
-    cleanLocationTokens(rlyehStreets)
-    cleanLocationEncounter(rlyehStreets)
-    rlyehStreets.setPosition(aboveTrash)
-    printToAll("[FFFFAA]R'lyeh Streets[-] was removed")
+    removeLocation(RLYEH_STREETS_ID)
+    CoroutineLib.yieldSeconds(stepTime)
+    printToAll("[FFFFAA]R'lyeh Streets[-] was removed.")
 
     -- Shuffle each open sky and Summit location in play except for Central Spire into the Summit deck.
     -- Each card and token at those locations is discarded.
     cleanUpLocationIntelligent(CENTRAL_SPIRE_ID, summitDeck)
+    CoroutineLib.yieldSeconds(stepTime)
 
     -- Place locations in the new shape
     -- Placing the Central Spire in the correct space
     local centralSpire = getObjectById(CENTRAL_SPIRE_ID)
     if not centralSpire then
-      log("Interrupting script.")
+      error("Central Spire should be on the table. Assertion to be removed.", 2)
       return
     end
     moveCardSafelyToCoordinates(centralSpire, ACT2_INITIAL_SPIRE)
-    printToAll('Central Spire was placed in its place.')
     makeSureIsFaceUp(centralSpire)
+    printToAll("Central Spire was placed on its new position.")
+    CoroutineLib.yieldSeconds(stepTime)
 
     -- Step 3.2
     -- Move minicards to starting position
-    local miniPosition = PlayAreaApi.gridToWorld(ACT2_INITIAL_SPIRE) + Vector(0.5, 0, 0)
+    local miniPosition = PlayAreaApi.gridToWorld(ACT2_INITIAL_SPIRE) + Vector(0.8, 0, 0)
     findMoveMiniCardS({ position = miniPosition })
+    CoroutineLib.yieldSeconds(stepTime)
 
     -- Step 3.3. Place five Open Skies
     for _, coords in ipairs(ACT2_OPEN_SKIES_INITIAL_POSITIONS) do
       openSkiesDeck.takeObject({ position = PlayAreaApi.gridToWorld(coords) })
-      CoroutineLib.yieldSeconds(0.19) --
+      CoroutineLib.yieldSeconds(cautiousDealTime)
     end
+    CoroutineLib.yieldSeconds(stepTime)
 
-    -- Step 3.4.
-    local freePlaces = exclude_pairs(ACT2_ALL_POSITIONS, ACT2_OPEN_SKIES_INITIAL_POSITIONS)
-    freePlaces = exclude_pairs(freePlaces, { ACT2_INITIAL_SPIRE })
-    for _, coords in ipairs(freePlaces) do
+    -- Step 3.4. Place cards
+    local freeCoordinates = exclude_pairs(ACT2_ALL_POSITIONS, ACT2_OPEN_SKIES_INITIAL_POSITIONS)
+    freeCoordinates = exclude_pairs(freeCoordinates, { ACT2_INITIAL_SPIRE })
+    for _, coords in ipairs(freeCoordinates) do
       summitDeck.takeObject({ position = PlayAreaApi.gridToWorld(coords) })
-      CoroutineLib.yieldSeconds(0.19) --
+      CoroutineLib.yieldSeconds(1.5*cautiousDealTime) --
     end
 
     -- Paragraph four. Shuffle the set-aside X and Aerial Waterfall locations,
     -- along with each remaining set-aside open sky card, into the top 5 cards of the Summit deck.
     local aerial = takeObjectFromContainerById(chest, AERIAL_WATERFALL_ID,
-      { position = PlayAreaApi.gridToWorld({ x = 2.1, y = -2.1 }) })
-    CoroutineLib.yieldSeconds(0.19) --
+      { position = PlayAreaApi.gridToWorld({ x = 0, y = 2.5 }) })
+    CoroutineLib.yieldSeconds(cautiousDealTime)
 
     local secondThing = nil
     if expeditionDirection == 'eastern' then
       secondThing = takeObjectFromContainerById(chest, ANCIENT_DOME_ID,
-        { position = PlayAreaApi.gridToWorld({ x = 2.3, y = -2.3 }) })
-      CoroutineLib.yieldSeconds(0.19)
+        { position = PlayAreaApi.gridToWorld({ x = 1, y = 2.5 }) })
     else
       secondThing = takeObjectFromContainerById(chest, FLOATING_SPIRE_ID,
-        { position = PlayAreaApi.gridToWorld({ x = 2.3, y = -2.3 }) })
-      CoroutineLib.yieldSeconds(0.19)
+        { position = PlayAreaApi.gridToWorld({ x = 1, y = 2.5 }) })
     end
+    CoroutineLib.yieldSeconds(cautiousDealTime)
 
     if expeditionDirection == 'western' then
       toShuffle = { aerial, secondThing }
@@ -497,7 +485,7 @@ function act2Setup(_, color)
       printToAll('along with the two remaining Open Skies.')
     end
     printToAll('You can continue playing.')
-    currentAct = 2
+    
 
     -- Transform this helper into Act II helper
     refreshButtons()
@@ -549,9 +537,10 @@ function act3Setup(_, color)
       printToAll("Central Spire not found", 'Red')
       return
     end
-    cleanLocationTokens(centralSpire)
-    cleanLocationEncounter(centralSpire)
-    centralSpire.setPosition(aboveTrash)
+    removeLocation(CENTRAL_SPIRE_ID)
+    -- cleanLocationTokens(centralSpire)
+    -- cleanLocationEncounter(centralSpire)
+    -- centralSpire.setPosition(aboveTrash)
     printToAll("[FFFFAA]Central Spire[-] was removed")
 
     -- Step 2. Take almost all remaining locations and openskies and place them on the Summit deck.
@@ -612,6 +601,10 @@ function doNothing(_, color)
   -- function to be called by a button
   -- This function exists to create a button that does nothing, but raises no error
 end
+
+------------------
+--- AUXILIARY FUNCTIONS
+------------------
 
 ------------------
 --- Button manipulation
@@ -703,8 +696,6 @@ end
 function getId(obj)
   if not obj then
     return nil
-  elseif type(obj) ~= "userdata" then
-    log(obj)
   end
   local md = JSON.decode(obj.getGMNotes() or "{}") or {}
   return md.id
@@ -715,8 +706,6 @@ end
 function getType(obj)
   if not obj then
     return nil
-  elseif type(obj) ~= "userdata" then
-    log(obj)
   end
   local md = JSON.decode(obj.getGMNotes() or "{}") or {}
   return md.type or nil
@@ -761,37 +750,33 @@ end
 ---@param deck tts__Object|nil       -- target deck
 function shuffleSafelyCardsInDeck(tableo, deck)
   if type(tableo) ~= "table" then
-    log("shuffleSafelyCardsInDeck: tableo is not a table")
+    error("shuffleSafelyCardsInDeck: tableo is not a table. Implementation Error", 2)
     return
   end
 
   if not deck or type(deck) ~= "userdata" then
-    log("shuffleSafelyCardsInDeck: deck is not a valid object")
+    error("shuffleSafelyCardsInDeck: deck is not a valid object", 2)
     return
   end
 
-  local aboveDeck = deck.getPosition() + Vector(0, 0.8, 0)
+  local aboveDeck = deck.getPosition() + Vector(0, 0.7, 0)
+  local stepTime = 0.1
 
   for _, obj in ipairs(tableo) do
     if obj and type(obj) == "userdata" then
-      CoroutineLib.yieldSeconds(0.02)
-
-      DeckLib.placeOrMergeIntoDeck(
-        obj,
-        aboveDeck,
+      DeckLib.placeOrMergeIntoDeck( obj, aboveDeck,
         { x = 0, y = 270, z = 180 },
-        false, false, true
-      )
-
-      CoroutineLib.yieldSeconds(0.02)
+        false, false, true)
+      CoroutineLib.yieldSeconds(stepTime)
     end
   end
 
+  CoroutineLib.yieldSeconds(stepTime*10)
   if deck.shuffle then
     deck.shuffle()
   end
 
-  CoroutineLib.yieldSeconds(0.10)
+  CoroutineLib.yieldSeconds(stepTime)
 end
 
 ------------------
@@ -802,6 +787,7 @@ end
 ---@param coordinates table|nil           -- target coordinates {x=..., y=..., z=...}
 function moveCardSafelyToCoordinates(card, coordinates)
   -- type checks
+  local cautiousTime = 0.15
   if not card or type(card) ~= "userdata" then
     log("transportCardSafelyToCoordinates: invalid card")
     return
@@ -819,10 +805,9 @@ function moveCardSafelyToCoordinates(card, coordinates)
 
   -- This moves a card and the things on it, like clues, to the coordinates in the objective
   card.setLock(false)
-  CoroutineLib.yieldSeconds(0.10)
+  CoroutineLib.yieldSeconds(cautiousTime)
   moveCardToCoordinates(card, coordinates)
-  CoroutineLib.yieldSeconds(0.20)
-  log('1234')
+  CoroutineLib.yieldSeconds(cautiousTime)
 end
 
 -- This function is copied
@@ -884,11 +869,15 @@ end
 
 ---@param location tts__Object|nil
 function cleanLocationTokens(location)
+  if not location or not isLocationOrOpenSkies(location) then
+    log("Implementation error. Escape silently.")
+    return
+  end
+
   -- remove tokens from the card (does not remove chaos tokens)
-  local trash = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
   for _, obj in ipairs(SearchLib.onObject(location, "isTileOrToken")) do
     if not obj.getLock() and obj.interactable then
-      trash.putObject(obj)
+      obj.destruct()
     end
   end
 end
@@ -896,7 +885,10 @@ end
 ---@param location tts__Object|nil
 function cleanLocationEncounter(location)
   -- silently exit if location is missing
-  if not location then return end
+  if not location or not isLocationOrOpenSkies(location) then
+    log("Implementation error. Escape silently.")
+    return
+  end
 
   -- removes encounter cards from a location, to clean it cleanly
   -- Like removing treacheries attached, or enemies
@@ -921,14 +913,48 @@ function cleanLocationEncounter(location)
   end
 end
 
+-- Some locations are placed several times
+---@param location tts__Object|nil
+function resetLocationTokenSpawn(location)
+  
+  if not location or not isLocationOrOpenSkies(location) then
+    log("Implementation error. Escape silently.")
+    return
+  end
+  TokenSpawnTrackerApi.resetTokensSpawned(location)
+end
+
 -- To be called inside a coroutine
-function cleanLocationsEncounter(locations)
+function cleanMultipleLocationsEncounter(locations)
   for _, obj in ipairs(locations) do
     if isLocationOrOpenSkies(obj) then
       cleanLocationEncounter(obj)
       CoroutineLib.yieldSeconds(0.05)
     end
   end
+end
+
+-- Places location into the trash, cleanly
+function removeLocation(locationId)
+
+  -- Retrieve the location object
+  local location = getObjectById(locationId)
+  if not location then
+    error("removeLocation: location object is nil", 2)
+  end
+
+  if not isLocationOrOpenSkies(location) then
+    error("Implementation error in remove location function", 2)
+  end
+
+  cleanLocationTokens(location)
+  cleanLocationEncounter(location)
+  
+  if not trash then
+    error("removeLocation: trash container is nil", 2)
+  end
+
+  trash.putObject(location)
 end
 
 ------------------
@@ -964,6 +990,29 @@ function placeStarSpawnOnDeck()
   CoroutineLib.yieldSeconds(0.1)
 end
 
+-- Part of setup
+function spawnInescapableCoroutine(chest)
+  if expeditionDirection == 'western' then
+    return
+  elseif expeditionDirection ~= 'eastern' then
+    error("Implementarion error in spawn inescapalble", 2)
+  end
+  chest.takeObject({ guid = INNESCAPABLE_DECK_GUID, position = PlayAreaApi.gridToWorld({ x = 0.5, y = -2.5 }) })
+  CoroutineLib.yieldSeconds(0.1)
+  local innescapableDeck = getObjectFromGUID(INNESCAPABLE_DECK_GUID)
+  local centralSpire = getObjectById(CENTRAL_SPIRE_ID)
+  local pos2 = centralSpire.getPosition() + Vector(2.5, 1, 1.5)
+  innescapableDeck.takeObject({ guid = INNESCAPABLE_ENEMY_GUID, position = pos2, rotation = HORIZONTAL_ROTATION })
+  printToAll('Spawned the [88C999]The Inescapable enemy[-] at Central Spire, exhausted and unengaged.')
+  CoroutineLib.yieldSeconds(0.5)
+  DeckLib.placeOrMergeIntoDeck(innescapableDeck, MythosAreaApi.getEncounterDeckPosition(),
+    VERTICAL_ROTATION, false, false, false)
+  printToAll('Shuffled the rest of [88C999]The Innescapable[-] encounter set in the encounter deck.')
+  MythosAreaApi.reshuffleEncounterDeck(false) -- this fails if the discard is empty
+  printToAll('Please, make sure the encounter deck is shuffled.', 'Orange')
+  CoroutineLib.yieldSeconds(1)
+end
+
 ---@param tableCoords table table of coords
 ---@param id string id of the card to make exception
 function findLocationsInGridExcept(tableCoords, id)
@@ -983,7 +1032,7 @@ function findLocationsInGridExcept(tableCoords, id)
 end
 
 -- This function gathers all cards and places them onto the Summit Deck
--- Or the Vp, or the set aside, accordingly
+-- Or the VP display, or the set-aside chest, accordingly
 function cleanUpLocationIntelligent(locationToExclude, summitDeck)
   if currentAct == 1 then
     grid = ACT1_ALL_POSITIONS
@@ -992,48 +1041,57 @@ function cleanUpLocationIntelligent(locationToExclude, summitDeck)
   else
     error("cleanUpLocationIntelligent::value error", 2)
   end
+  local cautiousTime = 0.15
+
+  -- Clean treacheries and monsters 
   local locationsToCleanEncounters = findLocationsInGridExcept(grid, locationToExclude)
-  cleanLocationsEncounter(locationsToCleanEncounters)
-  CoroutineLib.yieldSeconds(0.05)
+  cleanMultipleLocationsEncounter(locationsToCleanEncounters)
+  CoroutineLib.yieldSeconds(cautiousTime)
 
   local glyphOrrery = getObjectById(GLYPH_ORRERY_ID)
   if glyphOrrery then
     if not cardHasClues(glyphOrrery) then
       --- The gliph Orrery goes to the VP
       cleanLocationTokens(glyphOrrery)
+      cleanLocationEncounter(glyphOrrery)
       printToAll('Moving the [FFFFAA]Glyph Orrery[-] to the VP display.')
       VictoryDisplayApi.placeCard(glyphOrrery)
     else
       --- The gliph Orrery goes to the set aside
       printToAll('Moving the [FFFFAA]Glyph Orrery[-] to the Set-Aside chest.')
       cleanLocationTokens(glyphOrrery)
-      CoroutineLib.yieldSeconds(0.05)
-      -- local pos = MythosAreaApi.getSetAsideChest().getPosition() + Vector(0, 2, 0)
-      -- glyphOrrery.setPosition(pos)
+      cleanLocationEncounter(glyphOrrery)
+      resetLocationTokenSpawn(glyphOrrery)
+      CoroutineLib.yieldSeconds(cautiousTime)
+      glyphOrrery.setPosition(pos)
       MythosAreaApi.getSetAsideChest().putObject(glyphOrrery)
     end
-    CoroutineLib.yieldSeconds(0.20)
+    CoroutineLib.yieldSeconds(cautiousTime)
   end
 
+  -- Clean clues
   local locationsToCleanTokens = findLocationsInGridExcept(grid, locationToExclude)
   for _, location in ipairs(locationsToCleanTokens) do
     cleanLocationTokens(location)
+    resetLocationTokenSpawn(location)
+    CoroutineLib.yieldSeconds(0.05)
   end
-  CoroutineLib.yieldSeconds(0.20)
-
+  
   local locationsToMove = findLocationsInGridExcept(grid, locationToExclude)
   for _, obj in ipairs(locationsToMove) do
     if getId(obj) == GLYPH_ORRERY_ID then
-      log('This card cannot be legally shuffled in the Summit deck. This might be a players error.')
+      error("This card should not be on the table at this point.", 2)
     end
   end
+
   local num = #locationsToMove
   shuffleSafelyCardsInDeck(locationsToMove, summitDeck)
   printToAll(tostring(num) .. 'locations shuffled into the Summit deck.')
   printToAll('Make sure to clean manually any remaining token or card attached.')
 end
 
-------------------
+
+-----------------
 -- Identify existence or types of cards
 ------------------
 

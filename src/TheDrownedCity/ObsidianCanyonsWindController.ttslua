@@ -1,11 +1,11 @@
 local CoroutineLib                         = require("util/CoroutineLib")
 local DeckLib                              = require("util/DeckLib")
-local GUIDReferenceApi                     = require("core/GUIDReferenceApi")
 local LocationLib                          = require("LocationLib")
 local MythosAreaApi                        = require("mythos/MythosAreaApi")
 local PlayAreaApi                          = require("playarea/PlayAreaApi")
 local SearchLib                            = require("util/SearchLib")
 local VictoryDisplayApi                    = require("mythos/VictoryDisplayApi")
+local ObsidianCanyonsHelperApi             = require("TheDrownedCity/ObsidianCanyonsHelperApi")
 
 -- Non movable locations IDs
 local CENTRAL_SPIRE_ID                     = "11649"
@@ -144,6 +144,7 @@ ACT3_NotLEFTMOST_POSITIONS_TOPROW          = {
 
 local ACT3_POSSIBLE_EMPTY_SPACES_RIGHT     = ACT1_POSSIBLE_EMPTY_SPACES_RIGHT
 
+
 local ACT3_POSSIBLE_EMPTY_SPACES_LEFT      = {
   { x = -2, y = 0 },
   { x = -2, y = -2 }
@@ -209,18 +210,6 @@ function onLoad(savedData)
   })
 end
 
--- Clicked functions
-
-function westernWindsBlow(_, color)
-  windDirection = 'western'
-  genericWindsBlow()
-end
-
-function easternWindsBlow(_, color)
-  windDirection = 'eastern'
-  genericWindsBlow()
-end
-
 -- Update information
 
 function updateToAct1()
@@ -235,36 +224,44 @@ function updateToAct3()
   currentAct = 3
 end
 
--- Complex functions
+-- Wind functions
+
+function westernWindsBlow(_, color)
+  windDirection = 'western'
+  genericWindsBlow()
+end
+
+function easternWindsBlow(_, color)
+  windDirection = 'eastern'
+  genericWindsBlow()
+end
 
 function genericWindsBlow()
+  if currentAct == 0 then
+    printToAll('Please, click setup before.')
+    return
+  end
+  
   if windDirection ~= 'western' and windDirection ~= 'eastern' then
     error("genericWindsBlow::ValueError", 2)
   end
 
   function coroutineGenericWindsBlow()
+    local safeTime = 0.5
     -- Verification of integrity
-    if currentAct == 0 then
-      printToAll('Please, click setup before.')
-      return
-    end
 
-    local summitDeck = getSummitDeck()
-    local aboveSummitDeck = nil
+    local summitDeck = ObsidianCanyonsHelperApi.getSummitDeck()
     if not summitDeck then
       printToAll("Can't find summit deck on the topleft corner.")
       return
-    else
-      aboveSummitDeck = summitDeck.getPosition() + Vector(0, 0.7, 0)
     end
-
-
+    local aboveSummitDeck = summitDeck.getPosition() + Vector(0, 0.7, 0)
 
     -- Start of the program
     if windDirection == 'western' then
-      printToAll('Western Winds blow strongly.', LIGHT_BLUE)
+      printToAll('Western Winds blow strongly.→', LIGHT_BLUE)
     elseif windDirection == 'eastern' then
-      printToAll('Eastern Winds blow strongly.', LIGHT_GREEN)
+      printToAll('Eastern Winds blow strongly.←', LIGHT_GREEN)
     end
 
     -- Choose coordinates to remove.
@@ -326,9 +323,10 @@ function genericWindsBlow()
       printToAll('No location was placed on top of the summit deck. Don\'t shuffle it.', 'Red')
     end
 
+    CoroutineLib.yieldSeconds(safeTime)
+
     -- Step 2.2. Choose what coordinates to move.
     -- Depending on the act and the windDirection, we will move some coordinates or others
-    CoroutineLib.yieldSeconds(0.1)
     if windDirection == 'western' and currentAct == 1 then
       someRows = { ACT1_NotRIGHTMOST_POSITIONS }
     elseif windDirection == 'eastern' and currentAct == 1 then
@@ -351,7 +349,7 @@ function genericWindsBlow()
           found = LocationLib.getObjectsAt(coordinates)
           -- Studying a determinate coordinate
           for _, obj in ipairs(found) do
-            if isLocationOrOpenSkies(obj) and cannotBeMovedLocation(obj) then
+            if ObsidianCanyonsHelperApi.isLocationOrOpenSkies(obj) and cannotBeMovedLocation(obj) then
               isFrozen[i] = true
             end
           end
@@ -361,16 +359,18 @@ function genericWindsBlow()
 
     -- Winds::Slide each open sky and Summit location in rows X and Y once to the direction
     moveCardsSafely(someRows, isFrozen, rowNumbers)
-
-
     -- Place the bottom card of the summit Deck in each gap canRemoveLocationsToSummitDeck
     for i = 1, #someRows do
       if isFrozen[i] == true then
       elseif isFrozen[i] == false then
         --place card in the space
         local pos1 = PlayAreaApi.gridToWorld(coordinatesToFill[i])
-        takeFromBottom(summitDeck, { position = pos1 })
-        CoroutineLib.yieldSeconds(0.5)
+        local taken = takeFromBottom(summitDeck, { position = pos1 })
+        taken.hide_when_face_down = true -- This can be bugged, so we
+        CoroutineLib.yieldSeconds(safeTime/2)
+        -- Cards are taken face down. Therefore, their clue and name-showing memo is reset
+        ObsidianCanyonsHelperApi.resetLocationTokenSpawn(taken)
+        CoroutineLib.yieldSeconds(safeTime / 2)
       end
     end
 
@@ -382,34 +382,8 @@ function genericWindsBlow()
 end
 
 ------------------
--- generic functions>> Single card manipulation
-------------------
-
----@param card tts__Object
-function makeSureIsFaceUp(card)
-  if card.is_face_down then
-    card.flip()
-  end
-end
-
----@param card tts__Object
-function makeSureIsFaceDown(card)
-  if not card.is_face_down then
-    card.flip()
-  end
-end
-
-------------------
 -- Identify existence or types of cards
 ------------------
-------------------
-
-function isLocationOrOpenSkies(obj)
-  local rawNotes = obj.getGMNotes() or "{}"
-  local md = JSON.decode(rawNotes) or {}
-  local type_ = md['type'] or ''
-  return type_ == 'Location' or obj.getName() == 'Open Sky'
-end
 
 function isVisibleVPlocation(obj)
   -- In this algorithm, if a VP card is visible it might not be removedTokens
@@ -451,24 +425,6 @@ function cannotBeMovedLocation(obj)
   return false
 end
 
--- HELPER DECK IDENTIFICATION
----@return tts__Object|nil
-function getSummitDeck()
-  -- Very specific function
-  local deck = getObjectByName(SUMMIT_DECK_NAME)
-  if not deck then
-    log('getSummitDeck::lost track of summit Deck')
-    local object = SearchLib.inArea(PlayAreaApi.gridToWorld({ x = -2, y = 2 }), nil, { 8, 8, 8 }, "isDeck")
-    if #object == 1 then
-      deck = object[1]
-      log('getSummitDeck::got new track of summit Deck')
-    else
-      deck = nil
-    end
-  end
-  return deck
-end
-
 -- HELPER MOVER
 
 -- This moves the rows, following the wind
@@ -494,10 +450,9 @@ function moveCardsSafely(someRows, isFrozen, rowNumbers)
       for _, coordinates in ipairs(oneRow) do
         found = LocationLib.getObjectsAt(coordinates) -- The pair of coordinates is well defined
         for _, obj in ipairs(found) do
-          if isLocationOrOpenSkies(obj) and not cannotBeMovedLocation(obj) then
-            obj.highlightOn('Orange', 0.15)
+          if ObsidianCanyonsHelperApi.isLocationOrOpenSkies(obj) and not cannotBeMovedLocation(obj) then
             LocationLib.moveCardInDirection(obj, directionToMove)
-            CoroutineLib.yieldSeconds(1.15)
+            CoroutineLib.yieldSeconds(1.10) --1.2 works
           end
         end
       end
@@ -512,16 +467,21 @@ function moveCardsSafely(someRows, isFrozen, rowNumbers)
     frozen = isFrozen[i]
     rowNumber = rowNumbers[i]
     moveOneRow()
-    CoroutineLib.yieldSeconds(0.05)
+    CoroutineLib.yieldSeconds(1)
   end
+
 end
 
 function placeWindCardAccordingly()
   if windDirection == 'eastern' then
-    makeSureIsFaceUp(self)
+    ObsidianCanyonsHelperApi.makeSureIsFaceUp(self)
+    makeButtonFaint(0)
+    makeButtonBright(1, LIGHT_BLUE)
     printToAll('→→ Western winds will blow →→.', LIGHT_BLUE)
   elseif windDirection == 'western' then
-    makeSureIsFaceDown(self)
+    ObsidianCanyonsHelperApi.makeSureIsFaceDown(self)
+    makeButtonFaint(1)
+    makeButtonBright(0, LIGHT_GREEN)
     printToAll('←← Eastern winds will blow ←←.', LIGHT_GREEN)
   else
     error('placeWindCardAccordingly:: wind direction has a wrong value', 2)
@@ -543,9 +503,9 @@ function canRemoveLocationsToSummitDeck(coordinatesToRemove, isFrozen)
     for _, obj in ipairs(found) do
       if isVisibleVPlocation(obj) then
         table.insert(locationsToRemove, obj)
-      elseif isLocationOrOpenSkies(obj) and not cannotBeMovedLocation(obj) then
+      elseif ObsidianCanyonsHelperApi.isLocationOrOpenSkies(obj) and not cannotBeMovedLocation(obj) then
         table.insert(locationsToRemove, obj)
-      elseif isLocationOrOpenSkies(obj) and cannotBeMovedLocation(obj) then
+      elseif ObsidianCanyonsHelperApi.isLocationOrOpenSkies(obj) and cannotBeMovedLocation(obj) then
         isFrozen[i] = true
       end
     end
@@ -559,19 +519,19 @@ function placeOnDeckOrVpDisplaySafelyCoroutine(locations, deckLocation)
   for j = 1, #locations do
     local location = locations[j]
     assert(location.tag == 'Card', 'For safety, this function should take as argument only a table of locations.')
-    if isVisibleVPlocation(location) and not cardHasClues(location) then
+    if isVisibleVPlocation(location) and not ObsidianCanyonsHelperApi.cardHasClues(location) then
       VictoryDisplayApi.placeCard(location)
-      makeSureIsFaceUp(location)
+      ObsidianCanyonsHelperApi.makeSureIsFaceUp(location)
       CoroutineLib.yieldSeconds(0.05)
     else
-      location.highlightOn({ r = 1, g = 1, b = 0 }, 0.1)
-      cleanLocationTokens(location)
-      cleanLocationEncounter(location)
-      CoroutineLib.yieldSeconds(0.05)
-      makeSureIsFaceDown(location)
-      CoroutineLib.yieldSeconds(0.05)
+      ObsidianCanyonsHelperApi.cleanLocationTokens(location)
+      ObsidianCanyonsHelperApi.cleanLocationEncounter(location)
+      ObsidianCanyonsHelperApi.resetLocationTokenSpawn(location) 
+      CoroutineLib.yieldSeconds(0.1)
+      ObsidianCanyonsHelperApi.makeSureIsFaceDown(location)
+      CoroutineLib.yieldSeconds(0.1)
       DeckLib.placeOrMergeIntoDeck(location, deckLocation, VERTICAL_ROTATION, false, false, true)
-      CoroutineLib.yieldSeconds(0.05)
+      CoroutineLib.yieldSeconds(0.1)
     end
   end
 end
@@ -648,128 +608,29 @@ function getType(obj)
   return md.type or nil
 end
 
--- Checks if a card has clues on it
----@param card tts__Object Card to check for clues
----@return boolean hasClues True if card has clues on it
-function cardHasClues(card)
-  local searchResult = SearchLib.onObject(card, "isClue")
-  return #searchResult > 0
-end
-
----@param listA GridPos[]
----@param listB GridPos[]
----@return GridPos[]
-function exclude_pairs(listA, listB)
-  -- This function performs the exclusion operation on a set
-  -- And that set is made of pairs x,y
-
-  local function same_pos(a, b)
-    return a.x == b.x and a.y == b.y
-  end
-
-  local result = {}
-
-  for _, a in ipairs(listA) do
-    local found = false
-    for _, b in ipairs(listB) do
-      if same_pos(a, b) then
-        found = true
-        break
-      end
-    end
-    if not found then
-      table.insert(result, a)
-    end
-  end
-
-  return result
-end
-
+---@return tts__Object|nil
 function takeFromBottom(deck, params)
-  if deck.tag ~= "Deck" then return end
+  if deck.tag ~= "Deck" then 
+    error("not a deck",2)
+   end
 
   local objects = deck.getObjects()
-  if #objects == 0 then return end
+
+  if #objects == 0 then
+    return nil
+  end
 
   local bottomIndex = #objects
   local bottomCardGUID = objects[bottomIndex].guid
-
-
   params['guid'] = bottomCardGUID
-
-  deck.takeObject(params)
+  taken = deck.takeObject(params)
+  return taken
 end
 
-------------------
--- SCED location functions>> Clean location. This allows removing locations quickly
-------------------
-
----@param location tts__Object Card to check for tokens
-function cleanLocationTokens(location)
-  local trash = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
-  for _, obj in ipairs(SearchLib.onObject(location, "isTileOrToken")) do
-    if obj.memo and not obj.getLock() and obj.interactable then
-      trash.putObject(obj)
-    end
-  end
+function makeButtonFaint(buttonIndex)
+  self.editButton({ index = buttonIndex, color = { 0.3, 0.3, 0.3 } }) -- Dark grey
 end
 
----@param location tts__Object|nil
-function cleanLocationEncounter(location)
-  -- silently exit if location is missing
-  if not location then return end
-
-  -- removes encounter cards from a location, to clean it cleanly
-  -- Like removing treacheries attached, or enemies
-  local objects = SearchLib.inArea(
-    location.getPosition(),
-    Vector(0, 270, 0),
-    1.6 * Vector(2.4, 2, 3.2),
-    "isInteractable"
-  )
-
-  for _, obj in ipairs(objects) do
-    if getType(obj) == "Treachery" or getType(obj) == "Enemy" then
-      DeckLib.placeOrMergeIntoDeck(
-        obj,
-        MythosAreaApi.getEncounterDiscardPosition() + Vector(1, 1, 0),
-        { x = 0, y = 270, z = 0 },
-        false, false, true
-      )
-
-      print(obj.getName() .. " was discarded.")
-    end
-  end
-end
-------------------
---- Math operations
-------------------
-
----@param listA table
----@param listB table
----@return table
-function exclude_pairs(listA, listB)
-  -- This function performs the exclusion operation on a set
-  -- And that set is made of pairs x,y
-
-  local function same_pos(a, b)
-    return a.x == b.x and a.y == b.y
-  end
-
-  local result = {}
-
-  for _, a in ipairs(listA) do
-    local found = false
-    for _, b in ipairs(listB) do
-      if same_pos(a, b) then
-        found = true
-        break
-      end
-    end
-    if not found then
-      table.insert(result, a)
-    end
-  end
-
-  return result
+function makeButtonBright(buttonIndex, color)
+  self.editButton({ index = buttonIndex,  color = color })
 end
