@@ -1,3 +1,4 @@
+local ChaosBagApi       = require("chaosbag/ChaosBagApi")
 local CoroutineLib      = require("util/CoroutineLib")
 local DeckLib           = require("util/DeckLib")
 local GUIDReferenceApi  = require("core/GUIDReferenceApi")
@@ -60,11 +61,49 @@ function setup(_, color)
       card.setPosition(loc.position)
     end
 
+    local tokenList = ChaosBagApi.getChaosBagState()
+    local match = 0
+    for _, token in ipairs(tokenList) do
+      if token == "cultist" then
+        match = match + 1
+      end
+    end
+    if match < 2 then
+      for i = (2 - match), 1, -1 do
+        table.insert(tokenList, "cultist")
+      end
+      ChaosBagApi.setChaosBagState(tokenList)
+      broadcastToAll("Added " .. 2 - match .. " Cultist tokens to the chaos bag.", "White")
+    end
+
     local peopleDeck = getObjectFromGUID(PEOPLE_GUID)
     peopleDeck.shuffle()
     local extraCard = peopleDeck.takeObject()
+
+    -- create bag to hide extra card
+    local bagPosition = peopleDeck.getPosition() + Vector(2.5, 0, 0)
+    local bagData = {
+      Name             = "Bag",
+      Nickname         = "Set-Aside Person of Arkham",
+      ColorDiffuse     = { r = 1, g = 1, b = 1 },
+      Bag              = { Order = 2 },
+      Transform        = {
+        posX = bagPosition.x,
+        posY = bagPosition.y,
+        posZ = bagPosition.z,
+        rotX = 0,
+        rotY = 270,
+        rotZ = 0,
+        scaleX = 1,
+        scaleY = 1,
+        scaleZ = 1
+      }
+    }
+    local hiddenBag = spawnObjectData({ data = bagData })
+    hiddenBag.putObject(extraCard)
+    CoroutineLib.yieldSeconds(0.5)
     local chest = MythosAreaApi.getSetAsideChest()
-    chest.putObject(extraCard)
+    chest.putObject(hiddenBag)
     CoroutineLib.yieldSeconds(0.5)
 
     local servantCard = getObjectFromGUID(SERVANT_GUID)
