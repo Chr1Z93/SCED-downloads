@@ -1,0 +1,185 @@
+
+local ChaosBagApi      = require("chaosbag/ChaosBagApi")
+local GlobalApi        = require("Global/GlobalApi")
+local GUIDReferenceApi = require("core/GUIDReferenceApi")
+local MythosAreaApi    = require("mythos/MythosAreaApi")
+local PlayAreaApi      = require("playarea/PlayAreaApi")
+local PlayermatApi     = require("playermat/PlayermatApi")
+local TableLib          = require("util/TableLib")
+
+local SEWER_DECK_GUID = "sewer"
+
+local SEWER_LOCATION_POSITIONS = {
+  { x = 0,    y = 0 },
+  { x = -1, y = 0 },
+  { x = -2,  y = 0 },
+  { x = 1, y = 0 },
+  { x = 2,  y = 0 }
+}
+
+local tokenData = {
+  Easy     = { token = { 'elder' } },
+  Standard = { token = { 'tablet', 'elder' } },
+  Hard     = { token = { 'skull', 'tablet', 'elder' } },
+  Expert   = { token = { 'skull', 'tablet', 'elder', 'cultist' } }
+}
+
+function onLoad()
+  self.createButton({
+    label          = "Set Up",
+    click_function = "setup",
+    function_owner = self,
+    position       = { 0, 0.11, 0 },
+    height         = 160,
+    width          = 500,
+    scale          = { x = 1.75, y = 1.75, z = 1.75 },
+    font_size      = 90
+  })
+end
+
+function setup(_, playerColor)
+  local sewerDeck = getObjectFromGUID(SEWER_DECK_GUID)
+  if not sewerDeck then
+    broadcastToAll("Sewer Deck not found!", "Red")
+  else
+    sewerDeck.shuffle()
+    for i = 1, 5 do
+      sewerDeck.takeObject({ position = PlayAreaApi.gridToWorld(SEWER_LOCATION_POSITIONS[i]) })
+    end
+  end
+
+  local tokenList = ChaosBagApi.getChaosBagState()
+  local match = 0
+  for _, token in ipairs(tokenList) do
+    if token == "elder" then
+      match = match + 1
+    end
+  end
+
+  if match < 2 then
+    -- assume that this is already done if there is > 1 Elder Thing in the bag already
+    Player[playerColor].showOptionsDialog("Add tokens to bag based on difficulty level", { "Easy", "Standard", "Hard", "Expert" }, "Standard",
+      function(text)
+        local data = tokenData[text]
+        local newTokenList = TableLib.concat(data.token, tokenList)
+        ChaosBagApi.setChaosBagState(newTokenList)
+        setup2(playerColor)
+      end
+    )
+  else
+    setup2(playerColor)
+  end
+end
+
+function setup2(playerColor)
+  Player[playerColor].showOptionsDialog("Did the investigators discover the cult's whereabouts?", { "Yes", "No" }, "Yes",
+    function(text)
+      if text == "No" then
+        local doomCounter = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "DoomCounter")
+        doomCounter.call("addVal", 1)
+      end
+      setup3(playerColor)
+    end
+  )
+end
+
+function setup3(playerColor)
+  Player[playerColor].showOptionsDialog("Did the investigators kill the Servant of the Flame?", { "Yes", "No" }, "Yes",
+    function(text)
+      if text == "Yes" then
+        removeServant()
+      end
+      setup4(playerColor)
+    end
+  )
+end
+
+function setup4(playerColor)
+    Player[playerColor].showOptionsDialog("Choose a relevant option:", { "The investigators stirred up trouble.", "The investigators scoured Arkham for answers", "None of the above" }, "None of the above",
+    function(text)
+      if text == "The investigators stirred up trouble." then
+        spawnCultists()
+      elseif text == "The investigators scoured Arkham for answers" then
+        takeClues()
+      end
+      broadcastToAll("Set-up is complete", "White")
+    end
+  )
+end
+
+function spawnCultists()
+  local deck = MythosAreaApi.getEncounterDeckObjects().draw
+  local indexes = {}
+
+  for _, card in ipairs(deck.getObjects()) do
+    local md = JSON.decode(card.gm_notes) or {}
+    if string.find(md.traits, "Cultist", 1, true) then
+      table.insert(indexes, card.index)
+    end
+  end
+  TableLib.shuffle(indexes)
+
+  local numPlayers = PlayAreaApi.getInvestigatorCount()
+  for i = 1, numPlayers do
+    deck.takeObject({
+      index    = indexes[i],
+      position = PlayAreaApi.gridToWorld(SEWER_LOCATION_POSITIONS[i]) + Vector(0.75, 0, -2.5),
+      rotation = { 0, 270, 0 }
+    })
+    for j = i + 1, #indexes do
+      if indexes[i] < indexes[j] then
+        indexes[j] = indexes[j] - 1
+      end
+    end
+  end
+  broadcastToAll("Placed " .. numPlayers .. " random Cultist(s) at Sewer Location(s)")
+  deck.shuffle()
+end
+
+function removeServant()
+  local trash = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+  local chest = MythosAreaApi.getSetAsideChest()
+  local match = false
+  for _, card in ipairs(chest.getObjects()) do
+    if card.guid == "72a4a6" then
+      match = true
+      break
+    end
+  end
+  if not match then broadcastToAll("Servant of the Flame not found", "Red") return end
+  local servant = chest.takeObject({guid = "72a4a6"})
+
+  trash.putObject(servant)
+  broadcastToAll("Removed Servant of the Flame from the game.", "White")
+end
+
+function takeClues()
+  local usedColors = PlayermatApi.getUsedMatColors()
+  if #usedColors == 0 then
+    broadcastToAll("No investigators placed.", "Red")
+    return
+  end
+
+  for _, color in ipairs(usedColors) do
+    local cluePool           = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "ClueTokenBag")
+    clue = cluePool.takeObject()
+
+  -- determine the position
+    local clickableClues = GlobalApi.getOptionPanelState()["useClueClickers"]
+    local pos
+
+    if clickableClues then
+      local trash = GUIDReferenceApi.getObjectByOwnerAndType(color, "Trash")
+      pos = trash.getPosition():setAt("y", 2)
+      PlayermatApi.updateCounter(color, "ClickableClueCounter", nil, 1)
+    else
+      pos = PlayermatApi.transformLocalPosition({ x = -1.12, y = 0.2, z = 0.7 }, color)
+    end
+
+    local rot = PlayermatApi.returnRotation(color)
+
+    clue.setPositionSmooth(pos)
+    clue.setRotation(rot)
+    broadcastToAll("Each investigator begins the game with one clue from the token pool.", "White")
+  end
+end
