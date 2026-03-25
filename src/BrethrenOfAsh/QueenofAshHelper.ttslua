@@ -1,23 +1,22 @@
+local ChaosBagApi              = require("chaosbag/ChaosBagApi")
+local GlobalApi                = require("Global/GlobalApi")
+local GUIDReferenceApi         = require("core/GUIDReferenceApi")
+local MythosAreaApi            = require("mythos/MythosAreaApi")
+local PlayAreaApi              = require("playarea/PlayAreaApi")
+local PlayermatApi             = require("playermat/PlayermatApi")
+local TableLib                 = require("util/TableLib")
 
-local ChaosBagApi      = require("chaosbag/ChaosBagApi")
-local GlobalApi        = require("Global/GlobalApi")
-local GUIDReferenceApi = require("core/GUIDReferenceApi")
-local MythosAreaApi    = require("mythos/MythosAreaApi")
-local PlayAreaApi      = require("playarea/PlayAreaApi")
-local PlayermatApi     = require("playermat/PlayermatApi")
-local TableLib          = require("util/TableLib")
-
-local SEWER_DECK_GUID = "sewer"
+local SEWER_DECK_GUID          = "sewer"
 
 local SEWER_LOCATION_POSITIONS = {
-  { x = 0,    y = 0 },
+  { x = 0,  y = 0 },
   { x = -1, y = 0 },
-  { x = -2,  y = 0 },
-  { x = 1, y = 0 },
+  { x = -2, y = 0 },
+  { x = 1,  y = 0 },
   { x = 2,  y = 0 }
 }
 
-local tokenData = {
+local tokenData                = {
   Easy     = { token = { 'elder' } },
   Standard = { token = { 'tablet', 'elder' } },
   Hard     = { token = { 'skull', 'tablet', 'elder' } },
@@ -58,7 +57,8 @@ function setup(_, playerColor)
 
   if match < 2 then
     -- assume that this is already done if there is > 1 Elder Thing in the bag already
-    Player[playerColor].showOptionsDialog("Add tokens to bag based on difficulty level", { "Easy", "Standard", "Hard", "Expert" }, "Standard",
+    Player[playerColor].showOptionsDialog("Add tokens to bag based on difficulty level",
+      { "Easy", "Standard", "Hard", "Expert" }, "Standard",
       function(text)
         local data = tokenData[text]
         local newTokenList = TableLib.concat(data.token, tokenList)
@@ -100,7 +100,9 @@ function setup3(playerColor)
 end
 
 function setup4(playerColor)
-    Player[playerColor].showOptionsDialog("Choose a relevant option:", { "The investigators stirred up trouble.", "The investigators scoured Arkham for answers", "None of the above" }, "None of the above",
+  Player[playerColor].showOptionsDialog("Choose a relevant option:",
+    { "The investigators stirred up trouble.", "The investigators scoured Arkham for answers", "None of the above" },
+    "None of the above",
     function(text)
       if text == "The investigators stirred up trouble." then
         spawnCultists()
@@ -145,18 +147,16 @@ end
 function removeServant()
   local trash = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
   local chest = MythosAreaApi.getSetAsideChest()
-  local match = false
   for _, card in ipairs(chest.getObjects()) do
     if card.guid == "flame" then
-      match = true
-      break
+      local servant = chest.takeObject({ guid = "flame" })
+      trash.putObject(servant)
+      broadcastToAll("Removed Servant of the Flame from the game.", "White")
+      return
     end
   end
-  if not match then broadcastToAll("Servant of the Flame not found", "Red") return end
-  local servant = chest.takeObject({guid = "flame"})
 
-  trash.putObject(servant)
-  broadcastToAll("Removed Servant of the Flame from the game.", "White")
+  broadcastToAll("Servant of the Flame not found", "Red")
 end
 
 function takeClues()
@@ -167,10 +167,10 @@ function takeClues()
   end
 
   for _, color in ipairs(usedColors) do
-    local cluePool           = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "ClueTokenBag")
-    local clue = cluePool.takeObject()
+    local cluePool       = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "ClueTokenBag")
+    local clue           = cluePool.takeObject()
 
-  -- determine the position
+    -- determine the position
     local clickableClues = GlobalApi.getOptionPanelState()["useClueClickers"]
     local pos
 
@@ -182,10 +182,8 @@ function takeClues()
       pos = PlayermatApi.transformLocalPosition({ x = -1.12, y = 0.2, z = 0.7 }, color)
     end
 
-    local rot = PlayermatApi.returnRotation(color)
-
+    clue.setRotation(PlayermatApi.returnRotation(color))
     clue.setPositionSmooth(pos)
-    clue.setRotation(rot)
     broadcastToAll("Each investigator begins the game with one clue from the token pool.", "White")
   end
 end
