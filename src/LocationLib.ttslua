@@ -82,29 +82,36 @@ do
   end
 
   local function rotateDirectionByCard(card, direction)
-    local cardRot = math.floor((card.getRotation().y + 45) / 90) % 4
-
-    local directions = { "north", "east", "south", "west" }
-    local index = ({ north = 4, east = 3, south = 2, west = 1 })[direction]
-
+    local cardRot      = math.floor((card.getRotation().y + 45) / 90) % 4
+    local directions   = { "north", "east", "south", "west" }
+    local index        = ({ north = 4, east = 3, south = 2, west = 1 })[direction]
     local rotatedIndex = (index - 1 + cardRot) % 4 + 1
     return directions[rotatedIndex]
   end
 
   -- remove duplicates based on proximity
   local function removeDuplicates(source, target, pos1, pos2)
+    local targetLookupMap = {}
+    for i, obj in ipairs(target) do
+      targetLookupMap[obj] = i
+    end
+
     for i = #source, 1, -1 do
-      local obj = source[i]
-      for j = #target, 1, -1 do
-        if target[j] == obj then
-          local distToCurrent  = (obj.getPosition() - pos1).magnitude()
-          local distToAdjacent = (obj.getPosition() - pos2).magnitude()
-          if distToCurrent < distToAdjacent then
-            table.remove(target, j)
-          else
-            table.remove(source, i)
-          end
-          break
+      local obj         = source[i]
+      local targetIndex = targetLookupMap[obj]
+
+      if targetIndex then
+        -- Object exists in both! Calculate which one it is "closer" to.
+        local pos              = obj.getPosition()
+        local distSqToCurrent  = (pos - pos1):sqrMagnitude()
+        local distSqToAdjacent = (pos - pos2):sqrMagnitude()
+
+        if distSqToCurrent < distSqToAdjacent then
+          -- It belongs to source, so remove it from target
+          table.remove(target, targetIndex)
+        else
+          -- It belongs to target, so remove it from source
+          table.remove(source, i)
         end
       end
     end
@@ -170,7 +177,6 @@ do
     local adjacentGrid     = LocationLib.getAdjacentGrid(currentGrid, direction)
     local currentPos       = PlayAreaApi.gridToWorld(currentGrid)
     local adjacentPos      = PlayAreaApi.gridToWorld(adjacentGrid)
-
     local sourceObjects    = LocationLib.getObjectsAt(currentGrid)
     local targetObjects    = LocationLib.getObjectsAt(adjacentGrid)
 

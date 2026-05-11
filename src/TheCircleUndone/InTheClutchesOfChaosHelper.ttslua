@@ -1,3 +1,4 @@
+local GUIDReferenceApi     = require("core/GUIDReferenceApi")
 local PlayAreaApi          = require("playarea/PlayAreaApi")
 local SearchLib            = require("util/SearchLib")
 local TokenManagerApi      = require("tokens/TokenManagerApi")
@@ -56,7 +57,18 @@ local SET_ASIDE            = {
 local PLAYAREA             = {
   position = Vector(-27.92, 4.04, -0.20),
   rotation = Vector(0, 90, 0),
-  scale = { 37.63, 5.10, 37.19 }
+  scale    = { 37.63, 5.10, 37.19 }
+}
+
+local SETUP_POSITIONS      = {
+  ["5f4d8a"] = { position = { -30.22, 1.53, 15.19 }, rotation = { 0, 270, 0 } },  -- Hangman's Hill
+  ["79a987"] = { position = { -30.22, 1.53, -15.28 }, rotation = { 0, 270, 0 } }, -- Lodge
+  ["cb41b0"] = { position = { -2.94, 1.61, -5.05 }, rotation = { 0, 180, 0 } },   -- Act Deck
+  ["7d1536"] = { position = { -3.927, 1.81, 5.76 }, rotation = { 0, 270, 180 } }, -- Encounter Deck
+  ["a21c5b"] = { position = { -30.22, 1.53, 15.19 }, rotation = { 0, 270, 0 } },
+  ["17e686"] = { position = { -30.22, 1.53, -15.28 }, rotation = { 0, 270, 0 } },
+  ["09377b"] = { position = { -2.94, 1.61, -5.05 }, rotation = { 0, 180, 0 } },
+  ["6c34a5"] = { position = { -3.927, 1.81, 5.76 }, rotation = { 0, 270, 180 } }
 }
 
 function onSave()
@@ -71,30 +83,30 @@ function onLoad(savedData)
   end
 
   -- shared button parameters
-  local bParams = {
+  local bParams          = {
     function_owner = self,
-    height = 120,
-    width = 525,
-    scale = { x = 1.75, y = 1.75, z = 1.75 },
-    font_size = 75
+    height         = 120,
+    width          = 525,
+    scale          = { x = 1.75, y = 1.75, z = 1.75 },
+    font_size      = 75
   }
 
   -- setup button
-  bParams.label = "Set Up"
+  bParams.label          = "Set Up"
   bParams.click_function = "setup"
-  bParams.position = { 0, 0.11, -0.6 }
+  bParams.position       = { 0, 0.11, -0.6 }
   self.createButton(bParams)
 
   -- place clue button
-  bParams.label = "Place Clue"
+  bParams.label          = "Place Clue"
   bParams.click_function = "placeClue"
-  bParams.position = { 0, 0.11, 0 }
+  bParams.position       = { 0, 0.11, 0 }
   self.createButton(bParams)
 
   -- add breaches button
-  bParams.label = "Add Breaches"
+  bParams.label          = "Add Breaches"
   bParams.click_function = "addBreaches"
-  bParams.position = { 0, 0.11, 0.6 }
+  bParams.position       = { 0, 0.11, 0.6 }
   self.createButton(bParams)
 end
 
@@ -127,15 +139,41 @@ function setup(_, playerColor, _)
     },
     function(_, index)
       if index == 1 then
-        bag = getObjectFromGUID("92c6fc")
+        bag        = getObjectFromGUID("92c6fc")
+        unused_bag = getObjectFromGUID("d14543")
       else
-        bag = getObjectFromGUID("d14543")
+        bag        = getObjectFromGUID("d14543")
+        unused_bag = getObjectFromGUID("92c6fc")
       end
-      bag.call("buttonClick_place")
+
+      local trash = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+      if trash then
+        trash.putObject(unused_bag)
+      else
+        unused_bag.destruct()
+      end
+
+      placeSetupObjects(bag)
       findBagLocations()
       setup2(playerColor)
     end
   )
+end
+
+function placeSetupObjects(bag)
+  for _ = 1, #bag.getObjects() do
+    local object = bag.takeObject()
+    local guid   = object.getGUID()
+    object.setPosition(SETUP_POSITIONS[guid].position)
+    object.setRotation(SETUP_POSITIONS[guid].rotation)
+  end
+
+  local trash = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+  if trash then
+    trash.putObject(bag)
+  else
+    bag.destruct()
+  end
 end
 
 function setup2(playerColor)
@@ -144,6 +182,7 @@ function setup2(playerColor)
       for i, loc in ipairs(RANDOMIZED_LOCATIONS) do
         local deck = getObjectFromGUID(loc.deck)
         deck.shuffle()
+
         local cardsToTake = #deck.getObjects() - 1
         for j = 1, cardsToTake do
           deck.takeObject({
@@ -151,8 +190,9 @@ function setup2(playerColor)
             rotation = SET_ASIDE.rotation
           })
         end
+
         local locationCard = deck.remainder
-        local md = JSON.decode(locationCard.getGMNotes()) or {}
+        local md           = JSON.decode(locationCard.getGMNotes()) or {}
         if md.id then
           local englishName = ID_TO_ENGLISH_NAME[md.id]
           locationData[englishName] = { guid = locationCard.guid, breach = 0 }
@@ -161,10 +201,12 @@ function setup2(playerColor)
 
       if text == "Yes" then
         for i, v in ipairs(ALL_LOCATIONS) do
-          local location = locationData[v]
+          local location     = locationData[v]
           local locationCard = getObjectFromGUID(location.guid)
           TokenManagerApi.spawnTokenGroup(locationCard, "resourceCounter", 1)
         end
+        -- spawn clickable counter next to the act
+        TokenManagerApi.spawnToken({ -2.94, 1.63, -7.49 }, "resourceCounter")
       end
 
       local numPlayers   = PlayAreaApi.getInvestigatorCount()
@@ -194,18 +236,20 @@ function getRandomLocationName()
   return ALL_LOCATIONS[math.random(1, #ALL_LOCATIONS)]
 end
 
-function broadCastRandomLocation()
-  local name = getRandomLocationName()
+function getRandomLocationCard()
+  local name     = getRandomLocationName()
   local location = locationData[name]
-  local locationCard = getObjectFromGUID(location.guid)
+  return getObjectFromGUID(location.guid)
+end
+
+function broadCastRandomLocation()
+  local locationCard = getRandomLocationCard()
   locationCard.highlightOn("Green", 3)
   broadcastToAll(locationCard.getName())
 end
 
 function placeClue()
-  local name = getRandomLocationName()
-  local location = locationData[name]
-  local locationCard = getObjectFromGUID(location.guid)
+  local locationCard = getRandomLocationCard()
   broadcastToAll("Clue placed at: " .. locationCard.getName(), "White")
   TokenManagerApi.addUseToCard(locationCard, "clue")
 end
@@ -224,10 +268,10 @@ function placeBreaches(numBreaches)
   printToAll("Breaches added to:", "White")
   for j = 1, numBreaches do
     broadcastToAll("- " .. shuffled[j], "White")
-    local location = locationData[shuffled[j]]
-    local locationCard = getObjectFromGUID(location.guid)
+    local location                                = locationData[shuffled[j]]
+    local locationCard                            = getObjectFromGUID(location.guid)
     local foundBreaches, clickableResourceCounter = searchLocation(locationCard)
-    foundBreaches = foundBreaches + 1
+    foundBreaches                                 = foundBreaches + 1
 
     if foundBreaches >= 4 then
       locationCard.highlightOn("Red", 3)

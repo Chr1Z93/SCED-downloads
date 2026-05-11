@@ -5,7 +5,6 @@ import logging
 import json
 import os
 from pathlib import Path
-import re
 import time
 
 # ==========================================
@@ -33,7 +32,6 @@ EXCLUDED_FOLDERS = {
     "Darkham Horror",
     "Night of Vespers",
     "Rise, Rapture, Rise",
-    "Starter Decks 2026 - Preview Cards",
     "The Crown of Egil",
     "The Ghosts of Onigawa",
     "Unofficial Return to The Scarlet Keys",
@@ -57,10 +55,16 @@ NOT_ORPHANS = {
     "PhaseReference",
     "RoundSequence",
     "RulesReference",
+    "RulesReference2",
+    "Grimoire",
     "89005",  # Reality Acid Sheet
-    "98019", # Gloria Goldberg Promo
+    "98019",  # Gloria Goldberg Promo
     "CGWTWS01",  # When The World Screamed scenario guide
+    *(f"{60100 + i}" for i in range(500)), # original Investigator Decks
+    *(f"TAR{i:02}" for i in range(22)) # RtTCU Tarot cards
 }
+# Define prefixes we want to skip
+# EXCLUDED_PREFIXES = ("CB", "CG", "CL", "SB", "SN", "CT", "ES")
 
 # Derived Paths
 LP_PATH = ROOT_PATH / "language-pack"
@@ -90,10 +94,10 @@ def load_playercard_data(root_folder):
                 gmnotes_file = file_path.with_suffix(".gmnotes")
                 if gmnotes_file.exists():
                     with gmnotes_file.open("r", encoding="utf-8") as f:
-                        gm_data = json.load(f)
-                        found_id = get_id(gm_data)
+                        metadata = json.load(f)
+                        found_id = get_id(metadata)
                         if found_id:
-                            card_data[found_id] = gm_data.get("cycle", "Unknown")
+                            card_data[found_id] = metadata.get("cycle", "Unknown")
                             continue
 
                 # Attempt to get ID from embedded GM Notes
@@ -102,10 +106,10 @@ def load_playercard_data(root_folder):
 
                 gm_notes_raw = data.get("GMNotes", "")
                 if gm_notes_raw:
-                    gm_data = json.loads(gm_notes_raw)
-                    found_id = get_id(gm_data)
+                    metadata = json.loads(gm_notes_raw)
+                    found_id = get_id(metadata)
                     if found_id:
-                        card_data[found_id] = gm_data.get("cycle", "Unknown")
+                        card_data[found_id] = metadata.get("cycle", "Unknown")
 
     return card_data
 
@@ -208,12 +212,12 @@ def generate_id_map():
             result = task.result()
             if result:
                 card_id, data = result
-                if card_id is None:  # data is the file path
-                    files_without_id.append(data)
-                else:  # data is the main folder
+                if card_id is None:
+                    files_without_id.append(data)  # data is the file path
+                else:
                     # skip mini cards
                     if not card_id.endswith("-m"):
-                        id_to_content_map[card_id] = data
+                        id_to_content_map[card_id] = data  # data is the main folder
 
     processing_time = time.perf_counter()
     logging.info(f"Processing completed in {processing_time - scan_done:.2f}s")
@@ -229,7 +233,7 @@ def generate_id_map():
     end_time = time.perf_counter()
 
     logging.info(
-        f"Loading player card data from API completed in: {end_time - processing_time:.2f}s"
+        f"Player card data loading via API completed in: {end_time - processing_time:.2f}s"
     )
     logging.info(f"Total time: {end_time - start_time:.2f}s")
 

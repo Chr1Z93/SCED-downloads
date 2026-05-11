@@ -1,0 +1,82 @@
+local MythosAreaApi = require("mythos/MythosAreaApi")
+local TableLib      = require("util/TableLib")
+
+local CH1_CARD_MAP  = {
+  ["01135"] = { set = "The Midnight Masks Treacheries" },
+  ["01136"] = { set = "The Midnight Masks Treacheries" },
+  ["01159"] = { set = "Rats" },
+  ["01160"] = { set = "Ghouls" },
+  ["01161"] = { set = "Ghouls" },
+  ["01162"] = { set = "Ghouls" },
+  ["01163"] = { set = "Striking Fear" },
+  ["01164"] = { set = "Striking Fear" },
+  ["01165"] = { set = "Striking Fear" },
+  ["01166"] = { set = "Ancient Evils" },
+  ["01167"] = { set = "Chilling Cold" },
+  ["01168"] = { set = "Chilling Cold" },
+  ["01169"] = { set = "Dark Cult" },
+  ["01170"] = { set = "Dark Cult" },
+  ["01171"] = { set = "Dark Cult" },
+  ["01172"] = { set = "Nightgaunts" },
+  ["01173"] = { set = "Nightgaunts" },
+  ["01174"] = { set = "Locked Doors" },
+  ["01175"] = { set = "Agents of Hastur" },
+  ["01176"] = { set = "Agents of Hastur" },
+  ["01177"] = { set = "Agents of Yog-Sothoth" },
+  ["01178"] = { set = "Agents of Yog-Sothoth" },
+  ["01179"] = { set = "Agents of Shub-Niggurath" },
+  ["01180"] = { set = "Agents of Shub-Niggurath" },
+  ["01181"] = { set = "Agents of Cthulhu" },
+  ["01182"] = { set = "Agents of Cthulhu" }
+}
+
+function onLoad()
+  self.addContextMenuItem("Remove Ch1 Cards", removeCh1)
+end
+
+function removeCh1()
+  local removedSets = {}
+  local pos          = self.getPosition():setAt("y", 3.5) - Vector(4, 0, 0)
+  local rot          = Vector(0, 270, 0)
+  local deck         = MythosAreaApi.getEncounterDeckObjects().draw
+  if not deck then
+    broadcastToAll("Encounter Deck not found!", "Red")
+    return
+  elseif deck.type == "Card" then
+    local md = JSON.decode(deck.getGMNotes()) or {}
+    if CH1_CARD_MAP[md.id] then
+      deck.setRotation(rot)
+      deck.setPosition(pos)
+      table.insert(removedSets, CH1_CARD_MAP[md.id].set)
+    end
+  else
+    local deckObjects = deck.getObjects()
+
+    -- loop deck in reverse to keep index consistent
+    for i = #deckObjects, 1, -1 do
+      local cardInfo = deckObjects[i]
+      local md       = JSON.decode(cardInfo.gm_notes) or {}
+      if CH1_CARD_MAP[md.id] then
+        deck.takeObject({
+          index    = cardInfo.index,
+          position = pos,
+          rotation = rot,
+          smooth   = false
+        })
+        table.insert(removedSets, CH1_CARD_MAP[md.id].set)
+      end
+    end
+  end
+
+  if #removedSets == 0 then
+    broadcastToAll("Didn't find any cards to replace!", "Orange")
+    return
+  end
+
+  -- create unique list
+  local uniqueSets = TableLib.removeDuplicates(removedSets)
+  local result = table.concat(uniqueSets, ", ")
+
+  broadcastToAll("Removed replaceable cards from the encounter deck.", "Green")
+  printToAll("Removed encounter sets: " .. result .. ".", "White")
+end

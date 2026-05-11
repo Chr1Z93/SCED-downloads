@@ -83,10 +83,10 @@ def construct_card_gmnotes(card_id, card_level, card_type, card_class):
         "cost": 1,
         "level": int(card_level),
         "traits": "",
-        "agilityIcons": 1,
-        "combatIcons": 1,
-        "intellectIcons": 1,
         "willpowerIcons": 1,
+        "intellectIcons": 1,
+        "combatIcons": 1,
+        "agilityIcons": 1,
         "wildIcons": 1,
         "weakness": True,
         "basicWeaknessCount": 1,
@@ -104,10 +104,10 @@ def construct_card_gmnotes(card_id, card_level, card_type, card_class):
     # Remove fields for non Player Cards
     if not any(t in card_type for t in ["Asset", "Event", "Skill"]):
         notes.pop("level", None)
-        notes.pop("agilityIcons", None)
-        notes.pop("combatIcons", None)
-        notes.pop("intellectIcons", None)
         notes.pop("willpowerIcons", None)
+        notes.pop("intellectIcons", None)
+        notes.pop("combatIcons", None)
+        notes.pop("agilityIcons", None)
         notes.pop("wildIcons", None)
 
     # Handle Weaknesses (remove level and set class)

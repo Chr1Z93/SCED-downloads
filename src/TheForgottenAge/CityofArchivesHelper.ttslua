@@ -1,0 +1,112 @@
+local GlobalApi                = require("Global/GlobalApi")
+local GUIDReferenceApi         = require("core/GUIDReferenceApi")
+local PlayAreaApi              = require("playarea/PlayAreaApi")
+local PlayermatApi             = require("playermat/PlayermatApi")
+local VictoryDisplayApi        = require("mythos/VictoryDisplayApi")
+
+local SETUPBAG_GUID          = "446a11"
+
+local ROOM_LOCATION_POSITIONS = {
+  { x = 2,  y = 1 },
+  { x = 2, y = 0 },
+  { x = 2, y = -1 }
+}
+
+function onLoad()
+  self.createButton({
+    label          = "Set Up",
+    click_function = "setup",
+    function_owner = self,
+    position       = { 0, 0.11, 0 },
+    height         = 160,
+    width          = 500,
+    scale          = { x = 1.75, y = 1.75, z = 1.75 },
+    font_size      = 90
+  })
+end
+
+function setup(_, playerColor)
+  local setupBag = getObjectFromGUID(SETUPBAG_GUID)
+  if not setupBag then
+    broadcastToAll("Bag not found!", "Red")
+    return
+  end
+
+  Player[playerColor].showOptionsDialog("Choose one of the following", { "The investigators cooperated with the Yithians", "The investigators resisted captivity" }, "The investigators cooperated with the Yithians",
+    function(text)
+      if text == "The investigators cooperated with the Yithians" then
+        startingID = "04245"
+        takeClues()
+      else
+        startingID = "04246"
+      end
+
+      -- place starting location
+      local bagObjects = setupBag.getObjects()
+      for i = #bagObjects, 1, -1 do
+        local cardInfo = bagObjects[i]
+        local md       = JSON.decode(cardInfo.gm_notes) or {}
+        if md.id == startingID then
+          setupBag.takeObject({
+            index    = cardInfo.index,
+            position = PlayAreaApi.gridToWorld(ROOM_LOCATION_POSITIONS[1]),
+            rotation = Vector(0, 270, 180),
+            smooth   = false
+          })
+        elseif md.id == "01177" then
+          if startingID =="04245" then
+            setupBag.takeObject({
+              index    = cardInfo.index,
+              position = PlayAreaApi.gridToWorld(ROOM_LOCATION_POSITIONS[1]) + Vector(0.75, 0, 2.5),
+              rotation = Vector(0, 270, 0),
+              smooth   = false
+            })
+          else
+           local yithian = setupBag.takeObject({
+              index    = cardInfo.index})
+            VictoryDisplayApi.placeCard(yithian)
+          end
+        end
+      end
+      -- place remaining locations randomly
+      setupBag.shuffle()
+      for j = 2, 3 do
+        setupBag.takeObject({
+          position = PlayAreaApi.gridToWorld(ROOM_LOCATION_POSITIONS[j]),
+          rotation = Vector(0, 270, 0),
+          smooth   = false
+        })
+      end
+    end
+  )
+  self.destroy()
+end
+
+function takeClues()
+  local usedColors = PlayermatApi.getUsedMatColors()
+  if #usedColors == 0 then
+    broadcastToAll("No investigators placed. Each investigator should take 1 clue from the token pool manually.", "Red")
+    return
+  end
+
+  for _, matColor in ipairs(usedColors) do
+    local cluePool       = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "ClueTokenBag")
+    local clue           = cluePool.takeObject()
+
+    -- determine the position
+    local clickableClues = GlobalApi.getOptionPanelState()["useClueClickers"]
+    local pos
+
+    if clickableClues then
+      local trash = GUIDReferenceApi.getObjectByOwnerAndType(matColor, "Trash")
+      pos = trash.getPosition():setAt("y", 2)
+      PlayermatApi.updateCounter(matColor, "ClickableClueCounter", nil, 1)
+    else
+      pos = PlayermatApi.transformLocalPosition({ x = -1.12, y = 0.2, z = 0.7 }, matColor)
+    end
+
+    clue.setRotation(PlayermatApi.returnRotation(matColor))
+    clue.setPositionSmooth(pos)
+  end
+  broadcastToAll("Each investigator begins the game with one clue from the token pool.", "White")
+end
