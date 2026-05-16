@@ -11,6 +11,7 @@ import time
 # CONFIGURATION
 # ==========================================
 
+FORCE_REFRESH = False
 PLAYER_CARD_PATH_1 = Path(r"C:\git\SCED\objects\AdditionalPlayerCards.2cba6b")
 PLAYER_CARD_PATH_2 = Path(r"C:\git\SCED\objects\AllPlayerCards.15bb07")
 ROOT_PATH = Path(r"C:\git\SCED-downloads\decomposed")
@@ -288,9 +289,9 @@ def generate_lang_id_set(lang_root):
 # ==========================================
 
 
-def get_master_map(force_refresh=False):
+def get_master_map():
     """Loads the map from disk if it exists, otherwise generates and saves it."""
-    if CACHE_FILE.exists() and not force_refresh:
+    if CACHE_FILE.exists() and not FORCE_REFRESH:
         print(f"Loading master map from cache: {CACHE_FILE}")
         with open(CACHE_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
