@@ -1,8 +1,8 @@
 import json
-import os
+from pathlib import Path
 
 # Name of the JSON file
-JSON_FILE = "library.json"
+JSON_FILE = Path(__file__).resolve().parents[1] / "library.json"
 
 # Author whose items will be moved to the top, preserving original order
 PRIORITY_AUTHOR = "Fantasy Flight Games"
@@ -78,7 +78,7 @@ def sort_json_file():
     """
     Main function to read, sort, and write the library.
     """
-    if not os.path.exists(JSON_FILE):
+    if not JSON_FILE.exists():
         print(f"❌ Library not found in the current directory.")
         return
 

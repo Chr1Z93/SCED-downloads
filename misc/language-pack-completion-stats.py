@@ -8,9 +8,10 @@ from pathlib import Path
 import time
 
 # ==========================================
-# CONFIGURATION
+# MARK: CONFIGURATION
 # ==========================================
 
+FORCE_REFRESH = False
 PLAYER_CARD_PATH_1 = Path(r"C:\git\SCED\objects\AdditionalPlayerCards.2cba6b")
 PLAYER_CARD_PATH_2 = Path(r"C:\git\SCED\objects\AllPlayerCards.15bb07")
 ROOT_PATH = Path(r"C:\git\SCED-downloads\decomposed")
@@ -32,7 +33,6 @@ EXCLUDED_FOLDERS = {
     "Darkham Horror",
     "Night of Vespers",
     "Rise, Rapture, Rise",
-    "Starter Decks 2026 - Preview Cards",
     "The Crown of Egil",
     "The Ghosts of Onigawa",
     "Unofficial Return to The Scarlet Keys",
@@ -56,9 +56,13 @@ NOT_ORPHANS = {
     "PhaseReference",
     "RoundSequence",
     "RulesReference",
+    "RulesReference2",
+    "Grimoire",
     "89005",  # Reality Acid Sheet
     "98019",  # Gloria Goldberg Promo
     "CGWTWS01",  # When The World Screamed scenario guide
+    *(f"{60100 + i}" for i in range(500)), # original Investigator Decks
+    *(f"TAR{i:02}" for i in range(22)) # RtTCU Tarot cards
 }
 # Define prefixes we want to skip
 # EXCLUDED_PREFIXES = ("CB", "CG", "CL", "SB", "SN", "CT", "ES")
@@ -73,7 +77,7 @@ logging.basicConfig(
 )
 
 # ==========================================
-# PROCESSING HELPERS
+# MARK: PROCESSING HELPERS
 # ==========================================
 
 
@@ -171,7 +175,7 @@ def return_with_folder(found_id, path_obj):
 
 
 # ==========================================
-# SCANNING ENGINES
+# MARK: SCANNING ENGINES
 # ==========================================
 
 
@@ -281,13 +285,13 @@ def generate_lang_id_set(lang_root):
 
 
 # ==========================================
-# REPORTING
+# MARK: REPORTING
 # ==========================================
 
 
-def get_master_map(force_refresh=False):
+def get_master_map():
     """Loads the map from disk if it exists, otherwise generates and saves it."""
-    if CACHE_FILE.exists() and not force_refresh:
+    if CACHE_FILE.exists() and not FORCE_REFRESH:
         print(f"Loading master map from cache: {CACHE_FILE}")
         with open(CACHE_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -404,7 +408,7 @@ def find_language_folders():
 
 
 # ==========================================
-# MAIN LOOP
+# MARK: MAIN LOOP
 # ==========================================
 
 if __name__ == "__main__":

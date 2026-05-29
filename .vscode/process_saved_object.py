@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 
 PLATFORM = platform.system()
+TTS_SUFFIX = Path("Tabletop Simulator") / "Saves" / "Saved Objects"
 
 # mac / linux build binary is for v1.3, windows binary uses dev state from 2026-02-26
 
@@ -25,19 +26,34 @@ def read_json_value(file_path, key):
         return ""
 
 
-def get_saved_objects_dir():
-    home = Path.home()
-    if PLATFORM == "Windows":
-        return (
-            home
-            / "Documents"
-            / "My Games"
-            / "Tabletop Simulator"
-            / "Saves"
-            / "Saved Objects"
+def get_windows_documents_dir() -> Path:
+    """Helper to safely retrieve the Windows Documents folder via registry."""
+    try:
+        import winreg
+
+        sub_key = (
+            r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders"
         )
-    else:  # macOS / Darwin
-        return home / "Library" / "Tabletop Simulator" / "Saves" / "Saved Objects"
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, sub_key) as key:
+            # 'Personal' is the registry key for the Documents folder
+            doc_path_str, _ = winreg.QueryValueEx(key, "Personal")
+
+            # Expand environment variables like %USERPROFILE% if present
+            return Path(os.path.expandvars(doc_path_str))
+    except Exception:
+        # Fallback to standard guess if registry lookup fails
+        return Path.home() / "Documents"
+
+
+def get_saved_objects_dir():
+    if PLATFORM == "Windows":
+        base_dir = get_windows_documents_dir() / "My Games"
+    elif PLATFORM == "Darwin":  # macOS
+        base_dir = Path.home() / "Library"
+    else:  # Linux
+        base_dir = Path.home() / ".local" / "share"
+
+    return base_dir / TTS_SUFFIX
 
 
 def get_base_command(script_dir):
