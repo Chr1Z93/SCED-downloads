@@ -8,7 +8,7 @@ from pathlib import Path
 import time
 
 # ==========================================
-# CONFIGURATION
+# MARK: CONFIGURATION
 # ==========================================
 
 FORCE_REFRESH = False
@@ -77,7 +77,7 @@ logging.basicConfig(
 )
 
 # ==========================================
-# PROCESSING HELPERS
+# MARK: PROCESSING HELPERS
 # ==========================================
 
 
@@ -175,7 +175,7 @@ def return_with_folder(found_id, path_obj):
 
 
 # ==========================================
-# SCANNING ENGINES
+# MARK: SCANNING ENGINES
 # ==========================================
 
 
@@ -285,7 +285,7 @@ def generate_lang_id_set(lang_root):
 
 
 # ==========================================
-# REPORTING
+# MARK: REPORTING
 # ==========================================
 
 
@@ -408,7 +408,7 @@ def find_language_folders():
 
 
 # ==========================================
-# MAIN LOOP
+# MARK: MAIN LOOP
 # ==========================================
 
 if __name__ == "__main__":
