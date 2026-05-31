@@ -1,0 +1,110 @@
+local HemlockScenarioSetupLib = require("TheFeastOfHemlockVale/HemlockScenarioSetupLib")
+
+local CoroutineLib       = require("util/CoroutineLib")
+local DeckLib            = require("util/DeckLib")
+local GUIDReferenceApi        = require("core/GUIDReferenceApi")
+local PlayAreaApi   = require("playarea/PlayAreaApi")
+
+local trash                   = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+
+RESIDENTS_PER_DAY_MAP = {
+  {
+    ["10696"] = true,
+    ["10698"] = true
+  },
+  {
+    ["10696"] = true,
+    ["10699"] = true
+  },
+  {
+    ["10699"] = true,
+    ["10700"] = true
+  }
+}
+local BEDROOMS_DECK_GUID = "438832"
+local OTHER_LOCATIONS_DECK_GUID = "6a73b1"
+local AGENDA_DECK_GUID = "dda1d3"
+
+local HEMLOCK_HOUSE_POSITIONS = {
+  { x = -1, y = 1 },
+  { x = 0,  y = 1 },
+  { x = 1,  y = 1 },
+  { x = -1, y = 0 },
+  { x = 0, y = 0 },
+  { x = 1, y = 0 }
+}
+
+
+RESIDENT_LOCATIONS = {
+  {
+    {-15.02, 1.53, 2.22}, {-36.46, 1.53, 10.16}
+  },
+  {
+    {-15.02, 1.53, 2.22}, {-36.46, 1.53, 10.16}
+  },
+  {
+    {-36.46, 1.53, 10.16}, {-36.46, 1.53, -2.40}
+  }
+}
+
+function onLoad()
+  self.createButton({
+    label          = "Set Up",
+    click_function = "setup",
+    function_owner = self,
+    position       = { 0, 0.11, 0 },
+    height         = 160,
+    width          = 500,
+    scale          = { x = 1.75, y = 1.75, z = 1.75 },
+    font_size      = 90
+  })
+end
+
+function setup(_, playerColor)
+  HemlockScenarioSetupLib.setup(playerColor)
+end
+
+function setup3(dayOrNight, dayNumber, residents)
+  -- remove Agenda card
+  if dayNumber == 2 then
+    removeCardID = "10526"
+  else
+    removeCardID = "10527"
+  end
+  local agendaDeck = getObjectFromGUID(AGENDA_DECK_GUID)
+  local deckObjects = agendaDeck.getObjects()
+  for i = #deckObjects, 1, -1 do
+    local cardInfo = deckObjects[i]
+    local md       = JSON.decode(cardInfo.gm_notes) or {}
+    if md.id == removeCardID then
+      local extraAgendaCard = agendaDeck.takeObject({
+        index    = cardInfo.index})
+      trash.putObject(extraAgendaCard)
+    end
+  end
+
+  if dayNumber ~= 1 then
+    local littleSylvie = getObjectFromGUID("153a42")
+    trash.putObject(littleSylvie)
+  else
+    broadcastToAll("Place Little Sylvie at a Bedroom location on the lowest floor.", "White")
+  end
+
+  function setup2Coroutine()
+    local otherLocationsDeck = getObjectFromGUID(OTHER_LOCATIONS_DECK_GUID)
+    local deck = getObjectFromGUID(BEDROOMS_DECK_GUID)
+    deck.shuffle()
+
+    local extraCard = deck.takeObject()
+    extraCard.setPositionSmooth(PlayAreaApi.gridToWorld({ x = 0,  y = 2 }))
+    CoroutineLib.yieldSeconds(0.5)
+    DeckLib.placeOrMergeIntoDeck(deck, otherLocationsDeck.getPosition(), otherLocationsDeck.getRotation(), false, true)
+    CoroutineLib.yieldSeconds(1)
+    for i = 1, 6 do
+      otherLocationsDeck.takeObject({ position = PlayAreaApi.gridToWorld(HEMLOCK_HOUSE_POSITIONS[i]) })
+    end
+    CoroutineLib.yieldSeconds(0.5)
+    trash.putObject(otherLocationsDeck)
+  end
+  CoroutineLib.start(setup2Coroutine)
+end
