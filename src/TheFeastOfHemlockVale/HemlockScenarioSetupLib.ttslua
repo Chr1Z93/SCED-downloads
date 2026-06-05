@@ -1,0 +1,76 @@
+do
+  local HemlockScenarioSetupLib     = {}
+  local CoroutineLib       = require("util/CoroutineLib")
+  local DeckLib            = require("util/DeckLib")
+  local GUIDReferenceApi     = require("core/GUIDReferenceApi")
+  local MythosAreaApi      = require("mythos/MythosAreaApi")
+
+  local RESIDENTS_BAG_GUID = "c6c097"
+  local DAY_BAG_GUID = { "e12e98", "722cee", "c04a7b"}
+
+  function HemlockScenarioSetupLib.setup(playerColor)
+    Player[playerColor].showOptionsDialog("Choose one of the following", { "Day 1", "Day 2", "Day 3", "Night 1", "Night 2" }, "Day 1",
+      function(text)
+        if string.sub(text, 1, 1) == "D" then
+          dayOrNight = "Day"
+        else
+          dayOrNight = "Night"
+        end
+
+        HemlockScenarioSetupLib.setup2(dayOrNight, tonumber(string.sub(text, -1)))
+      end
+    )
+  end
+
+  function HemlockScenarioSetupLib.setup2(dayOrNight, dayNumber)
+    residents = {}
+    function setupCoroutine()
+      local mythosArea = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "MythosArea")
+      local dayBag = getObjectFromGUID(DAY_BAG_GUID[dayNumber])
+      local dayDeck = dayBag.takeObject({
+        position = mythosArea.positionToWorld(Vector(-1.483, 0.117, -0.409)),
+        rotation = mythosArea.getRotation()
+      })
+      CoroutineLib.yieldSeconds(0.5)
+      -- Set position of Day marker
+      local dayCard = dayDeck.takeObject({ 
+        position = mythosArea.positionToWorld(Vector(-0.883, 0.117, -0.409))
+      })
+
+      if dayOrNight == "Night" then dayCard.setRotation(dayCard.getRotation():setAt("z", 180)) end
+
+      DeckLib.placeOrMergeIntoDeck(dayDeck, MythosAreaApi.getEncounterDeckPosition(), nil, false, true)
+      
+      if dayOrNight == "Day" then
+        local residentsBag = getObjectFromGUID(RESIDENTS_BAG_GUID)
+        local residentsDeck = residentsBag.takeObject({ position = {-11.48, 1.58, 12.29}, rotation = {0, 270, 0} })
+        CoroutineLib.yieldSeconds(1)
+        local rot          = Vector(0, 270, 0)
+
+        local deckObjects = residentsDeck.getObjects()
+        -- loop deck in reverse to keep index consistent
+        j = 1
+        for i = #deckObjects, 1, -1 do
+          local cardInfo = deckObjects[i]
+          local md       = JSON.decode(cardInfo.gm_notes) or {}
+          if RESIDENTS_PER_DAY_MAP[dayNumber][md.id] then
+            residents[j] = residentsDeck.takeObject({
+              index    = cardInfo.index,
+              position = RESIDENT_LOCATIONS[dayNumber][j],
+              rotation = rot,
+              smooth   = false
+            })
+            j = j + 1
+          end
+        end
+        CoroutineLib.yieldSeconds(1)
+        residentsDeck.destroy()
+      end
+      setup3(dayOrNight, dayNumber, residents)
+    end
+    CoroutineLib.start(setupCoroutine)
+    self.destroy()
+  end
+
+  return HemlockScenarioSetupLib
+end

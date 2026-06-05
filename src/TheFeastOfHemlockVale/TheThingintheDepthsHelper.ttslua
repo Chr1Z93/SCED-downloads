@@ -1,0 +1,143 @@
+local HemlockScenarioSetupLib = require("TheFeastOfHemlockVale/HemlockScenarioSetupLib")
+local CoroutineLib       = require("util/CoroutineLib")
+local GUIDReferenceApi        = require("core/GUIDReferenceApi")
+local PlayAreaApi   = require("playarea/PlayAreaApi")
+
+local trash                   = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+
+RESIDENTS_PER_DAY_MAP = {
+  {
+    ["10699"] = true,
+    ["10702"] = true
+  },
+  {
+    ["10697"] = true
+  },
+  {
+    ["10697"] = true
+  }
+}
+local LOCATIONS_DECK_GUID = "644cac"
+
+local THING_POSITIONS = {
+  { x = -1, y = 1 },
+  { x = 0,  y = 1 },
+  { x = 1,  y = 1 },
+  { x = -1, y = 0 },
+  { x = 0, y = 0 },
+  { x = 1, y = 0 },
+  { x = -1, y = -1 },
+  { x = 0, y = -1 },
+  { x = 1, y = -1 }
+}
+
+
+RESIDENT_LOCATIONS = {
+  {
+    {-15.02, 1.53, 2.22}, {-22.41, 1.53, -10.66}
+  },
+  {
+    {-22.41, 1.53, -10.66}
+  },
+  {
+    {-22.41, 1.53, -10.66}
+  }
+}
+
+function onLoad()
+  self.createButton({
+    label          = "Set Up",
+    click_function = "setup",
+    function_owner = self,
+    position       = { 0, 0.11, 0 },
+    height         = 160,
+    width          = 500,
+    scale          = { x = 1.75, y = 1.75, z = 1.75 },
+    font_size      = 90
+  })
+end
+
+function setup(_, playerColor)
+  HemlockScenarioSetupLib.setup(playerColor)
+end
+
+function setup3(dayOrNight, dayNumber, residents)
+  if dayNumber > 1 then
+    local doomCounter = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "DoomCounter")
+    doomCounter.call("addVal", dayNumber-1)
+    broadcastToAll("Placed doom on the agenda for each day after Day 1", "White")
+  end
+
+  function setup2Coroutine()
+    local locationsDeck = getObjectFromGUID(LOCATIONS_DECK_GUID)
+    locationsDeck.shuffle()
+
+    local extraCard = locationsDeck.takeObject()
+    trash.putObject(extraCard)
+    CoroutineLib.yieldSeconds(0.75)
+    for i = 1, 9 do
+      local card = locationsDeck.takeObject({ position = PlayAreaApi.gridToWorld(THING_POSITIONS[i]), rotation = {0, 270, 0} })
+      if i == 3 then
+        addScriptToLocation(card, "North\nShore")
+      elseif i == 9 then 
+        addScriptToLocation(card, "Cranberry\nBog")
+      elseif i == 7 then
+        addScriptToLocation(card, "Starting\nLocation")
+      end
+    end
+  end
+  CoroutineLib.start(setup2Coroutine)
+end
+
+function addScriptToLocation(card, locationText)
+  card.script_state = locationText
+  card.setLuaScript([[
+    function onLoad(savedData)
+      if savedData and savedData ~= "" then
+        addLocationText(savedData)
+      end
+    end
+    function onRotate(_, flip, _, _, oldFlip)
+      if flip == oldFlip then return end
+
+      if flip == 180 then
+        self.UI.setAttribute("label", "position", "0 200 11")
+        self.UI.setAttribute("label", "rotation", "0 180 180")
+      else
+        self.UI.setAttribute("label", "position", "0 200 -11")
+        self.UI.setAttribute("label", "rotation", "0 0 180")
+      end
+    end
+
+    function addLocationText(locationText)
+
+      self.UI.setXmlTable({
+        {
+          tag = "Panel",
+          attributes = {
+            id = "label",
+            position = "0 230 11",
+            rotation = "0 0 180",
+            active = "true",
+            height = "1200",
+            width = "1750",
+            scale = ".1 .1 1",
+            color = "white"
+          },
+          children = {
+            {
+              tag = "Text",
+              attributes = {
+                fontSize = "525",
+                color = "black",
+                alignment = "MiddleCenter",
+                font = "font_teutonic-arkham"
+              },
+              value = locationText
+            }
+          }
+        }
+      })
+    end
+  ]])
+end
