@@ -178,6 +178,12 @@ def return_with_folder(found_id, path_obj):
 # MARK: SCANNING ENGINES
 # ==========================================
 
+def get_scanning_priority(d):
+    if "Return to" in d:
+        return 0  # Priority 1: Top of the list
+    elif d in ("Night of the Zealot", "Brethren of Ash"):
+        return 2  # Priority 3: Absolute back of the line
+    return 1      # Priority 2: Everything else in the middle
 
 def generate_id_map():
     id_to_content_map = {}
@@ -190,12 +196,15 @@ def generate_id_map():
     logging.info(f"Starting scan in {ROOT_PATH}")
     with ThreadPoolExecutor(max_workers=8) as executor:
         for dirpath, dirs, filenames in os.walk(ROOT_PATH):
-            # This modifies the dirs list in-place, so os.walk won't visit them
-            dirs[:] = [
+            # Filter out excluded folders
+            filtered_dirs = [
                 d
                 for d in dirs
                 if d not in EXCLUDED_FOLDERS and "Fan Campaigns" not in d
             ]
+            # Sort so that "Return to" folders come first, Core Sets come last
+            filtered_dirs.sort(key=get_scanning_priority)
+            dirs[:] = filtered_dirs
 
             current_path = Path(dirpath)
 
