@@ -1,0 +1,449 @@
+local CoroutineLib               = require("util/CoroutineLib")
+local DeckLib                    = require("util/DeckLib")
+local GUIDReferenceApi           = require("core/GUIDReferenceApi")
+local LocationLib                = require("LocationLib")
+local HelperLib                = require("HelperLib")
+local MythosAreaApi              = require("mythos/MythosAreaApi")
+local PlayAreaApi                = require("playarea/PlayAreaApi")
+local SearchLib                  = require("util/SearchLib")
+local TokenSpawnTrackerApi       = require("tokens/TokenSpawnTrackerApi")
+local VictoryDisplayApi          = require("mythos/VictoryDisplayApi")
+
+local SUMMIT_DECK_GUID           = "cedbf4"
+local OPEN_SKY_DECK_GUID         = "001eb4"
+local STREETS_GUID               = "37868c"
+local CENTRAL_SPIRE_GUID         = "a58106"
+local FLOATING_SPIRE_GUID        = "638756"
+local INESCAPABLE_SET_GUID       = "09f2da"
+local STAR_SPAWN_SET_GUID        = "929cf9"
+local trash
+local direction
+
+local BAG_GUIDS                  = {
+  ["west"] = "e6b84a",
+  ["east"] = "114b54"
+}
+
+local buttonParameters     = {
+  function_owner = self,
+  position       = { 0, 0.1, 0 },
+  height         = 300,
+  width          = 450,
+  scale          = { x = 1.75, y = 1.75, z = 1.75 },
+  font_size      = 125
+}
+
+local IS_REGULAR_SUMMIT    = {
+  ["11653"] = true,
+  ["11654"] = true,
+  ["11655"] = true,
+  ["11656"] = true,
+  ["11657"] = true,
+  ["11658"] = true,
+  ["11659"] = true,
+  ["11660"] = true,
+  ["11661"] = true
+}
+
+local TARGET_LOCATIONS = {
+  ["Act 1"] = "11649",  -- Central Spire
+  ["Act 2"] = "11650"   -- Floating Spire (Western Expedition Only)
+}
+
+local ACT1_LOCATION_POSITIONS = {
+  { x = 0,  y = 0 },
+  { x = 1,  y = 1 },
+  { x = 1,  y = -1 },
+  { x = 2,  y = 1 },
+  { x = 2,  y = -1 },
+  { x = 2,  y = 0 },
+  { x = -1, y = 1 }
+}
+
+local ACT2_OPEN_SKY_INITIAL_POSITIONS = {
+  { x = -2, y = -1 },
+  { x = -1, y = 1 },
+  { x = 0,  y = 0 },
+  { x = 2,  y = 1 },
+  { x = 2,  y = -1 }
+}
+local ACT3_OPEN_SKY_INITIAL_POSITIONS = {
+  { x = -2, y = 0 },
+  { x = -1, y = 1 },
+  { x = -1, y = -1 },
+  { x = 0,  y = -2 },
+  { x = 1,  y = 1 }
+}
+
+local ACT2_LOCATION_POSITIONS                = {
+  { x = -2, y = 1 },
+  { x = -1, y = 0 },
+  { x = -1, y = -1 },
+  { x = 0,  y = 1 },
+  { x = 0,  y = -1 },
+  { x = 1,  y = 1 },
+  { x = 1,  y = 0 },
+  { x = 1,  y = -1 },
+  { x = 2,  y = 0 }
+}
+
+local ACT3_LOCATION_POSITIONS                = {
+  { x = -2, y = -1 },
+  { x = -2, y = -2 },
+  { x = -1, y = 0 },
+  { x = -1, y = -2 },
+  { x = 0,  y = 1 },
+  { x = 0,  y = 0 },
+  { x = 0,  y = -1 },
+  { x = 1,  y = 0 },
+  { x = 1,  y = -1 },
+  { x = 1,  y = -2 },
+  { x = 2,  y = 1 },
+  { x = 2,  y = 0 },
+  { x = 2,  y = -1 },
+  { x = 2,  y = -2 }
+}
+
+function onLoad()
+  trash = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+  if not trash then
+    printToAll("Trash not found!", "Red")
+  end
+
+  self.createButton({
+    label          = "Western",
+    click_function = "westernSetup",
+    function_owner = self,
+    position       = { 0, 0.11, -0.5 },
+    height         = 150,
+    width          = 460,
+    scale          = { x = 2, y = 2, z = 2 },
+    font_color     = { r = 0, g = 0, b = 0 },
+    color          = { r = 1, g = 1, b = 1 }
+  })
+
+  self.createButton({
+    label          = "Eastern",
+    click_function = "easternSetup",
+    function_owner = self,
+    position       = { 0, 0.11, 0.5 },
+    height         = 150,
+    width          = 460,
+    scale          = { x = 2, y = 2, z = 2 },
+    font_color     = { r = 0, g = 0, b = 0 },
+    color          = { r = 1, g = 1, b = 1 }
+  })
+end
+
+function westernSetup(_, color)
+  playerColor = color
+  direction = "west"
+  setup()
+end
+
+function easternSetup(_, color)
+  playerColor = color
+  direction = "east"
+  setup()
+end
+
+function setup()
+  function obsidianSetupCoroutine()
+    local bag = getObjectFromGUID(BAG_GUIDS[direction])
+
+    if #bag.getObjects() > 0 then
+      bag.call("buttonClick_place")
+    end
+
+    local summitDeck = getObjectFromGUID(SUMMIT_DECK_GUID)
+    local centralSpire = getObjectFromGUID(CENTRAL_SPIRE_GUID)
+    summitDeck.shuffle()
+    CoroutineLib.yieldSeconds(1)
+
+    for i = 1, 7 do
+      summitDeck.takeObject({ position = PlayAreaApi.gridToWorld(ACT1_LOCATION_POSITIONS[i]) })
+    end
+
+    CoroutineLib.yieldSeconds(1)
+    DeckLib.shuffleIntoTopOrBottomX(centralSpire, summitDeck, false, 3, true)
+    -- Deal with the Star Spawn
+    local starSpawnDeck = getObjectFromGUID(STAR_SPAWN_SET_GUID)
+    starSpawnDeck.shuffle()
+
+    CoroutineLib.yieldSeconds(0.5)
+    if direction == "east" then numStarSpawns = 1 else numStarSpawns = 2 end
+    
+    for i = 1, numStarSpawns do
+      starSpawnCard = starSpawnDeck.takeObject()
+      DeckLib.placeOrMergeIntoDeck(starSpawnCard, MythosAreaApi.getEncounterDeckPosition(), nil, false, true)
+    end
+    trash.putObject(starSpawnDeck)
+
+    CoroutineLib.yieldSeconds(1)
+    -- Deal with the Inescapable
+    if direction == "east" then
+      -- put The Inescapable into the set aside chest and shuffle the rest of the encounter set into the encounter deck
+      local inescapableSet = getObjectFromGUID(INESCAPABLE_SET_GUID)
+      local setAsideChest = MythosAreaApi.getSetAsideChest()
+
+      -- The Inescapable set is face-down for dramatic effect
+      local inescapable = inescapableSet.takeObject({ top = false })
+      setAsideChest.putObject(inescapable)
+      inescapableGUID = inescapable.guid
+
+      CoroutineLib.yieldSeconds(0.5)
+      inescapableSet.setName("Still Behind Yous")
+      setAsideChest.putObject(inescapableSet)
+      
+      -- remove bag from unused direction
+      trash.putObject(getObjectFromGUID(BAG_GUIDS["west"]))
+
+      -- remove extra Open Sky cards
+      local openSkyDeck = getObjectFromGUID(OPEN_SKY_DECK_GUID)
+      for i = 1, 3 do
+        local card = openSkyDeck.takeObject()
+        trash.putObject(card)
+      end
+    else
+      -- prompt user to report on the Inescapable
+      Player[playerColor].showOptionsDialog("Was the creature defeated?", { "Yes", "No" }, 1, function(text)
+        local inescapableSet = getObjectFromGUID(INESCAPABLE_SET_GUID)
+        if text == "No" then
+          inescapableSet.takeObject({ position = {-20.37, 1.53, -14.49}, rotation = {0.00, 0.00, 0.00}, top = false })
+          -- add the "Still Behind You" from Inescapable Encounter set to the deck
+          DeckLib.placeOrMergeIntoDeck(inescapableSet, MythosAreaApi.getEncounterDeckPosition(), nil, false, true)
+          broadcastToAll("Added 'The Inescapable' Encounter Set to the game.", "White")
+        else
+          trash.putObject(inescapableSet)
+          broadcastToAll("Removed 'The Inescapable' Encounter Set from the game.", "White")
+        end
+      end)
+      -- remove bag from unused direction
+      trash.putObject(getObjectFromGUID(BAG_GUIDS["east"]))
+      flipWind()
+    end
+    trash.putObject(bag)
+    nextSetupStep = 1
+    direction = direction
+    increaseSetupStep()
+  end
+
+  CoroutineLib.start(obsidianSetupCoroutine)
+end
+
+function setup_2()
+  if not detectActLocation("Act 1") then
+    broadcastToAll("Can't advance act yet.", "Yellow")
+    return
+  end
+  function setup_2Coroutine()
+    local setAsideChest = MythosAreaApi.getSetAsideChest()
+    local streets = getObjectFromGUID(STREETS_GUID)
+    local centralSpire = getObjectFromGUID(CENTRAL_SPIRE_GUID)
+    trash.putObject(streets)
+    if direction == "east" then
+      if HelperLib.checkContainerForGuid(setAsideChest, inescapableGUID) then
+        setAsideChest.takeObject({guid = inescapableGUID, position = centralSpire.getPosition() - Vector(3, 0 ,0), rotation = {0, 0, 0} })
+      end
+      if HelperLib.checkContainerForGuid(setAsideChest, INESCAPABLE_SET_GUID) then
+        setAsideChest.takeObject({guid = INESCAPABLE_SET_GUID, position = MythosAreaApi.getEncounterDiscardPosition(), rotation = MythosAreaApi.getEncounterDiscardRotation()})
+        CoroutineLib.yieldSeconds(0.5)
+      end
+      MythosAreaApi.reshuffleEncounterDeck()
+    end
+    CoroutineLib.yieldSeconds(1)
+
+    locations = cleanZone(CENTRAL_SPIRE_GUID)
+    
+    CoroutineLib.yieldSeconds(1)
+    summitDeck = shuffleLocations(locations)
+    CoroutineLib.yieldSeconds(1)
+    
+    local offset = PlayAreaApi.gridToWorld({ x = -2, y = 0 }) - centralSpire.getPosition()
+    local gridPosition = LocationLib.getCurrentGrid(centralSpire)
+    local objectsAroundLocation = LocationLib.getObjectsAt(gridPosition)
+    LocationLib.moveObjectsByOffset(objectsAroundLocation, offset)
+    local openSkyDeck = getObjectFromGUID(OPEN_SKY_DECK_GUID)
+
+    for i = 1, 5 do
+      openSkyDeck.takeObject({ position = PlayAreaApi.gridToWorld(ACT2_OPEN_SKY_INITIAL_POSITIONS[i]) })
+    end
+    
+    for i = 1, 9 do
+      summitDeck.takeObject({ position = PlayAreaApi.gridToWorld(ACT2_LOCATION_POSITIONS[i]), top = false })
+    end
+    
+    if direction == "east" then
+      secondLocationGUID = "862f49" -- Ancient Dome
+    else
+      secondLocationGUID = "638756" -- Floating Spire
+    end
+
+    local secondLocation = setAsideChest.takeObject({guid = secondLocationGUID})
+    local aerialWaterfall = setAsideChest.takeObject({guid = "b10b6a"})
+    if direction == "east" then -- shuffle both locations and the remaining empty sky into the top 5 of the summit deck
+      DeckLib.shuffleIntoDeck(secondLocation, openSkyDeck)
+      DeckLib.shuffleIntoDeck(aerialWaterfall, openSkyDeck)
+      CoroutineLib.yieldSeconds(2)
+      DeckLib.shuffleIntoTopOrBottomX(openSkyDeck, summitDeck, false, 5, true)
+      trash.putObject(self)
+    else -- shuffle both locations into the top 3 of the summit deck
+      local newLocations = {aerialWaterfall, secondLocation}
+      DeckLib.shuffleIntoTopOrBottomX(newLocations, summitDeck, false, 3, true)
+      increaseSetupStep()
+    end
+  end
+  CoroutineLib.start(setup_2Coroutine)
+end
+
+function setup_3()
+  if not detectActLocation("Act 2") then
+    broadcastToAll("Can't advance act yet.", "Yellow")
+    return
+  end
+  function setup_3Coroutine()
+    local centralSpire = getObjectFromGUID(CENTRAL_SPIRE_GUID)
+    local floatingSpire = getObjectFromGUID(FLOATING_SPIRE_GUID)
+    trash.putObject(centralSpire)
+    CoroutineLib.yieldSeconds(1)
+
+    locations = cleanZone(FLOATING_SPIRE_GUID)
+    
+    CoroutineLib.yieldSeconds(1)
+    summitDeck = shuffleLocations(locations)
+    CoroutineLib.yieldSeconds(1)
+    
+    local offset = PlayAreaApi.gridToWorld({ x = -2, y = 1 }) - floatingSpire.getPosition()
+    local gridPosition = LocationLib.getCurrentGrid(floatingSpire)
+    local objectsAroundLocation = LocationLib.getObjectsAt(gridPosition)
+    LocationLib.moveObjectsByOffset(objectsAroundLocation, offset)
+    local openSkyDeck = getObjectFromGUID(OPEN_SKY_DECK_GUID)
+
+    for i = 1, 5 do
+      openSkyDeck.takeObject({ position = PlayAreaApi.gridToWorld(ACT3_OPEN_SKY_INITIAL_POSITIONS[i]) })
+    end
+    
+    for i = 1, 14 do
+      summitDeck.takeObject({ position = PlayAreaApi.gridToWorld(ACT3_LOCATION_POSITIONS[i]), top = false })
+    end
+    CoroutineLib.yieldSeconds(1)
+    -- shuffle in Western Wall into the top 3
+    local setAsideChest = MythosAreaApi.getSetAsideChest()
+    local westernWall = setAsideChest.takeObject({guid = "ec0fc1"})
+    DeckLib.shuffleIntoTopOrBottomX(westernWall, summitDeck, false, 3, true)
+    trash.putObject(self)
+  end
+  CoroutineLib.start(setup_3Coroutine)
+end
+
+function shuffleLocations(locations)
+  local summitDeck = getObjectFromGUID(SUMMIT_DECK_GUID)
+  if summitDeck == nil then
+    for _, obj in ipairs(getObjects()) do
+      if obj.type == "Deck" and obj.getName() == "Summit Deck" then
+        summitDeck = obj
+        break
+      end
+    end
+  end
+
+  if summitDeck == nil then
+    broadcastToAll("Summit deck not found. If it does exist, right-click on it, set the name to 'Summit Deck' and try again.")
+    return
+  end
+
+  DeckLib.shuffleIntoDeck(locations, summitDeck, true)
+  return summitDeck
+end
+
+function updateSave()
+  self.script_state = tostring(nextSetupStep)
+end
+
+function createButtons()
+  self.clearButtons()
+
+  if nextSetupStep >= 1 and nextSetupStep <= 3 then
+    buttonParameters.label = "Act " .. nextSetupStep .. "\nSet Up"
+    buttonParameters.click_function = "setup_" .. nextSetupStep
+    self.createButton(buttonParameters)
+  end
+end
+
+function increaseSetupStep()
+  nextSetupStep = nextSetupStep + 1
+  updateSave()
+  createButtons()
+end
+
+
+function flipWind()
+  -- flip Winds card
+  local windsCard = getObjectFromGUID("82b859")
+  windsCard.flip()
+end
+
+function cleanZone(locationToKeepGUID)
+  local locationToKeep = getObjectFromGUID(locationToKeepGUID)
+  local bounds = locationToKeep.getBounds()
+
+  -- define the area "near" the central location
+  local bufferAround = 2
+  areaNearCenter = {}
+  areaNearCenter.minX = bounds.center.x - bounds.size.x / 2 - bufferAround
+  areaNearCenter.maxX = bounds.center.x + bounds.size.x / 2 + bufferAround
+  areaNearCenter.minZ = bounds.center.z - bounds.size.z / 2 - bufferAround
+  areaNearCenter.maxZ = bounds.center.z + bounds.size.z / 2 + bufferAround
+
+  -- clean the play area
+  local zone = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "PlayAreaZone")
+  locations = {}
+  objectsToDelete = {}
+  for _, obj in ipairs(zone.getObjects()) do
+    if not HelperLib.isInArea(obj.getPosition(), areaNearCenter) then -- keep cards that are "at" the location to keep for the next Act
+      if obj.type == "Card" and obj.hasTag("ScenarioCard") then
+        -- move enemies and treacheries to the encounter discard pile
+        if not obj.hasTag("Location") and not HelperLib.isInArea(obj.getPosition(), areaNearCenter) then
+          obj.setPosition(MythosAreaApi.getEncounterDiscardPosition())
+        else
+          -- move locations to Summit Deck or set aside if Orrery
+          local md = HelperLib.getMetadata(obj) or {}
+          if md.id == "11662" and not obj.is_face_down then
+            if not HelperLib.cardHasClues(obj) then
+              PlayAreaApi.maybeUntrackLocation(obj)
+              VictoryDisplayApi.placeCard(obj)
+              CoroutineLib.yieldSeconds(0.5)
+            else
+              TokenSpawnTrackerApi.resetTokensSpawned(obj)
+              local setAsideChest = MythosAreaApi.getSetAsideChest()
+              setAsideChest.putObject(obj)
+            end
+          else
+            TokenSpawnTrackerApi.resetTokensSpawned(obj)
+            table.insert(locations, obj)
+          end
+        end
+      elseif obj.memo == "clueDoom" then -- delete clues and doom tokens
+        table.insert(objectsToDelete, obj)
+      end
+    end
+  end
+  
+  for _, token in ipairs(objectsToDelete) do
+    token.destruct()
+  end
+  return locations
+end
+
+function detectActLocation(act)
+  local zone = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "PlayAreaZone")
+  for _, obj in ipairs(zone.getObjects()) do
+    if obj.type == "Card" and obj.hasTag("ScenarioCard") then
+      local md = HelperLib.getMetadata(obj) or {}
+      if md.id == TARGET_LOCATIONS[act] and not obj.is_face_down then
+        return true
+      end
+    end
+  end
+  return false
+end

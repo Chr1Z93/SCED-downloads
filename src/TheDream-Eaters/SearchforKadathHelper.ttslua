@@ -1,8 +1,8 @@
 local CoroutineLib      = require("util/CoroutineLib")
 local GUIDReferenceApi  = require("core/GUIDReferenceApi")
+local HelperLib         = require("HelperLib")
 local MythosAreaApi     = require("mythos/MythosAreaApi")
 local PlayAreaApi       = require("playarea/PlayAreaApi")
-local SearchLib         = require("util/SearchLib")
 local VictoryDisplayApi = require("mythos/VictoryDisplayApi")
 
 local SET_ASIDE         = {
@@ -204,7 +204,7 @@ function cleanZone()
 
     -- remove certain cards from game
     if obj.type == "Card" then
-      local md = getMetadata(obj)
+      local md = HelperLib.getMetadata(obj)
       if md.id and RFG_IDS[md.id] then
         obj.setRotation(RFG.rotation)
         obj.setPosition(RFG.position)
@@ -215,7 +215,7 @@ function cleanZone()
     end
 
     if not handled and obj.type == "Card" and obj.hasTag("ScenarioCard") then
-      local md = getMetadata(obj)
+      local md = HelperLib.getMetadata(obj)
       -- move enemies and treacheries to the encounter deck
       if md.type == "Enemy" or md.type == "Treachery" then
         encounterDeckObjects = MythosAreaApi.getEncounterDeckObjects()
@@ -224,7 +224,7 @@ function cleanZone()
         CoroutineLib.yieldSeconds(0.5)
       elseif obj.hasTag("Location") then
         -- move locations to victory display or set aside
-        if md.locationFront and md.locationFront.victory and not obj.is_face_down and not cardHasClues(obj) then
+        if md.locationFront and md.locationFront.victory and not obj.is_face_down and not HelperLib.cardHasClues(obj) then
           PlayAreaApi.maybeUntrackLocation(obj)
           VictoryDisplayApi.placeCard(obj)
         else
@@ -258,7 +258,7 @@ function removeCardsFromDeck(deck)
   local deckInfo = deck.getObjects()
   for i = #deckInfo, 1, -1 do
     local card = deckInfo[i]
-    local md = getMetadata(card)
+    local md = HelperLib.getMetadata(card)
     if md.id and RFG_IDS[md.id] then
       deck.takeObject({
         position = RFG.position,
@@ -275,7 +275,7 @@ function placeLocationsAndEnemies(region)
   for i, loc in ipairs(LOCATIONS) do
     if loc.region == region then
       for j, card in ipairs(locationDeck.getObjects()) do
-        local md = getMetadata(card)
+        local md = HelperLib.getMetadata(card)
         if md.id and md.id == loc.id then
           locationDeck.takeObject({
             position = loc.position,
@@ -324,7 +324,7 @@ function placeEnemyFromContainer(id, name, container, locationName, side)
     local info = container.getObjects()
     for i = #info, 1, -1 do
       local card = info[i]
-      local md = getMetadata(card)
+      local md = HelperLib.getMetadata(card)
       if md.id and md.id == id then
         container.takeObject({
           index    = card.index,
@@ -338,25 +338,6 @@ function placeEnemyFromContainer(id, name, container, locationName, side)
     end
   end
   broadcastToAll("Couldn't find " .. name, "Orange")
-end
-
--- Checks if a card has clues on it
----@param card tts__Object Card to check for clues
----@return boolean hasClues True if card has clues on it
-function cardHasClues(card)
-  local searchResult = SearchLib.onObject(card, "isClue")
-  return #searchResult > 0
-end
-
-function getMetadata(objectOrNotes)
-  if objectOrNotes == nil then return {} end
-  if type(objectOrNotes) == "string" then
-    return JSON.decode(objectOrNotes) or {}
-  elseif type(objectOrNotes) == "table" then
-    return JSON.decode(objectOrNotes["GMNotes"] or objectOrNotes["gm_notes"]) or {}
-  else
-    return JSON.decode(objectOrNotes.getGMNotes()) or {}
-  end
 end
 
 function getLocationPositionByName(locationName)
