@@ -1,0 +1,252 @@
+local AllCardsBagApi       = require("playercards/AllCardsBagApi")
+local CoroutineLib         = require("util/CoroutineLib")
+local MythosAreaApi        = require("mythos/MythosAreaApi")
+local PlayAreaApi          = require("playarea/PlayAreaApi")
+local PlayermatApi         = require("playermat/PlayermatApi")
+local TokenManagerApi      = require("tokens/TokenManagerApi")
+local TokenSpawnTrackerApi = require("tokens/TokenSpawnTrackerApi")
+
+local STARTING_POSITION    = {
+  ["Gavriella Mizrah"] = "05079",
+  ["Jerome Davids"]    = "05084",
+  ["Valentino Rivas"]  = "05081",
+  ["Penny White"]      = "05083"
+}
+local ENCOUNTER_CARDS      = {
+  ["Gavriella Mizrah"] = {
+    { id = "05108", idReturn = "54067", localPos = Vector(-0.91, 0, -0.625) }
+  },
+  ["Jerome Davids"]    = {
+    { id = "05100", idReturn = "-",     startingOffset = Vector(3.25, 0, 0) },
+    { id = "01168", idReturn = "54073", startingOffset = Vector(0, 0, -2.5) }
+  },
+  ["Valentino Rivas"]  = {
+    { id = "05101", idReturn = "-",     localPos = Vector(-0.91, 0, -0.625) },
+    { id = "05107", idReturn = "54066", gridPos = { x = -0.2, y = 3 } }
+  },
+  ["Penny White"]      = {
+    { id = "05103", idReturn = "54074", localPos = Vector(-0.91, 0, -0.625) },
+    { id = "05102", idReturn = "-",     gridPos = { x = 0.2, y = 3 } }
+  }
+}
+local STARTING_RESOURCES   = {
+  ["Gavriella Mizrah"] = 1,
+  ["Jerome Davids"]    = 3,
+  ["Valentino Rivas"]  = 10,
+  ["Penny White"]      = 2
+}
+
+local STARTING_PLAY_AREA   = {
+  ["Gavriella Mizrah"] = {
+    { id = "01016", localPos = Vector(0.217, 0, 0.035), usesMod = { Ammo = -2 } },
+    { id = "01017", localPos = Vector(0.98, 0, 0.035) }
+  },
+  ["Jerome Davids"]    = {},
+  ["Valentino Rivas"]  = {
+    { id = "05028", localPos = Vector(0.98, 0, 0.035) }
+  },
+  ["Penny White"]      = {
+    { id = "01077", localPos = Vector(0.98, 0, 0.035) },
+    { id = "01086", localPos = Vector(0.217, 0, 0.035) },
+    { id = "01087", localPos = Vector(-0.177, 0, 0.032), usesMod = { Supply = -1 } },
+  }
+}
+
+local OPENING_HAND         = {
+  ["Gavriella Mizrah"] = { "01019", "01021", "01022", "01023", "01026", "05021", "05021" },
+  ["Jerome Davids"]    = { "01034", "01036", "01037", "01038", "01039", "01040", "05024", "05025", "05026", "05026" },
+  ["Valentino Rivas"]  = { "01047", "01053", "01056", "05029", "05029", "05030", "05030" },
+  ["Penny White"]      = { "01077", "01080", "01086", "01087", "05037", "05037", "05038", "05038" }
+}
+
+local CARD_WIDTH           = 2.5
+
+function onLoad()
+  self.createButton({
+    label          = "Set Up",
+    click_function = "buttonClick",
+    function_owner = self,
+    position       = { 0, 0.11, 0 },
+    height         = 450,
+    width          = 1400,
+    scale          = { x = 0.6, y = 1, z = 0.6 },
+    font_size      = 320
+  })
+end
+
+function buttonClick(_, playerColor)
+  Player[playerColor].showConfirmDialog(
+    "Make sure each player has placed a prologue investigator on their player mat before proceeding.", setup)
+end
+
+function setup()
+  local deck = MythosAreaApi.getEncounterDeckObjects().draw
+  if not deck then
+    printToAll("Couldn't find encounter deck!", "Red")
+    return
+  end
+
+  function setupCoroutine()
+    local count = 0
+    for matColor, investigatorCard in pairs(PlayermatApi.getUsedInvestigatorCards()) do
+      local name = investigatorCard.getName()
+      if STARTING_RESOURCES[name] then
+        performSetup(matColor, name, deck)
+        count = count + 1
+      else
+        printToAll("Warning: '" .. name .. "' is not a valid investigator for this scenario!", "Orange")
+      end
+    end
+    PlayAreaApi.setInvestigatorCount(count)
+    printToAll("")
+    printToAll("Setup completed.")
+    self.destruct()
+  end
+
+  CoroutineLib.start(setupCoroutine)
+end
+
+function performSetup(matColor, name, deck)
+  printToAll("")
+  local playerColor = PlayermatApi.getPlayerColor(matColor)
+  local coloredName = "[" .. Color.fromString(playerColor):toHex() .. "]" .. name .. "[-]"
+  printToAll(coloredName)
+  placeEncounterCards(matColor, name, deck)
+  moveToStartingPosition(name)
+  setStartingResources(matColor, name)
+  spawnHand(matColor, name)
+  spawnStartingPlayArea(matColor, name)
+
+  if name == "Gavriella Mizrah" then
+    -- add 1 damage to the Watcher
+    local watcher = getWatcher()
+    if not watcher then
+      printToAll("- couldn't find Spectral Watcher to deal 1 damage", "Red")
+    else
+      local position  = watcher.getPosition() + Vector(0, 0.2, 0)
+      local tokenType = "damage"
+      local rotation  = Vector(0, 270, 0)
+      TokenManagerApi.spawnToken(position, tokenType, rotation)
+      printToAll("- dealt 1 damage to Spectral Watcher")
+    end
+  end
+end
+
+function moveToStartingPosition(name)
+  local location = getLocationById(STARTING_POSITION[name])
+  if not location then
+    printToAll("- starting location couldn't be found", "Red")
+    return
+  end
+
+  local miniCard = getMiniCardByName(name)
+  if not miniCard then
+    printToAll("- mini card couldn't be found", "Red")
+    return
+  end
+
+  miniCard.setPosition(location.getPosition() + Vector(0, 0.05, 2))
+  printToAll("- moved mini card to starting location")
+end
+
+function placeEncounterCards(matColor, name, deck)
+  for _, info in ipairs(ENCOUNTER_CARDS[name]) do
+    local pos
+    local rot = Vector(0, 270, 0)
+    if info.localPos then
+      pos = PlayermatApi.transformLocalPosition(info.localPos, matColor)
+      rot = PlayermatApi.returnRotation(matColor)
+    elseif info.gridPos then
+      pos = PlayAreaApi.gridToWorld(info.gridPos)
+    elseif info.startingOffset then
+      local location = getLocationById(STARTING_POSITION[name])
+      if location then
+        pos = location.getPosition() + info.startingOffset
+      end
+    end
+    if not pos then
+      printToAll("Position for encounter card with ID " .. info.id .. " couldn't be determined.", "Red")
+    else
+      takeObjectFromDeck(deck, info.id, info.idReturn, pos:setAt("y", 1.6), rot)
+      CoroutineLib.yieldSeconds(0.8)
+    end
+  end
+  printToAll("- placed encounter cards")
+end
+
+function setStartingResources(matColor, name)
+  PlayermatApi.updateCounter(matColor, "ResourceCounter", STARTING_RESOURCES[name])
+  printToAll("- adjusted starting resources")
+end
+
+function spawnHand(matColor, name)
+  local cardList    = OPENING_HAND[name]
+  local cardCount   = #cardList
+  local playerColor = PlayermatApi.getPlayerColor(matColor)
+  local handData    = Player[playerColor].getHandTransform()
+  local rotation    = handData.rotation + Vector(0, 180, 0)
+  for i, cardId in ipairs(cardList) do
+    local cardInfo   = AllCardsBagApi.getCardById(cardId)
+    local offsetMult = i - (cardCount + 1) / 2
+    spawnObjectData({
+      data     = cardInfo.data,
+      position = handData.position + CARD_WIDTH * handData.right * offsetMult,
+      rotation = rotation
+    })
+  end
+  printToAll("- spawned opening hand")
+end
+
+function spawnStartingPlayArea(matColor, name)
+  local rotation = PlayermatApi.returnRotation(matColor)
+  for _, info in ipairs(STARTING_PLAY_AREA[name]) do
+    local guid            = info.id .. name
+    local cardInfo        = AllCardsBagApi.getCardById(info.id)
+    cardInfo.data["GUID"] = guid
+    if info.usesMod then
+      TokenSpawnTrackerApi.markTokensSpawned(guid)
+    end
+    local spawnedCard = spawnObjectData({
+      data     = cardInfo.data,
+      position = PlayermatApi.transformLocalPosition(info.localPos, matColor):setAt("y", 1.6),
+      rotation = rotation
+    })
+    Wait.time(function()
+      TokenSpawnTrackerApi.resetTokensSpawned(guid)
+      TokenManagerApi.spawnForCard(spawnedCard, info.usesMod, nil, matColor)
+    end, 1)
+  end
+  printToAll("- spawned starting play area")
+end
+
+function getLocationById(id)
+  for _, obj in ipairs(getObjectsWithTag("Location")) do
+    local md = JSON.decode(obj.getGMNotes()) or {}
+    if id == md.id then return obj end
+  end
+end
+
+function getWatcher()
+  for _, obj in ipairs(getObjectsWithTag("ScenarioCard")) do
+    local md = JSON.decode(obj.getGMNotes()) or {}
+    if md.id == "05086" then return obj end
+  end
+end
+
+function getMiniCardByName(name)
+  for _, obj in ipairs(getObjectsWithTag("Minicard")) do
+    if name == obj.getName() then return obj end
+  end
+end
+
+function takeObjectFromDeck(deck, id, idReturn, pos, rot)
+  local deckInfo = deck.getObjects()
+  for i = #deckInfo, 1, -1 do
+    local cardInfo = deckInfo[i]
+    local md       = JSON.decode(cardInfo.gm_notes) or {}
+    if md.id == id or md.id == idReturn then
+      deck.takeObject({ index = cardInfo.index, position = pos, rotation = rot })
+      return
+    end
+  end
+end
