@@ -1,11 +1,18 @@
 local AllCardsBagApi       = require("playercards/AllCardsBagApi")
 local CoroutineLib         = require("util/CoroutineLib")
+local GUIDReferenceApi     = require("core/GUIDReferenceApi")
 local MythosAreaApi        = require("mythos/MythosAreaApi")
 local PlayAreaApi          = require("playarea/PlayAreaApi")
 local PlayermatApi         = require("playermat/PlayermatApi")
 local TokenManagerApi      = require("tokens/TokenManagerApi")
 local TokenSpawnTrackerApi = require("tokens/TokenSpawnTrackerApi")
 
+local unusedInvestigators  = {
+  ["Gavriella Mizrah"] = true,
+  ["Jerome Davids"]    = true,
+  ["Valentino Rivas"]  = true,
+  ["Penny White"]      = true
+}
 local STARTING_POSITION    = {
   ["Gavriella Mizrah"] = "05079",
   ["Jerome Davids"]    = "05084",
@@ -17,16 +24,16 @@ local ENCOUNTER_CARDS      = {
     { id = "05108", idReturn = "54067", localPos = Vector(-0.91, 0, -0.625) }
   },
   ["Jerome Davids"]    = {
-    { id = "05100", idReturn = "-",     startingOffset = Vector(3.25, 0, 0) },
-    { id = "01168", idReturn = "54073", startingOffset = Vector(0, 0, -2.5) }
+    { id = "05100", idReturn = "-",     startingOffset = Vector(3.3, 0, 0) },
+    { id = "01168", idReturn = "54073", startingOffset = Vector(0, 0, -2.55) }
   },
   ["Valentino Rivas"]  = {
     { id = "05101", idReturn = "-",     localPos = Vector(-0.91, 0, -0.625) },
-    { id = "05107", idReturn = "54066", gridPos = { x = -0.2, y = 3 } }
+    { id = "05107", idReturn = "54066", agendaPos = Vector(0.257, 0, -0.38) }
   },
   ["Penny White"]      = {
     { id = "05103", idReturn = "54074", localPos = Vector(-0.91, 0, -0.625) },
-    { id = "05102", idReturn = "-",     gridPos = { x = 0.2, y = 3 } }
+    { id = "05102", idReturn = "-",     agendaPos = Vector(-0.257, 0, -0.38) }
   }
 }
 local STARTING_RESOURCES   = {
@@ -35,7 +42,6 @@ local STARTING_RESOURCES   = {
   ["Valentino Rivas"]  = 10,
   ["Penny White"]      = 2
 }
-
 local STARTING_PLAY_AREA   = {
   ["Gavriella Mizrah"] = {
     { id = "01016", localPos = Vector(0.217, 0, 0.035), usesMod = { Ammo = -2 } },
@@ -51,7 +57,6 @@ local STARTING_PLAY_AREA   = {
     { id = "01087", localPos = Vector(-0.177, 0, 0.032), usesMod = { Supply = -1 } },
   }
 }
-
 local OPENING_HAND         = {
   ["Gavriella Mizrah"] = { "01019", "01021", "01022", "01023", "01026", "05021", "05021" },
   ["Jerome Davids"]    = { "01034", "01036", "01037", "01038", "01039", "01040", "05024", "05025", "05026", "05026" },
@@ -76,7 +81,8 @@ end
 
 function buttonClick(_, playerColor)
   Player[playerColor].showConfirmDialog(
-    "Make sure each player has placed a prologue investigator on their player mat before proceeding.", setup)
+    "Each player needs to place a prologue investigator on their player mat before continuing! Press OK to start setup.",
+    setup)
 end
 
 function setup()
@@ -86,11 +92,18 @@ function setup()
     return
   end
 
+  local invCards = PlayermatApi.getUsedInvestigatorCards()
+  if next(invCards) == nil then
+    printToAll("Couldn't find placed investigator cards.", "Red")
+    return
+  end
+
   function setupCoroutine()
     local count = 0
-    for matColor, investigatorCard in pairs(PlayermatApi.getUsedInvestigatorCards()) do
+    for matColor, investigatorCard in pairs(invCards) do
       local name = investigatorCard.getName()
       if STARTING_RESOURCES[name] then
+        unusedInvestigators[name] = false
         performSetup(matColor, name, deck)
         count = count + 1
       else
@@ -98,12 +111,28 @@ function setup()
       end
     end
     PlayAreaApi.setInvestigatorCount(count)
+    removeUnusedInvestigators()
     printToAll("")
     printToAll("Setup completed.")
     self.destruct()
   end
 
   CoroutineLib.start(setupCoroutine)
+end
+
+function removeUnusedInvestigators()
+  for name, state in pairs(unusedInvestigators) do
+    if state then
+      local inv = getInvestigatorByName(name)
+      if inv then
+        inv.destruct()
+      end
+      local mini = getMiniCardByName(name)
+      if mini then
+        mini.destruct()
+      end
+    end
+  end
 end
 
 function performSetup(matColor, name, deck)
@@ -150,14 +179,17 @@ function moveToStartingPosition(name)
 end
 
 function placeEncounterCards(matColor, name, deck)
+  printToAll("- placing encounter cards:")
+  local MythosArea = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "MythosArea")
   for _, info in ipairs(ENCOUNTER_CARDS[name]) do
     local pos
     local rot = Vector(0, 270, 0)
     if info.localPos then
       pos = PlayermatApi.transformLocalPosition(info.localPos, matColor)
       rot = PlayermatApi.returnRotation(matColor)
-    elseif info.gridPos then
-      pos = PlayAreaApi.gridToWorld(info.gridPos)
+    elseif info.agendaPos then
+      pos = MythosArea.positionToWorld(info.agendaPos)
+      rot = MythosArea.getRotation()
     elseif info.startingOffset then
       local location = getLocationById(STARTING_POSITION[name])
       if location then
@@ -167,11 +199,11 @@ function placeEncounterCards(matColor, name, deck)
     if not pos then
       printToAll("Position for encounter card with ID " .. info.id .. " couldn't be determined.", "Red")
     else
-      takeObjectFromDeck(deck, info.id, info.idReturn, pos:setAt("y", 1.6), rot)
+      local card = takeObjectFromDeck(deck, info.id, info.idReturn, pos:setAt("y", 1.65), rot)
+      printToAll("  - " .. card.getName())
       CoroutineLib.yieldSeconds(0.8)
     end
   end
-  printToAll("- placed encounter cards")
 end
 
 function setStartingResources(matColor, name)
@@ -235,6 +267,12 @@ end
 
 function getMiniCardByName(name)
   for _, obj in ipairs(getObjectsWithTag("Minicard")) do
+    if name == obj.getName() then return obj end
+  end
+end
+
+function getInvestigatorByName(name)
+  for _, obj in ipairs(getObjectsWithTag("Investigator")) do
     if name == obj.getName() then return obj end
   end
 end
