@@ -23,6 +23,13 @@ local BAG_GUIDS                       = {
   ["east"] = "114b54"
 }
 
+local NUMBER_GUIDS = {
+  ["1"] = "fd463d",
+  ["2"] = "7fb3c3",
+  ["3"] = "1e0b40",
+  ["4"] = "a8c9c6"
+}
+
 local buttonParameters                = {
   function_owner = self,
   position       = { 0, 0.1, 0 },
@@ -47,6 +54,13 @@ local ACT1_LOCATION_POSITIONS         = {
   { x = -1, y = 1 }
 }
 
+local ACT1_OPEN_SKY_INITIAL_POSITIONS = {
+  { x = -1, y = 0 },
+  { x = 0,  y = -1 },
+  { x = 0,  y = 1 },
+  { x = 1,  y = 0 }
+}
+
 local ACT2_OPEN_SKY_INITIAL_POSITIONS = {
   { x = -2, y = -1 },
   { x = -1, y = 1 },
@@ -54,6 +68,7 @@ local ACT2_OPEN_SKY_INITIAL_POSITIONS = {
   { x = 2,  y = 1 },
   { x = 2,  y = -1 }
 }
+
 local ACT3_OPEN_SKY_INITIAL_POSITIONS = {
   { x = -2, y = 0 },
   { x = -1, y = 1 },
@@ -140,18 +155,28 @@ end
 function setup()
   function obsidianSetupCoroutine()
     local bag = getObjectFromGUID(BAG_GUIDS[direction])
+    local setAsideChest = MythosAreaApi.getSetAsideChest()
 
     if #bag.getObjects() > 0 then
       bag.call("buttonClick_place")
     end
 
     local summitDeck = getObjectFromGUID(SUMMIT_DECK_GUID)
+    local openSkyDeck = getObjectFromGUID(OPEN_SKY_DECK_GUID)
     local centralSpire = getObjectFromGUID(CENTRAL_SPIRE_GUID)
     summitDeck.shuffle()
     CoroutineLib.yieldSeconds(1)
 
+    for i = 1, 4 do
+      openSkyDeck.takeObject({ position = PlayAreaApi.gridToWorld(ACT1_OPEN_SKY_INITIAL_POSITIONS[i]) })
+    end
+
     for i = 1, 7 do
       summitDeck.takeObject({ position = PlayAreaApi.gridToWorld(ACT1_LOCATION_POSITIONS[i]) })
+    end
+
+    for i = 1, 3 do
+      setAsideChest.takeObject({ guid = NUMBER_GUIDS[tostring(i)], position = PlayAreaApi.gridToWorld({ x = -1, y = 2 - i}) + Vector(0, 0, 2.5), rotation = {0, 270, 0}})
     end
 
     CoroutineLib.yieldSeconds(1)
@@ -161,12 +186,19 @@ function setup()
     starSpawnDeck.shuffle()
 
     CoroutineLib.yieldSeconds(0.5)
-    if direction == "east" then numStarSpawns = 1 else numStarSpawns = 2 end
+    if direction == "east" then 
+      numStarSpawns = 1
+      ending = "y"
+    else
+      numStarSpawns = 2
+      ending = "ies"
+    end
 
     for i = 1, numStarSpawns do
       starSpawnCard = starSpawnDeck.takeObject()
       DeckLib.placeOrMergeIntoDeck(starSpawnCard, MythosAreaApi.getEncounterDeckPosition(), nil, false, true)
     end
+    broadcastToAll("Shuffled " .. numStarSpawns .. " Star Spawn enem".. ending .." into the encounter deck.")
     trash.putObject(starSpawnDeck)
 
     CoroutineLib.yieldSeconds(1)
@@ -174,7 +206,6 @@ function setup()
     if direction == "east" then
       -- put The Inescapable into the set aside chest and shuffle the rest of the encounter set into the encounter deck
       local inescapableSet = getObjectFromGUID(INESCAPABLE_SET_GUID)
-      local setAsideChest = MythosAreaApi.getSetAsideChest()
 
       -- The Inescapable set is face-down for dramatic effect
       local inescapable = inescapableSet.takeObject({ top = false })
@@ -263,6 +294,12 @@ function setup_2()
     LocationLib.moveObjectsByOffset(objectsAroundLocation, offset)
     local openSkyDeck = getObjectFromGUID(OPEN_SKY_DECK_GUID)
 
+    -- move numbers to indicate row
+    for i = 1, 3 do
+      local numberObject = getObjectFromGUID(NUMBER_GUIDS[tostring(i)])
+      numberObject.setPosition(PlayAreaApi.gridToWorld({ x = -2, y = 2 - i}) + Vector(0, 0, 2.25))
+    end
+
     for i = 1, 5 do
       openSkyDeck.takeObject({ position = PlayAreaApi.gridToWorld(ACT2_OPEN_SKY_INITIAL_POSITIONS[i]) })
     end
@@ -279,15 +316,17 @@ function setup_2()
 
     local secondLocation = setAsideChest.takeObject({ guid = secondLocationGUID })
     local aerialWaterfall = setAsideChest.takeObject({ guid = "b10b6a" })
-    if direction == "east" then -- shuffle both locations and the remaining empty sky into the top 5 of the summit deck
+    if direction == "east" then -- shuffle both locations and the remaining open sky into the top 5 of the summit deck
       DeckLib.shuffleIntoDeck(secondLocation, openSkyDeck)
       DeckLib.shuffleIntoDeck(aerialWaterfall, openSkyDeck)
       CoroutineLib.yieldSeconds(2)
       DeckLib.shuffleIntoTopOrBottomX(openSkyDeck, summitDeck, false, 5, true)
+      broadcastToAll("Shuffled Aerial Waterfall, Anceitn Dome, and the remaining open sky into top 5 cards of the Summit Deck.")
       trash.putObject(self)
     else -- shuffle both locations into the top 3 of the summit deck
       local newLocations = { aerialWaterfall, secondLocation }
       DeckLib.shuffleIntoTopOrBottomX(newLocations, summitDeck, false, 3, true)
+      broadcastToAll("Shuffled Aerial Waterfall and Floating Spire into top 3 cards of the Summit Deck.")
       increaseSetupStep()
     end
   end
@@ -301,6 +340,7 @@ function setup_3()
     return
   end
   function setup_3Coroutine()
+    local setAsideChest = MythosAreaApi.getSetAsideChest()
     local centralSpire = getObjectFromGUID(CENTRAL_SPIRE_GUID)
     local floatingSpire = getObjectFromGUID(FLOATING_SPIRE_GUID)
     trash.putObject(centralSpire)
@@ -318,6 +358,17 @@ function setup_3()
     LocationLib.moveObjectsByOffset(objectsAroundLocation, offset)
     local openSkyDeck = getObjectFromGUID(OPEN_SKY_DECK_GUID)
 
+    -- move numbers to indicate row
+    for i = 1, 4 do
+      if i < 4 then
+        numberObject = getObjectFromGUID(NUMBER_GUIDS[tostring(i)])
+      else
+        numberObject = setAsideChest.takeObject({ guid = NUMBER_GUIDS[tostring(i)]})
+        numberObject.setRotation({0, 270, 0})
+      end
+      numberObject.setPosition(PlayAreaApi.gridToWorld({ x = -2, y = 2 - i}) + Vector(0, 0, 2.25))
+    end
+
     for i = 1, 5 do
       openSkyDeck.takeObject({ position = PlayAreaApi.gridToWorld(ACT3_OPEN_SKY_INITIAL_POSITIONS[i]) })
     end
@@ -330,6 +381,7 @@ function setup_3()
     local setAsideChest = MythosAreaApi.getSetAsideChest()
     local westernWall = setAsideChest.takeObject({ guid = "ec0fc1" })
     DeckLib.shuffleIntoTopOrBottomX(westernWall, summitDeck, false, 3, true)
+    broadcastToAll("Shuffled Western Wall into top 3 cards of the Summit Deck")
     trash.putObject(self)
   end
 
@@ -378,8 +430,16 @@ end
 
 function flipWind()
   -- flip Winds card
-  local windsCard = getObjectFromGUID("82b859")
-  windsCard.flip()
+  for _, obj in ipairs(getObjectsWithTag("WindReference")) do
+    obj.flip()
+    if obj.is_face_down then
+      direction = "Western"
+    else
+      direction = "Eastern"
+    end
+  end
+  
+  broadcastToAll("Winds Card flipped to " .. direction .." Winds.")
 end
 
 function cleanZone(locationToKeepGUID)
@@ -403,7 +463,9 @@ function cleanZone(locationToKeepGUID)
       if obj.type == "Card" and obj.hasTag("ScenarioCard") then
         -- move enemies and treacheries to the encounter discard pile
         if not obj.hasTag("Location") and not HelperLib.isInArea(obj.getPosition(), areaNearCenter) then
-          obj.setPosition(MythosAreaApi.getEncounterDiscardPosition())
+          broadcastToAll("Discarded " .. obj.getName())
+          CoroutineLib.yieldSeconds(0.2)
+          obj.setPosition(MythosAreaApi.getEncounterDiscardPosition() + Vector(0, 5, 0) )
         else
           -- move locations to Summit Deck or set aside if Orrery
           local md = HelperLib.getMetadata(obj) or {}
@@ -416,6 +478,7 @@ function cleanZone(locationToKeepGUID)
               TokenSpawnTrackerApi.resetTokensSpawned(obj)
               local setAsideChest = MythosAreaApi.getSetAsideChest()
               setAsideChest.putObject(obj)
+              printToAll("Put Glyph Orrery in the set-aside chest.")
             end
           else
             TokenSpawnTrackerApi.resetTokensSpawned(obj)
@@ -431,6 +494,7 @@ function cleanZone(locationToKeepGUID)
   for _, token in ipairs(objectsToDelete) do
     token.destruct()
   end
+  broadcastToAll("Discard any other player cards and tokens manually from the play area.")
   return locations
 end
 
