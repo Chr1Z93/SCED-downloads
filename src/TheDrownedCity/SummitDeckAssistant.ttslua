@@ -1,0 +1,296 @@
+local DeckLib                  = require("util/DeckLib")
+local GUIDReferenceApi         = require("core/GUIDReferenceApi")
+local PlayermatApi             = require("playermat/PlayermatApi")
+local SearchLib                = require("util/SearchLib")
+
+-- forward declaration of variables that are used across functions
+local matColor, handColor
+local ongoingSearch            = false
+local handZoneName             = "HandZoneSummit"
+
+local quickParameters          = {}
+quickParameters.function_owner = self
+quickParameters.font_size      = 700
+quickParameters.width          = 1000
+quickParameters.height         = 1000
+quickParameters.color          = "White"
+quickParameters.scale          = Vector(0.3, 1, 0.3)
+
+local buttonLabels             = {
+  { label = 1, position = { -0.5, 0.11, -0.5 } },
+  { label = 2, position = { 0.5, 0.11, -0.5 } },
+  { label = 3, position = { -0.5, 0.11, 0.5 } },
+  { label = 4, position = { 0.5, 0.11, 0.5 } }
+}
+
+function onLoad()
+  createClickFunctions()
+  normalView()
+  self.max_typed_number = 99
+end
+
+function createClickFunctions()
+  for _, data in ipairs(buttonLabels) do
+    _G["search" .. data.label] = function(_, playerColor, isRightClick) startSearch(playerColor, data.label) end
+  end
+end
+
+-- regular view with search box
+function normalView()
+  ongoingSearch = false
+  self.clearButtons()
+
+  -- create buttons to search 3, 6 or 9 cards
+  for _, data in ipairs(buttonLabels) do
+    quickParameters.click_function = "search" .. data.label
+    quickParameters.label          = data.label
+    quickParameters.position       = data.position
+    self.createButton(quickParameters)
+  end
+end
+
+-- view during a search with "done" buttons
+function searchView()
+  ongoingSearch = true
+  self.clearButtons()
+end
+
+function onNumberTyped(playerColor, number)
+  if number > 0 then
+    startSearch(playerColor, number)
+  end
+end
+
+-- start the search (change UI, draw cards)
+function startSearch(messageColor, number)
+  if ongoingSearch then return end
+
+  matColor              = PlayermatApi.getMatColor(messageColor)
+  handColor             = messageColor
+
+  -- get draw deck
+  local summitDeck      = getSummitDeck()
+
+  local handData        = Player[handColor].getHandTransform()
+  local handZone        = GUIDReferenceApi.getObjectByOwnerAndType(matColor, "HandZone")
+  local data            = handZone.getData()
+  handCount             = Player[handColor].getHandCount() + 1
+
+  local position        = (self.getPosition() - handData.forward * 3.5):setAt("y", data.Transform.posY)
+  data.Transform.scaleX = data.Transform.scaleX * 0.8
+  data.Transform.scaleZ = data.Transform.scaleZ * 0.6
+
+  local newHand         = spawnObjectData({ data = data, position = position })
+  GUIDReferenceApi.editIndex(matColor, handZoneName, newHand.getGUID())
+
+  -- add XML labels
+  newHand.UI.setXmlTable({
+    {
+      tag = "Panel",
+      attributes = {
+        height = 120,
+        width = 1500,
+        scale = ".03125 .167 1",
+        position = "0 64 30",
+      },
+      children = {
+        {
+          tag = "TableLayout",
+          attributes = { cellSpacing = "250" },
+          children = {
+            {
+              tag = "Row",
+              children = {
+                {
+                  tag = "Cell",
+                  children = {
+                    {
+                      tag = "Panel",
+                      attributes = { color = "#b6e2f099" },
+                      children = {
+                        {
+                          tag = "Text",
+                          attributes = { font = "font_teutonic-arkham", fontSize = "100" },
+                          value = "← Top"
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  tag = "Cell",
+                  children = {
+                    {
+                      tag = "Panel",
+                      attributes = { color = "#b6e2f099" },
+                      children = {
+                        {
+                          tag = "Text",
+                          attributes = { font = "font_teutonic-arkham", fontSize = "100" },
+                          value = "Bottom →"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      tag = "Panel",
+      attributes = {
+        height = 170,
+        width = 1500,
+        scale = ".03125 .167 1",
+        position = "0 -67 30",
+      },
+      children = {
+        {
+          tag = "TableLayout",
+          attributes = { cellSpacing = "250", cellBackgroundColor = "#b6e2f0" },
+          children = {
+            {
+              tag = "Row",
+              children = {
+                {
+                  tag = "Cell",
+                  children = {
+                    {
+                      tag = "Panel",
+                      attributes = { color = "#b6e2f0D9" },
+                      children = {
+                        {
+                          tag = "Button",
+                          attributes = {
+                            color = "#ffffff00",
+                            fontSize = "150",
+                            font = "font_teutonic-arkham",
+                            onClick = self.getGUID() .. "/endSearch",
+                            textColors = "#000000|#009acb|#005a77"
+                          },
+                          value = "Put cards on Summit Deck"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  })
+
+  searchView()
+  if number > 0 then
+    Wait.frames(function() summitDeck.deal(number, handColor, handCount, true) end, 3)
+  end
+end
+
+function endSearch()
+  local handToCheck = math.min(Player[handColor].getHandCount(), handCount)
+  local handCards   = Player[handColor].getHandObjects(handToCheck)
+  local summitDeck  = getSummitDeck()
+  local faceDownRot = self.getRotation():setAt("z", 180)
+
+  -- reverse order for proper order after grouping
+  if #handCards == 0 then
+    handCards = nil
+  elseif #handCards == 1 then
+    handCards = handCards[1]
+    handCards.setRotation(faceDownRot)
+  else
+    local reversedTable = {}
+    for i = #handCards, 1, -1 do
+      local card = handCards[i]
+      table.insert(reversedTable, card)
+
+      -- flip facedown and lock (to stop from dropping)
+      card.setRotation(faceDownRot)
+      card.setLock(true)
+    end
+
+    -- group and lock (to stop from dropping)
+    handCards = group(reversedTable)[1]
+  end
+
+  if handCards then
+    handCards.setLock(true)
+
+    -- place cards on deck
+    DeckLib.placeOrMergeIntoDeck(handCards, summitDeck.getPosition(), faceDownRot)
+  end
+
+  -- remove the additional hand
+  local additionalHand = GUIDReferenceApi.getObjectByOwnerAndType(matColor, handZoneName)
+  if additionalHand then
+    additionalHand.destruct()
+    GUIDReferenceApi.editIndex(matColor, handZoneName, nil)
+  end
+
+  normalView()
+end
+
+function getSummitDeck()
+  for _, obj in ipairs(getObjects()) do
+    if obj.type == "Deck" and obj.getName() == "Summit Deck" then
+      return obj
+    end
+  end
+end
+
+-- handling for the summit hand
+function onObjectLeaveZone(zone, object)
+  if zone.type == "Hand"
+      and not object.is_face_down
+      and zone == GUIDReferenceApi.getObjectByOwnerAndType(matColor, handZoneName) then
+    object.held_flip_index = 12
+  end
+end
+
+-- allow locations to be dropped on open sky
+function onObjectDrop(_, object)
+  if object.hasTag("Location") then
+    for _, card in ipairs(SearchLib.belowObject(object, "isCard")) do
+      if card.getName() == "Open Sky" and card ~= object then
+        moveToHandOrSummit(card)
+        return
+      end
+    end
+  end
+end
+
+function moveToHandOrSummit(obj)
+  local summitHand = GUIDReferenceApi.getObjectByOwnerAndType(matColor, handZoneName)
+  if summitHand then
+    obj.use_hands = false
+    obj.setRotation(summitHand.getRotation():setAt("z", 0) + Vector(0, 180, 0))
+
+    local offsetMult = (#summitHand.getObjects() + 1) / 2
+    obj.setPositionSmooth(summitHand.getPosition() + Vector(0, -2.47, 2.2 * offsetMult))
+    Wait.condition(
+      function()
+        if obj then
+          broadcastToAll("Moved Open Sky into Summit hand.")
+          obj.use_hands = true
+        end
+      end,
+      function()
+        return obj.isDestroyed() or not obj.isSmoothMoving()
+      end,
+      3
+    )
+  else
+    local summitDeck = getSummitDeck()
+    if summitDeck then
+      -- make sure the card is higher than the summit deck
+      obj.setPosition(obj.getPosition():setAt("y", summitDeck.getPosition().y + 3))
+      summitDeck.putObject(obj)
+      broadcastToAll("Placed Open Sky on top of Summit deck.")
+    end
+  end
+end
