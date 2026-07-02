@@ -1,12 +1,12 @@
 local DeckLib                  = require("util/DeckLib")
 local GUIDReferenceApi         = require("core/GUIDReferenceApi")
 local PlayermatApi             = require("playermat/PlayermatApi")
+local SearchLib                = require("util/SearchLib")
 
 -- forward declaration of variables that are used across functions
-local matColor, handColor, drawDeckPosition, topCardDetected
+local matColor, handColor
 local ongoingSearch            = false
-
-SUMMIT_DECK_GUID = "cedbf4"
+local handZoneName             = "HandZoneSummit"
 
 local quickParameters          = {}
 quickParameters.function_owner = self
@@ -17,9 +17,9 @@ quickParameters.color          = "White"
 quickParameters.scale          = Vector(0.3, 1, 0.3)
 
 local buttonLabels             = {
-  { label = 1,  position = { -0.5, 0.11, -0.5 } },
-  { label = 2,  position = { 0.5, 0.11, -0.5 } },
-  { label = 3,  position = { -0.5, 0.11, 0.5 } },
+  { label = 1, position = { -0.5, 0.11, -0.5 } },
+  { label = 2, position = { 0.5, 0.11, -0.5 } },
+  { label = 3, position = { -0.5, 0.11, 0.5 } },
   { label = 4, position = { 0.5, 0.11, 0.5 } }
 }
 
@@ -64,94 +64,24 @@ end
 -- start the search (change UI, draw cards)
 function startSearch(messageColor, number)
   if ongoingSearch then return end
-  
-  matColor  = PlayermatApi.getMatColor(messageColor)
-  handColor = messageColor
+
+  matColor              = PlayermatApi.getMatColor(messageColor)
+  handColor             = messageColor
+
   -- get draw deck
-  local summitDeck = getSummitDeck()
-  local position
-  handZoneName = "HandZoneSummit"
+  local summitDeck      = getSummitDeck()
 
-  local handData = Player[handColor].getHandTransform()
-  local handZone = GUIDReferenceApi.getObjectByOwnerAndType(matColor, "HandZone")
-  local data = handZone.getData()
-  handCount = Player[handColor].getHandCount() + 1
+  local handData        = Player[handColor].getHandTransform()
+  local handZone        = GUIDReferenceApi.getObjectByOwnerAndType(matColor, "HandZone")
+  local data            = handZone.getData()
+  handCount             = Player[handColor].getHandCount() + 1
 
-  position = (self.getPosition() - handData.forward * 3.5):setAt("y", data.Transform.posY)
+  local position        = (self.getPosition() - handData.forward * 3.5):setAt("y", data.Transform.posY)
   data.Transform.scaleX = data.Transform.scaleX * 0.8
   data.Transform.scaleZ = data.Transform.scaleZ * 0.6
 
-  local newHand = spawnObjectData({ data = data, position = position })
+  local newHand         = spawnObjectData({ data = data, position = position })
   GUIDReferenceApi.editIndex(matColor, handZoneName, newHand.getGUID())
-
-  -- this ensures that the locations come into play face down.
-  newHand.setLuaScript([[
-    local owner = "]] .. handColor .. [["
-    local handData = Player[owner].getHandTransform(2)
-    local handCards = Player[owner].getHandObjects(2)
-    local offsetMult = #handCards - 1
-    local cardPos = handData.position + 2.5 * handData.right * offsetMult
-
-    local FILTER_FUNCTIONS = { isCard = function(x) return x.type == "Card" end }
-
-    function onObjectLeaveZone(zone, object)
-      if zone == self and not object.is_face_down then
-        object.held_flip_index = 12
-      end
-    end
-
-    function onObjectDrop(_, object)
-      if object.hasTag("Location") then 
-        for _, card in ipairs(belowObject(object, isCard)) do
-          if card.getName() == "Open Sky" and card ~= object then
-            card.setRotation(card.getRotation():setAt("z", 180))
-            Wait.frames(function() card.setPosition(cardPos) end, 3)
-            return
-          end
-        end
-      end
-    end
-
-    function belowObject(obj, filter, scale, debug)
-      local objPos = obj.getPosition()
-      return performSearch({
-        pos    = objPos + Vector(0, -objPos.y / 2, 0), -- offset by half the cast's height
-        size   = obj.getBounds().size:scale(scale or 1):setAt("y", objPos.y),
-        filter = filter,
-        debug  = debug
-      })
-    end
-
-    function performSearch(params)
-      if not params or not params.pos then return {} end
-
-      local filterFunc
-      if type(params.filter) == "string" then
-        filterFunc = FILTER_FUNCTIONS[params.filter]
-      elseif type(params.filter) == "function" then
-        filterFunc = params.filter
-      end
-
-      local searchResult = Physics.cast({
-        type         = 3,
-        origin       = params.pos,
-        orientation  = params.rot or { 0, 0, 0 },
-        size         = params.size or { 0.1, 2, 0.1 },
-        direction    = params.direction or { 0, 1, 0 },
-        max_distance = params.maxDistance or 0,
-        debug        = params.debug or false
-      })
-
-      local objList = {}
-      for _, data in ipairs(searchResult) do
-        local o = data.hit_object
-        if (not filterFunc or filterFunc(o)) then
-          table.insert(objList, o)
-        end
-      end
-      return objList
-    end
-  ]])
 
   -- add XML labels
   newHand.UI.setXmlTable({
@@ -263,8 +193,8 @@ end
 
 function endSearch()
   local handToCheck = math.min(Player[handColor].getHandCount(), handCount)
-  local handCards = Player[handColor].getHandObjects(handToCheck)
-  local summitDeck = getSummitDeck()
+  local handCards   = Player[handColor].getHandObjects(handToCheck)
+  local summitDeck  = getSummitDeck()
   local faceDownRot = self.getRotation():setAt("z", 180)
 
   -- reverse order for proper order after grouping
@@ -306,14 +236,61 @@ function endSearch()
 end
 
 function getSummitDeck()
-  local summitDeck = getObjectFromGUID(SUMMIT_DECK_GUID)
-  if summitDeck == nil then
-    for _, obj in ipairs(getObjects()) do
-      if obj.type == "Deck" and obj.getName() == "Summit Deck" then
-        return obj
+  for _, obj in ipairs(getObjects()) do
+    if obj.type == "Deck" and obj.getName() == "Summit Deck" then
+      return obj
+    end
+  end
+end
+
+-- handling for the summit hand
+function onObjectLeaveZone(zone, object)
+  if zone.type == "Hand"
+      and not object.is_face_down
+      and zone == GUIDReferenceApi.getObjectByOwnerAndType(matColor, handZoneName) then
+    object.held_flip_index = 12
+  end
+end
+
+-- allow locations to be dropped on open sky
+function onObjectDrop(_, object)
+  if object.hasTag("Location") then
+    for _, card in ipairs(SearchLib.belowObject(object, "isCard")) do
+      if card.getName() == "Open Sky" and card ~= object then
+        moveToHandOrSummit(card)
+        return
       end
     end
+  end
+end
+
+function moveToHandOrSummit(obj)
+  local summitHand = GUIDReferenceApi.getObjectByOwnerAndType(matColor, handZoneName)
+  if summitHand then
+    obj.use_hands = false
+    obj.setRotation(summitHand.getRotation():setAt("z", 0) + Vector(0, 180, 0))
+
+    local offsetMult = (#summitHand.getObjects() + 1) / 2
+    obj.setPositionSmooth(summitHand.getPosition() + Vector(0, -2.47, 2.5 * offsetMult))
+    Wait.condition(
+      function()
+        if obj then
+          broadcastToAll("Moved Open Sky into Summit hand.")
+          obj.use_hands = true
+        end
+      end,
+      function()
+        return obj.isDestroyed() or not obj.isSmoothMoving()
+      end,
+      3
+    )
   else
-    return summitDeck
+    local summitDeck = getSummitDeck()
+    if summitDeck then
+      -- make sure the card is higher than the summit deck
+      obj.setPosition(obj.getPosition():setAt("y", summitDeck.getPosition().y + 3))
+      summitDeck.putObject(obj)
+      broadcastToAll("Placed Open Sky on top of Summit deck.")
+    end
   end
 end
