@@ -7,6 +7,7 @@ local PlayermatApi         = require("playermat/PlayermatApi")
 local TokenManagerApi      = require("tokens/TokenManagerApi")
 local TokenSpawnTrackerApi = require("tokens/TokenSpawnTrackerApi")
 
+local useRevisedCore       = false
 local unusedInvestigators  = {
   ["Gavriella Mizrah"] = true,
   ["Jerome Davids"]    = true,
@@ -61,7 +62,7 @@ local OPENING_HAND         = {
   ["Gavriella Mizrah"] = { "01019", "01021", "01022", "01023", "01026", "05021", "05021" },
   ["Jerome Davids"]    = { "01034", "01036", "01037", "01038", "01039", "01040", "05024", "05025", "05026", "05026" },
   ["Valentino Rivas"]  = { "01047", "01053", "01056", "05029", "05029", "05030", "05030" },
-  ["Penny White"]      = { "01077", "01080", "01086", "01087", "05037", "05037", "05038", "05038" }
+  ["Penny White"]      = { "01076", "01080", "01086", "01087", "05037", "05037", "05038", "05038" }
 }
 
 local CARD_WIDTH           = 2.5
@@ -77,11 +78,15 @@ function onLoad()
     scale          = { x = 0.6, y = 1, z = 0.6 },
     font_size      = 320
   })
+  self.addContextMenuItem("Toggle Revised", function()
+    useRevisedCore = not useRevisedCore
+    printToAll("Using Revised Core cards " .. (useRevisedCore and "en" or "dis") .. "abled.")
+  end)
 end
 
 function buttonClick(_, playerColor)
   Player[playerColor].showConfirmDialog(
-    "Each player needs to place a prologue investigator on their player mat before continuing! Press OK to start setup.",
+    "Each player needs to place a prologue investigator on their player mat before continuing!\nPress OK to start setup.",
     setup)
 end
 
@@ -218,6 +223,9 @@ function spawnHand(matColor, name)
   local handData    = Player[playerColor].getHandTransform()
   local rotation    = handData.rotation + Vector(0, 180, 0)
   for i, cardId in ipairs(cardList) do
+    if useRevisedCore then
+      cardId = string.gsub(cardId, "010", "015")
+    end
     local cardInfo   = AllCardsBagApi.getCardById(cardId)
     local offsetMult = i - (cardCount + 1) / 2
     spawnObjectData({
@@ -232,8 +240,12 @@ end
 function spawnStartingPlayArea(matColor, name)
   local rotation = PlayermatApi.returnRotation(matColor)
   for _, info in ipairs(STARTING_PLAY_AREA[name]) do
-    local guid            = info.id .. name
-    local cardInfo        = AllCardsBagApi.getCardById(info.id)
+    local cardId = info.id
+    if useRevisedCore then
+      cardId = string.gsub(cardId, "010", "015")
+    end
+    local cardInfo        = AllCardsBagApi.getCardById(cardId)
+    local guid            = cardId .. name
     cardInfo.data["GUID"] = guid
     if info.usesMod then
       TokenSpawnTrackerApi.markTokensSpawned(guid)
@@ -283,8 +295,7 @@ function takeObjectFromDeck(deck, id, idReturn, pos, rot)
     local cardInfo = deckInfo[i]
     local md       = JSON.decode(cardInfo.gm_notes) or {}
     if md.id == id or md.id == idReturn then
-      deck.takeObject({ index = cardInfo.index, position = pos, rotation = rot })
-      return
+      return deck.takeObject({ index = cardInfo.index, position = pos, rotation = rot })
     end
   end
 end
