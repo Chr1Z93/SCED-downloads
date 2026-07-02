@@ -1,13 +1,13 @@
 local CoroutineLib         = require("util/CoroutineLib")
 local GUIDReferenceApi     = require("core/GUIDReferenceApi")
+local HelperLib            = require("HelperLib")
 local MythosAreaApi        = require("mythos/MythosAreaApi")
 local PlayAreaApi          = require("playarea/PlayAreaApi")
-local SearchLib            = require("util/SearchLib")
 local TokenSpawnTrackerApi = require("tokens/TokenSpawnTrackerApi")
 local VictoryDisplayApi    = require("mythos/VictoryDisplayApi")
 
-local floodTokenPoolGUID    = "0f9675"
-local trash                 = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+local floodTokenPoolGUID   = "0f9675"
+local trash                = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
 
 FLOORS                     = {
   { guid = "b7b094", pos = { x = 1, y = 0 } },
@@ -20,28 +20,28 @@ SYZYGY_GUID                = "6b40e7"
 GRAND_ENTRYWAY_GUID        = "0b3f66"
 
 TT_POSITIONS               = {
-  { x = -1 , y = -1 },
+  { x = -1, y = -1 },
   { x = -1, y = 0 },
   { x = -1, y = 1 },
-  { x = 0, y = 1 },
-  { x = 1, y = 1 },
-  { x = 1, y = 0 },
-  { x = 1, y = -1},
-  { x = 0, y = 0 }   -- the central location is marked here for flooding in Act 2
+  { x = 0,  y = 1 },
+  { x = 1,  y = 1 },
+  { x = 1,  y = 0 },
+  { x = 1,  y = -1 },
+  { x = 0,  y = 0 } -- the central location is marked here for flooding in Act 2
 }
 
 ROTATION                   = { 0, 270, 0 }
 
 function onLoad()
   self.createButton({
-    label = "Set Up",
+    label          = "Set Up",
     click_function = "setup",
     function_owner = self,
-    position = { 0, 0.1, 0 },
-    height = 150,
-    width = 450,
-    scale = { x = 1.75, y = 1.75, z = 1.75 },
-    font_size = 110
+    position       = { 0, 0.1, 0 },
+    height         = 150,
+    width          = 450,
+    scale          = { x = 1.75, y = 1.75, z = 1.75 },
+    font_size      = 110
   })
 end
 
@@ -57,14 +57,14 @@ function setup()
   end
 
   self.editButton({
-    label = "Place Tidal\nTunnels",
+    label          = "Place Tidal\nTunnels",
     click_function = "setup_2",
     function_owner = self,
-    position = { 0, 0.1, 0 },
-    height = 240,
-    width = 500,
-    scale = { x = 1.75, y = 1.75, z = 1.75 },
-    font_size = 85
+    position       = { 0, 0.1, 0 },
+    height         = 240,
+    width          = 500,
+    scale          = { x = 1.75, y = 1.75, z = 1.75 },
+    font_size      = 85
   })
 end
 
@@ -78,20 +78,20 @@ function setup_2()
     local chest = MythosAreaApi.getSetAsideChest()
 
     chest.takeObject({
-      guid = TT_DECK_GUID,
-      position = PlayAreaApi.gridToWorld(TT_POSITIONS[1]) + Vector(0, 1, 0),
-      rotation = ROTATION,
-      smooth = false,
+      guid              = TT_DECK_GUID,
+      position          = PlayAreaApi.gridToWorld(TT_POSITIONS[1]) + Vector(0, 1, 0),
+      rotation          = ROTATION,
+      smooth            = false,
       callback_function = placeTidalTunnels
     })
     CoroutineLib.yieldSeconds(1)
     chest.takeObject({
-      guid = SYZYGY_GUID,
+      guid     = SYZYGY_GUID,
       position = MythosAreaApi.getEncounterDiscardPosition(),
       rotation = MythosAreaApi.getEncounterDiscardRotation()
     })
     chest.takeObject({
-      guid = TIDAL_ALIGNMENT_GUID,
+      guid     = TIDAL_ALIGNMENT_GUID,
       position = MythosAreaApi.getEncounterDiscardPosition(),
       rotation = MythosAreaApi.getEncounterDiscardRotation()
     })
@@ -111,7 +111,7 @@ function setup_2()
     broadcastToAll("Increased flood level of each location.", "White")
     trash.putObject(self)
   end
-  
+
   CoroutineLib.start(setup_2Coroutine)
 end
 
@@ -124,7 +124,7 @@ function placeTidalTunnels(deck)
       deck.takeObject({
         position = PlayAreaApi.gridToWorld(TT_POSITIONS[i]),
         rotation = ROTATION,
-        smooth = true
+        smooth   = true
       })
     end
   end)
@@ -145,15 +145,15 @@ function cleanZone()
   -- clean the play area
   local zone = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "PlayAreaZone")
   for _, obj in ipairs(zone.getObjects()) do
-    if not inArea(obj.getPosition(), areaNearCenter) then -- keep cards that are "at" the Grand Entryway
+    if not HelperLib.isInArea(obj.getPosition(), areaNearCenter) then -- keep cards that are "at" the Grand Entryway
       if obj.type == "Card" and obj.hasTag("ScenarioCard") then
         -- move enemies and treacheries to the encounter discard pile
-        if not obj.hasTag("Location") and not inArea(obj.getPosition(), areaNearCenter) then
+        if not obj.hasTag("Location") and not HelperLib.isInArea(obj.getPosition(), areaNearCenter) then
           obj.setPosition(MythosAreaApi.getEncounterDiscardPosition())
         else
           -- move locations to victory display or set aside
-          local md = getMetadata(obj)
-          if md.locationBack and md.locationBack.victory and obj.is_face_down and not cardHasClues(obj) then
+          local md = HelperLib.getMetadata(obj)
+          if md.locationBack and md.locationBack.victory and obj.is_face_down and not HelperLib.cardHasClues(obj) then
             PlayAreaApi.maybeUntrackLocation(obj)
             VictoryDisplayApi.placeCard(obj)
             CoroutineLib.yieldSeconds(0.5)
@@ -166,33 +166,4 @@ function cleanZone()
       end
     end
   end
-end
-
--- Checks if a card has clues on it
----@param card tts__Object Card to check for clues
----@return boolean hasClues True if card has clues on it
-function cardHasClues(card)
-  local searchResult = SearchLib.onObject(card, "isClue")
-  return #searchResult > 0
-end
-
-function getMetadata(objectOrNotes)
-  if objectOrNotes == nil then return {} end
-  if type(objectOrNotes) == "string" then
-    return JSON.decode(objectOrNotes) or {}
-  elseif type(objectOrNotes) == "table" then
-    return JSON.decode(objectOrNotes["GMNotes"] or objectOrNotes["gm_notes"]) or {}
-  else
-    return JSON.decode(objectOrNotes.getGMNotes()) or {}
-  end
-end
-
--- Simple method to check if the given point is in a specified area
----@param point tts__Vector Point to check, only x and z values are relevant
----@param bounds table Defined area to see if the point is within
-function inArea(point, bounds)
-  return (point.x > bounds.minX
-    and point.x < bounds.maxX
-    and point.z > bounds.minZ
-    and point.z < bounds.maxZ)
 end

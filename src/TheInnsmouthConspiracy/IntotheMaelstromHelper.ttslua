@@ -1,12 +1,12 @@
 local CoroutineLib         = require("util/CoroutineLib")
 local GUIDReferenceApi     = require("core/GUIDReferenceApi")
+local HelperLib            = require("HelperLib")
 local MythosAreaApi        = require("mythos/MythosAreaApi")
 local PlayAreaApi          = require("playarea/PlayAreaApi")
-local SearchLib            = require("util/SearchLib")
 local TokenSpawnTrackerApi = require("tokens/TokenSpawnTrackerApi")
 local VictoryDisplayApi    = require("mythos/VictoryDisplayApi")
 
-local trash                 = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+local trash                = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
 
 FLOOD_BAG_GUID             = "fe6f38"
 FLOOD_OFFSET               = Vector(2, 0.2, -0.6)
@@ -215,6 +215,7 @@ function setup_2()
     Global.setVectorLines(lines)
     trash.putObject(self)
   end
+
   CoroutineLib.start(setup_2Coroutine)
 end
 
@@ -226,8 +227,7 @@ function placeSanctumLocations(deck)
     else
       deck.takeObject({
         position = YP[coord],
-        rotation = ROTATION,
-        smooth   = true
+        rotation = ROTATION
       })
     end
     addFloodToken(YP[coord], "full")
@@ -242,8 +242,7 @@ function placeYhanthleiLocations(deck)
     else
       deck.takeObject({
         position = YP[coord],
-        rotation = ROTATION,
-        smooth   = true
+        rotation = ROTATION
       })
     end
     addFloodToken(YP[coord], "partial")
@@ -283,15 +282,15 @@ function cleanZone()
   -- clean the play area
   local zone = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "PlayAreaZone")
   for _, obj in ipairs(zone.getObjects()) do
-    if not inArea(obj.getPosition(), areaNearCenter) then -- keep cards that are "at" the Grand Entryway
+    if not HelperLib.isInArea(obj.getPosition(), areaNearCenter) then -- keep cards that are "at" the Grand Entryway
       if obj.type == "Card" and obj.hasTag("ScenarioCard") then
         -- move enemies and treacheries to the encounter discard pile
-        if not obj.hasTag("Location") and not inArea(obj.getPosition(), areaNearCenter) then
+        if not obj.hasTag("Location") and not HelperLib.isInArea(obj.getPosition(), areaNearCenter) then
           obj.setPosition(MythosAreaApi.getEncounterDiscardPosition())
         else
           -- move locations to victory display or set aside
-          local md = getMetadata(obj)
-          if md.locationBack and md.locationBack.victory and obj.is_face_down and not cardHasClues(obj) then
+          local md = HelperLib.getMetadata(obj)
+          if md.locationBack and md.locationBack.victory and obj.is_face_down and not HelperLib.cardHasClues(obj) then
             PlayAreaApi.maybeUntrackLocation(obj)
             VictoryDisplayApi.placeCard(obj)
             CoroutineLib.yieldSeconds(0.5)
@@ -304,33 +303,4 @@ function cleanZone()
       end
     end
   end
-end
-
--- Checks if a card has clues on it
----@param card tts__Object Card to check for clues
----@return boolean hasClues True if card has clues on it
-function cardHasClues(card)
-  local searchResult = SearchLib.onObject(card, "isClue")
-  return #searchResult > 0
-end
-
-function getMetadata(objectOrNotes)
-  if objectOrNotes == nil then return {} end
-  if type(objectOrNotes) == "string" then
-    return JSON.decode(objectOrNotes) or {}
-  elseif type(objectOrNotes) == "table" then
-    return JSON.decode(objectOrNotes["GMNotes"] or objectOrNotes["gm_notes"]) or {}
-  else
-    return JSON.decode(objectOrNotes.getGMNotes()) or {}
-  end
-end
-
--- Simple method to check if the given point is in a specified area
----@param point tts__Vector Point to check, only x and z values are relevant
----@param bounds table Defined area to see if the point is within
-function inArea(point, bounds)
-  return (point.x > bounds.minX
-    and point.x < bounds.maxX
-    and point.z > bounds.minZ
-    and point.z < bounds.maxZ)
 end
