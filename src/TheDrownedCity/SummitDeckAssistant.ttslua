@@ -1,6 +1,5 @@
 local DeckLib                  = require("util/DeckLib")
 local GUIDReferenceApi         = require("core/GUIDReferenceApi")
-local MythosAreaApi            = require("mythos/MythosAreaApi")
 local PlayermatApi             = require("playermat/PlayermatApi")
 
 -- forward declaration of variables that are used across functions
@@ -87,10 +86,62 @@ function startSearch(messageColor, number)
 
   -- this ensures that the locations come into play face down.
   newHand.setLuaScript([[
+    local FILTER_FUNCTIONS = { isCard = function(x) return x.type == "Card" end }
+
     function onObjectLeaveZone(zone, object)
       if zone == self and not object.is_face_down then
         object.held_flip_index = 12
       end
+    end
+
+    function onObjectDrop(_, object)
+      if object.hasTag("Location") then 
+        for _, card in ipairs(belowObject(object, isCard)) do
+          if card.getName() == "Open Sky" and card ~= object then 
+            card.setPosition(self.getPosition())
+          end
+        end
+      end
+    end
+
+    function belowObject(obj, filter, scale, debug)
+      local objPos = obj.getPosition()
+      return performSearch({
+        pos    = objPos + Vector(0, -objPos.y / 2, 0), -- offset by half the cast's height
+        size   = obj.getBounds().size:scale(scale or 1):setAt("y", objPos.y),
+        filter = filter,
+        debug  = debug
+      })
+    end
+
+    function performSearch(params)
+      if not params or not params.pos then return {} end
+
+      local filterFunc
+      if type(params.filter) == "string" then
+        filterFunc = FILTER_FUNCTIONS[params.filter]
+      elseif type(params.filter) == "function" then
+        filterFunc = params.filter
+      end
+
+      local searchResult = Physics.cast({
+        type         = 3,
+        origin       = params.pos,
+        orientation  = params.rot or { 0, 0, 0 },
+        size         = params.size or { 0.1, 2, 0.1 },
+        direction    = params.direction or { 0, 1, 0 },
+        max_distance = params.maxDistance or 0,
+        debug        = params.debug or false
+      })
+
+      local objList = {}
+      for _, data in ipairs(searchResult) do
+        local o = data.hit_object
+        if (not filterFunc or filterFunc(o)) then
+          table.insert(objList, o)
+        end
+      end
+      return objList
     end
   ]])
 
