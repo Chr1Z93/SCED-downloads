@@ -61,8 +61,8 @@ NOT_ORPHANS = {
     "89005",  # Reality Acid Sheet
     "98019",  # Gloria Goldberg Promo
     "CGWTWS01",  # When The World Screamed scenario guide
-    *(f"{60100 + i}" for i in range(500)), # original Investigator Decks
-    *(f"TAR{i:02}" for i in range(22)) # RtTCU Tarot cards
+    *(f"{60100 + i}" for i in range(500)),  # original Investigator Decks
+    *(f"TAR{i:02}" for i in range(22)),  # RtTCU Tarot cards
 }
 # Define prefixes we want to skip
 # EXCLUDED_PREFIXES = ("CB", "CG", "CL", "SB", "SN", "CT", "ES")
@@ -98,7 +98,7 @@ def load_playercard_data(root_folder):
                         metadata = json.load(f)
                         found_id = get_id(metadata)
                         if found_id:
-                            card_data[found_id] = metadata.get("cycle", "Unknown")
+                            add_to_card_data(card_data, found_id, metadata)
                             continue
 
                 # Attempt to get ID from embedded GM Notes
@@ -110,9 +110,14 @@ def load_playercard_data(root_folder):
                     metadata = json.loads(gm_notes_raw)
                     found_id = get_id(metadata)
                     if found_id:
-                        card_data[found_id] = metadata.get("cycle", "Unknown")
+                        add_to_card_data(card_data, found_id, metadata)
 
     return card_data
+
+
+def add_to_card_data(card_data, found_id, metadata):
+    if not found_id.endswith("-m"):
+        card_data[found_id] = metadata.get("cycle", "Unknown")
 
 
 def get_id(gm_data):
@@ -178,12 +183,14 @@ def return_with_folder(found_id, path_obj):
 # MARK: SCANNING ENGINES
 # ==========================================
 
+
 def get_scanning_priority(d):
     if "Return to" in d:
         return 0  # Priority 1: Top of the list
     elif d in ("Night of the Zealot", "Brethren of Ash"):
         return 2  # Priority 3: Absolute back of the line
-    return 1      # Priority 2: Everything else in the middle
+    return 1  # Priority 2: Everything else in the middle
+
 
 def generate_id_map():
     id_to_content_map = {}
