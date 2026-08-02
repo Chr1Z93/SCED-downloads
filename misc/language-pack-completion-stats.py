@@ -12,10 +12,7 @@ import time
 # ==========================================
 
 FORCE_REFRESH = False
-PLAYER_CARD_PATH_1 = Path(r"C:\git\SCED\objects\AdditionalPlayerCards.2cba6b")
-PLAYER_CARD_PATH_2 = Path(r"C:\git\SCED\objects\AllPlayerCards.15bb07")
-ROOT_PATH = Path(r"C:\git\SCED-downloads\decomposed")
-REPORT_PATH = Path(r"C:\git\SCED-downloads\misc\localization_reports")
+
 EXCLUDED_FOLDERS = {
     "language-pack",
     "misc",
@@ -50,6 +47,7 @@ EXCLUDED_FOLDERS = {
     "The Symphony of Erich Zann",
     "The Woods of the Black Goat",
 }
+
 NOT_ORPHANS = {
     "LatestFAQ",
     "LearnToPlay",
@@ -64,12 +62,23 @@ NOT_ORPHANS = {
     *(f"{60100 + i}" for i in range(500)),  # original Investigator Decks
     *(f"TAR{i:02}" for i in range(22)),  # RtTCU Tarot cards
 }
+
 # Define prefixes we want to skip
 # EXCLUDED_PREFIXES = ("CB", "CG", "CL", "SB", "SN", "CT", "ES")
 
 # Derived Paths
+SCRIPT_DIR = Path(__file__).resolve().parent
+
+# Repository roots
+SCED_DOWNLOADS_ROOT = SCRIPT_DIR.parent
+SCED_ROOT = SCED_DOWNLOADS_ROOT.parent / "SCED"
+
+# Paths
+PLAYER_CARD_PATH_1 = SCED_ROOT / "objects" / "AdditionalPlayerCards.2cba6b"
+PLAYER_CARD_PATH_2 = SCED_ROOT / "objects" / "AllPlayerCards.15bb07"
+ROOT_PATH = SCED_DOWNLOADS_ROOT / "decomposed"
+REPORT_PATH = SCED_DOWNLOADS_ROOT / "misc" / "localization_reports"
 LP_PATH = ROOT_PATH / "language-pack"
-SCRIPT_DIR = Path(__file__).parent.absolute()
 CACHE_FILE = SCRIPT_DIR / "language-pack-completion-stats_cache.json"
 
 logging.basicConfig(
