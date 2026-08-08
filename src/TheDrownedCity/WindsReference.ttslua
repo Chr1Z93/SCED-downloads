@@ -1,0 +1,248 @@
+local CoroutineLib                    = require("util/CoroutineLib")
+local HelperLib                       = require("HelperLib")
+local LocationLib                     = require("LocationLib")
+local PlayAreaApi                     = require("playarea/PlayAreaApi")
+local SearchLib                       = require("util/SearchLib")
+local VictoryDisplayApi               = require("mythos/VictoryDisplayApi")
+local MythosAreaApi                   = require("mythos/MythosAreaApi")
+local TableLib                        = require("util/TableLib")
+local TokenSpawnTrackerApi            = require("tokens/TokenSpawnTrackerApi")
+
+local xmlTable = { {
+    tag = "Button",
+    attributes = {
+      active = "true",
+      id = "WindHelper",
+      height = 900,
+      width = 1600,
+      rotation = "0 180 180",
+      scale = "0.1 0.1 1",
+      position = "0 190 40",
+      padding = "50 50 50 50",
+      font = "font_teutonic-arkham",
+      fontSize = 300,
+      onClick = "triggerWinds",
+      color = "#77674DE6",
+      textColor = "White"
+    },
+    value = "Trigger Winds"
+  } }
+
+
+function onLoad()
+  self.UI.setXmlTable(xmlTable)
+end
+
+function triggerWinds()
+  
+ function triggerWindsCoroutine()
+  if self.is_face_down then -- "Eastern"
+    direction = "Eastern"
+    firstRow = 1
+    secondRow = 3
+  else
+    direction = "Western"
+    firstRow = 2
+    secondRow = 4
+  end
+  moveRow(firstRow)
+  CoroutineLib.yieldSeconds(2.5)
+  moveRow(secondRow)
+  CoroutineLib.yieldSeconds(3)
+  local summitDeck = getSummitDeck()
+  local pos = summitDeck.getPosition() - Vector(0, 0, 3.9)
+  local searchResult = SearchLib.atPosition(pos, "isCardOrDeck")
+  local removedLocation = deckOrCard(searchResult)
+  -- shuffle if deck, then put onto summit deck
+  if removedLocation.type == 'Deck' then
+    removedLocation.shuffle()
+  end
+  CoroutineLib.yieldSeconds(0.5)
+  removedLocation.setPosition(summitDeck.getPosition() + Vector(0, 3, 0))
+  CoroutineLib.yieldSeconds(2.5)
+  finish()
+ end
+ CoroutineLib.start(triggerWindsCoroutine)
+end
+
+function moveRow(row)
+  function moveRowCoroutine()
+    local summitDeck = getSummitDeck()
+    local gapPosition
+    
+    local rowLocations = getLocationsOnRow(row)
+    if #rowLocations == 0 then return end
+    local moveableRow = removeFromList(rowLocations)
+    if direction == "Western" then  -- reverse table to remove rightmost location
+      moveableRow = TableLib.reverse(moveableRow)
+    end
+
+    local locationToLeavePlay = moveableRow[1]
+
+
+    local md = HelperLib.getMetadata(locationToLeavePlay)
+    
+    objectsToDelete = {}
+    for _, obj in ipairs(LocationLib.getObjectsAt(PlayAreaApi.worldToGrid(locationToLeavePlay.getPosition()))) do
+      if obj.type == "Card" and obj.hasTag("ScenarioCard") then
+        -- move enemies and treacheries to the encounter discard pile
+        if not obj.hasTag("Location") then
+          broadcastToAll("Discarded " .. obj.getName())
+          obj.setPosition(MythosAreaApi.getEncounterDiscardPosition() + Vector(0, 5, 0) )
+          obj.setRotation(MythosAreaApi.getEncounterDiscardRotation())
+        else
+          if md.locationFront and md.locationFront.victory and not locationToLeavePlay.is_face_down and not HelperLib.cardHasClues(locationToLeavePlay) then
+            PlayAreaApi.maybeUntrackLocation(locationToLeavePlay)
+            VictoryDisplayApi.placeCard(locationToLeavePlay)
+          else
+            obj.setRotation({0, 270, 180}) -- flip over to avoid respawning clues
+            TokenSpawnTrackerApi.resetTokensSpawned(obj)
+          end
+        end
+      elseif obj.memo == "clueDoom" then -- delete clues and doom tokens
+        table.insert(objectsToDelete, obj)
+      elseif obj.getName() == "Wind Direction" then -- delete arrow
+        table.insert(objectsToDelete, obj)
+      end
+    end
+
+    for _, token in ipairs(objectsToDelete) do
+      token.destruct()
+    end
+
+    CoroutineLib.yieldSeconds(1)
+    locationToLeavePlay.setPositionSmooth(summitDeck.getPosition() - Vector(0, 0, 3.9))
+    CoroutineLib.yieldSeconds(1)
+
+    for i = 2, #moveableRow do
+      if i == #moveableRow then
+        gapPosition = moveableRow[i].getPosition()
+      end
+      if direction == "Eastern" then
+        if LocationLib.isAdjacentGridEmpty(moveableRow[i], "west") then
+          offset = Vector(0, 0, 7.65)
+        elseif LocationLib.isAdjacentGridEmpty(moveableRow[i-1], "west") then
+          offset = Vector(0, 0, 15.3)
+        end
+      else
+        if LocationLib.isAdjacentGridEmpty(moveableRow[i], "east") then
+          offset = Vector(0, 0, -7.65)
+        elseif LocationLib.isAdjacentGridEmpty(moveableRow[i-1], "east") then
+          offset = Vector(0, 0, -15.3)
+        end
+      end
+      local gridPosition = LocationLib.getCurrentGrid(moveableRow[i])
+      local objectsAroundLocation = LocationLib.getObjectsAt(gridPosition)
+      LocationLib.moveObjectsByOffset(objectsAroundLocation, offset)
+      CoroutineLib.yieldSeconds(0.75)
+      -- fill gap
+      if i == #moveableRow then
+        summitDeck.takeObject({ position = gapPosition, top = false })
+      end
+    end
+  end
+  CoroutineLib.start(moveRowCoroutine)
+end
+
+function spawnArrow(row)
+  local arrow = getObjectFromGUID("872fff")
+  local arrowData = arrow.getData()
+
+  local rowLocations = getLocationsOnRow(row)
+
+  if #rowLocations == 0 then return end
+  local moveableRow = removeFromList(rowLocations)
+  if direction == "Western" then  -- reverse table to remove rightmost location
+    moveableRow = TableLib.reverse(moveableRow)
+  end
+
+  local locationToLeavePlay = moveableRow[1]
+  local spawnPosition = locationToLeavePlay.getPosition() - Vector(2.7, 0, 0)
+  if row == 2 or row == 4 then
+    spawnRot = {0, 270, 0}
+  else
+    spawnRot = {0, 90, 0}
+    rotatePreview = true
+  end
+
+  spawnObjectData({
+        data = arrowData,
+        position = spawnPosition,
+        rotation = spawnRot,
+        callback_function = function(spawned_object)
+            if rotatePreview then
+              spawned_object.call("rotatePreview")
+            end
+        end
+    })
+end
+
+function onRotate(_, flip, _, _, oldFlip)
+  if flip == oldFlip then return end
+
+  self.UI.setAttribute("WindHelper", "rotation", (flip == 180) and "0 180 180" or "0 0 180")
+  self.UI.setAttribute("WindHelper", "position", (flip == 180) and "0 190 40" or "0 190 -40")
+  self.UI.setAttribute("WindHelper", "textColor", "White")
+
+  if flip == 180 then
+    direction = "Eastern"
+  else
+    direction = "Western"
+  end
+  broadcastToAll("Winds Card flipped to " .. direction .." Winds.")
+end
+
+-- returns a list of locations on a given row
+function getLocationsOnRow(row)
+  local rowLocations = {}
+  for i = 1, 5 do
+    local result = SearchLib.atPosition(PlayAreaApi.gridToWorld({ x = (i - 3), y = (2 - row) }), function(x) return x.hasTag("Location") end)
+    table.insert(rowLocations, result[1])
+  end
+  return rowLocations
+end
+
+function getSummitDeck()
+  for _, obj in ipairs(getObjects()) do
+    if obj.type == "Deck" and obj.getName() == "Summit Deck" then
+      return obj
+    end
+  end
+end
+
+function removeFromList(rowLocations)
+  for i, location in ipairs(rowLocations) do
+    if location.hasTag("NoWind") and not location.is_face_down then
+      table.remove(rowLocations, i)
+    end
+  end
+  return rowLocations
+end
+
+function deckOrCard(searchResult)
+-- check if a deck was found
+  for _, obj in ipairs(searchResult) do
+    if obj.type == 'Deck' then return obj end
+  end
+
+  -- if no deck was found, return the first hit (a card)
+  if #searchResult > 0 then
+    return searchResult[1]
+  end
+end
+
+function finish()
+  self.flip()
+
+  if direction == "Eastern" then
+    spawnArrow(1)
+    spawnArrow(3)
+    angle = {0, 90, 0}
+  else
+    spawnArrow(2)
+    spawnArrow(4)
+    angle = {0, 270, 0}
+  end
+  local mainArrow = getObjectFromGUID("872fff")
+  mainArrow.setRotationSmooth(angle)
+end
