@@ -28,6 +28,7 @@ EXCLUDED_FOLDERS = {
     "Cyclopean Foundations",
     "Dark Matter",
     "Darkham Horror",
+    "Jumanji",
     "Night of Vespers",
     "Rise, Rapture, Rise",
     "The Crown of Egil",
