@@ -1,0 +1,239 @@
+local CoroutineLib     = require("util/CoroutineLib")
+local DeckLib          = require("util/DeckLib")
+local GUIDReferenceApi = require("core/GUIDReferenceApi")
+local MythosAreaApi    = require("mythos/MythosAreaApi")
+local PlayAreaApi      = require("playarea/PlayAreaApi")
+local TableLib         = require("util/TableLib")
+
+local LOCATION_GRIDS   = {
+  -- Waterfront Warehouse
+  [""] = { 0, 2 },
+  [""] = { 0, 2 },
+
+  -- Garrison Street
+  [""] = { -1, 1 },
+  [""] = { -1, 1 },
+
+  -- Water Street
+  ["13008"] = { 1, 1 },
+  ["13009"] = { 1, 1 },
+
+  -- Erwin Bridge
+  [""] = { 0, 0 },
+  [""] = { 0, 0 },
+
+  -- Unvisited Isle
+  [""] = { -1, 0 },
+  [""] = { -1, 0 },
+
+  -- River Docks
+  [""] = { -1, -1 },
+  [""] = { -1, -1 },
+
+  -- Main Street
+  [""] = { 1, -1 },
+  [""] = { 1, -1 },
+
+  -- Back Alley
+  ["13022"] = { 0, -2 },
+  ["13023"] = { 0, -2 }
+}
+
+local LAIR_GRIDS       = { { 0, 2 }, { -1, 0 }, { 0, -2 } }
+local trash            = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+
+function showOptionsDialogAndWait(player, title, options, default)
+  local result
+  player.showOptionsDialog(
+    title,
+    options,
+    default,
+    function(value) result = value end
+  )
+  CoroutineLib.yieldCondition(function() return result ~= nil end)
+  return result
+end
+
+function onLoad()
+  self.createButton({
+    label          = "Set Up",
+    click_function = "setup",
+    function_owner = self,
+    position       = { 0, 0.11, 0 },
+    height         = 160,
+    width          = 500,
+    scale          = { x = 1.75, y = 1.75, z = 1.75 },
+    font_size      = 90
+  })
+end
+
+function setup(_, playerColor)
+  local player = Player[playerColor]
+
+  local function setupCoroutine()
+    -- Ask for difficulty
+    local difficulty = showOptionsDialogAndWait(
+      player,
+      "Choose Difficulty:",
+      { "Easy", "Standard", "Hard", "Export" },
+      "Standard"
+    )
+
+    -- Ask for investigator count
+    local investigatorCount = showOptionsDialogAndWait(
+      player,
+      "Choose Investigator Count:",
+      { 1, 2, 3, 4 },
+      PlayAreaApi.getInvestigatorCount()
+    )
+
+    -- Gather all relevant encounter sets
+    local listOfSets = {
+      -- CoB sets
+      "River of Blood", "Blood Blight", "Blood Moon", "Children of Blood", "Hunted", "Infected", "Misinformation",
+      -- Core 2026 sets
+      "Dead Ends", "Flying Terrors"
+    }
+
+    -- Adjust the list based on difficulty
+    if difficulty == "Hard" or difficulty == "Expert" then
+      table.insert(listOfSets, "Agents of Zburamoarte")
+      table.insert(listOfSets, "Mongrels")
+    else
+      table.insert(listOfSets, "Preyed Upon")
+      table.insert(listOfSets, "Vermin")
+    end
+
+    -- Adjust the list based on investigator count
+    if investigatorCount >= 3 then
+      table.insert(listOfSets, "Afflicted")
+    end
+
+    -- Get reference to card source
+    local objList = getObjectsWithTag("CoB-Cards")
+    if #objList == 0 then
+      broadcastToAll("Couldn't find campaign card source!", "Red")
+      return
+    end
+    local CardSource            = objList[1]
+    local encounterDeckCardList = {}
+    local mapSetAside           = {
+      [""] = true, -- Night Feeder
+      [""] = true, -- Spawn of Zburamoarte
+      [""] = true, -- Detective Reynolds
+      [""] = true, -- Fang of Zburamoarte
+    }
+    local mapRFG                = {
+      ["13024"] = true, -- Julia Stern
+      ["13025"] = true, -- Julia Stern
+      ["13026"] = true, -- Julia Stern
+    }
+
+    -- Determine proper version of Julia Stern
+    local juliaId
+    if difficulty == "Easy" then
+      juliaId = "13024"
+    elseif difficulty == "Standard" then
+      juliaId = "13025"
+    else
+      juliaId = "13026"
+    end
+
+    -- Get card list (each card has a data and metadata field)
+    local cardList = CardSource.call("getCardsForListOfSets", listOfSets)
+    printToAll(string.format(
+      "Gathered %d cards based on selected difficulty (%s) and player count (%d).",
+      #cardList,
+      difficulty,
+      investigatorCount
+    ))
+
+    -- Handling for Civilians
+    local civiliansToSpawn = (investigatorCount > 2) and 2 or 1
+
+    -- Handling for Dawn / Dusk locations
+    local locationTraitToUse = (difficulty == "Hard" or difficulty == "Expert") and "Dusk" or "Dawn"
+
+    for _, card in ipairs(cardList) do
+      local md = card.metadata
+      local id = md.id
+
+      -- skip RFG cards
+      if not mapRFG[id] then
+        if mapSetAside[id] or md.encounterSet == "Infected" then
+          -- handle set aside cards
+          -- TODO
+        elseif md.type == "Location" then
+          -- handle locations
+          if string.contains(md.traits, locationTraitToUse) then
+            spawnCardAtPosition(card.data, PlayAreaApi.gridToWorld(LOCATION_GRIDS[id]))
+          end
+        elseif id == "" then -- TODO: ID
+          -- spawn this civilian
+          if civiliansToSpawn == 2 then
+            civiliansToSpawn = civiliansToSpawn - 1
+            spawnCardAtPosition(card.data, PlayAreaApi.gridToWorld({ -0.5, 1 })) -- at Garrison Street
+          elseif civiliansToSpawn == 1 then
+            civiliansToSpawn = civiliansToSpawn - 1
+            spawnCardAtPosition(card.data, PlayAreaApi.gridToWorld({ 1.5, -1 })) -- at Main Street
+          else
+            -- set aside
+            -- TODO
+          end
+        else
+          -- add to encounter deck
+          table.insert(encounterDeckCardList, card.data)
+        end
+      end
+    end
+
+    -- Move mini-cards to Water Street
+    -- TODO
+
+    -- Shuffle Julia with two random cards
+    local lairCardList = {
+      getCardById(juliaId).data,
+      TableLib.pickRandom(encounterDeckCardList, true),
+      TableLib.pickRandom(encounterDeckCardList, true)
+    }
+    TableLib.shuffle(lairCardList)
+
+    -- Place beneath each Lair location
+    for i, cardData in ipairs(lairCardList) do
+      local grid = { LAIR_GRIDS[i][1] - 0.5, LAIR_GRIDS[i][2] }
+      spawnCardAtPosition(cardData, PlayAreaApi.gridToWorld(grid), Vector(0, 270, 180))
+    end
+
+    -- Create encounter deck
+    local deckPosition   = MythosAreaApi.getEncounterDeckPosition()
+    local deckRotation   = MythosAreaApi.getEncounterDiscardRotation()
+    local deckdata       = DeckLib.generateDeckDataFromCardList(
+      TableLib.shuffle(encounterDeckCardList),
+      deckPosition,
+      deckRotation
+    )
+    deckdata["Nickname"] = "Encounter Deck"
+    spawnObjectData({ data = deckdata })
+    printToAll("Encounter deck created.")
+
+    trash.putObject(self)
+  end
+
+  CoroutineLib.start(setupCoroutine)
+end
+
+function spawnCardAtPosition(cardData, position, rotation)
+  rotation = rotation or Vector(0, 270, 0)
+  cardData.Transform = {
+    posX = position.x,
+    posY = position.y,
+    posZ = position.z,
+    rotX = rotation.x,
+    rotY = rotation.y,
+    rotZ = rotation.z,
+    scaleX = 1,
+    scaleY = 1,
+    scaleZ = 1
+  }
+  return spawnObjectData({ data = cardData })
+end

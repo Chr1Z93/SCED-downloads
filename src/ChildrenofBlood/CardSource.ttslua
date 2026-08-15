@@ -1,0 +1,129 @@
+local CoroutineLib    = require("util/CoroutineLib")
+
+local json_parse      = json.parse
+local table_insert    = table.insert
+local cardIdIndex     = {}
+local setIndex        = {}
+local indexingDone    = false
+local cardsSinceYield = 0
+
+function onLoad()
+  Wait.frames(startIndexBuild, 60)
+end
+
+function isIndexReady()
+  if not indexingDone then
+    broadcastToAll("Still loading campaign cards, please try again in a few seconds", { 0.9, 0.2, 0.2 })
+  end
+  return indexingDone
+end
+
+function startIndexBuild()
+  cardIdIndex = {}
+  setIndex    = {}
+  CoroutineLib.start(buildIndex)
+end
+
+-- Create the card index by iterating over all cards in the bag
+function buildIndex()
+  indexingDone    = false
+  cardsSinceYield = 0
+
+  processContainedObjects(self.getData().ContainedObjects or {})
+  indexingDone = true
+end
+
+-- Processes the contained objects for cards to add to the index
+function processContainedObjects(containedObjects, customDeck)
+  for _, objData in ipairs(containedObjects) do
+    if objData.ContainedObjects then
+      -- recursively process nested containers
+      processContainedObjects(objData.ContainedObjects, objData.CustomDeck)
+    elseif objData.Name == "Card" or objData.Name == "CardCustom" then
+      if customDeck then
+        -- we might need to fix the "CustomDeck" entry for cards inside decks since TTS doesn't update it while they are in bags
+        local wantedCustomDeckIdStr = tostring(objData.CardID):sub(1, -3)
+        local presentCustomDeckIdNum = next(objData.CustomDeck)
+
+        -- type conversion (TTS seems to store these as strings, but reads them as numbers)
+        local wantedCustomDeckIdNum = tonumber(wantedCustomDeckIdStr)
+        if wantedCustomDeckIdNum ~= presentCustomDeckIdNum then
+          if customDeck[wantedCustomDeckIdNum] then
+            objData.CustomDeck = {}
+            objData.CustomDeck[wantedCustomDeckIdStr] = customDeck[wantedCustomDeckIdNum]
+            log("Corrected CustomDeckData for " .. objData.Nickname)
+          else
+            log("ERROR: Could not correct CustomDeckData for " .. objData.Nickname)
+          end
+        end
+      end
+
+      addCardToIndex(objData)
+      cardsSinceYield = cardsSinceYield + 1
+      if cardsSinceYield >= 20 then
+        cardsSinceYield = 0
+        CoroutineLib.yieldFrames()
+      end
+    end
+  end
+end
+
+-- Adds a card to any indexes it should be a part of, based on its metadata
+---@param cardData table TTS object data for the card
+function addCardToIndex(cardData)
+  if cardData.GMNotes == nil or cardData.GMNotes == "" then
+    log("No metadata found for " .. cardData.Nickname)
+    return
+  end
+
+  -- using the more efficient 'json.parse()' to speed this process up
+  local status, cardMetadata = pcall(json_parse, cardData.GMNotes)
+  if not status or not cardMetadata or type(cardMetadata) ~= "table" then
+    log("Error parsing " .. cardData.Nickname)
+    return
+  end
+
+  -- write to ID index
+  cardIdIndex[cardMetadata.id] = { data = cardData, metadata = cardMetadata }
+
+  -- write to set index
+  writeToNestedTable(setIndex, card.metadata.encounterSet, cardMetadata.id)
+end
+
+-- helper function to ensure nested tables are initialized - last argument will be used as table element
+function writeToNestedTable(rootTable, ...)
+  local args         = { ... }
+  local currentTable = rootTable
+
+  for i = 1, #args - 1 do
+    local key = args[i]
+    if not currentTable[key] then
+      currentTable[key] = {}
+    end
+    currentTable = currentTable[key]
+  end
+  table_insert(currentTable, args[#args])
+end
+
+function getCardIdsBySet(set)
+  if not isIndexReady() then return {} end
+  return setIndex[set]
+end
+
+function getCardsForListOfSets(listOfSets)
+  if not isIndexReady() then return {} end
+  local result = {}
+  for _, set in ipairs(listOfSets) do
+    local cardId = setIndex[set]
+    local card   = cardIdIndex[cardId]
+    for i = 1, (card.metadata.quantity or 1) do
+      table_insert(result, card)
+    end
+  end
+  return result
+end
+
+function getCardById(id)
+  if not isIndexReady() then return {} end
+  return cardIdIndex[id]
+end
