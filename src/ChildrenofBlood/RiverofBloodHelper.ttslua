@@ -3,12 +3,13 @@ local DeckLib          = require("util/DeckLib")
 local GUIDReferenceApi = require("core/GUIDReferenceApi")
 local MythosAreaApi    = require("mythos/MythosAreaApi")
 local PlayAreaApi      = require("playarea/PlayAreaApi")
+local PlayermatApi     = require("playermat/PlayermatApi")
 local TableLib         = require("util/TableLib")
 
 local LOCATION_GRIDS   = {
   -- Waterfront Warehouse
-  [""] = { 0, 2 },
-  [""] = { 0, 2 },
+  ["13020"] = { 0, 2 },
+  ["13021"] = { 0, 2 },
 
   -- Garrison Street
   [""] = { -1, 1 },
@@ -88,9 +89,10 @@ function setup(_, playerColor)
     )
 
     -- Gather all relevant encounter sets
+    -- (except for Infected, which is separately handled because it's fully set aside)
     local listOfSets = {
       -- CoB sets
-      "River of Blood", "Blood Blight", "Blood Moon", "Children of Blood", "Hunted", "Infected", "Misinformation",
+      "River of Blood", "Blood Blight", "Blood Moon", "Children of Blood", "Hunted", "Misinformation",
       -- Core 2026 sets
       "Dead Ends", "Flying Terrors"
     }
@@ -115,32 +117,33 @@ function setup(_, playerColor)
       broadcastToAll("Couldn't find campaign card source!", "Red")
       return
     end
-    local CardSource            = objList[1]
-    local encounterDeckCardList = {}
-    local mapSetAside           = {
-      [""] = true, -- Night Feeder
-      [""] = true, -- Spawn of Zburamoarte
-      [""] = true, -- Detective Reynolds
-      [""] = true, -- Fang of Zburamoarte
+
+    local CardSource           = objList[1]
+    local setAsideObjects      = {}
+    local encounterDeckObjects = {}
+    local mapSetAside          = {
+      ["13110"] = true, -- Night Feeder
+      [""] = true,      -- Spawn of Zburamoarte
+      [""] = true,      -- Detective Reynolds
+      [""] = true,      -- Fang of Zburamoarte
     }
-    local mapRFG                = {
+    local mapRFG               = {
       ["13024"] = true, -- Julia Stern
       ["13025"] = true, -- Julia Stern
       ["13026"] = true, -- Julia Stern
     }
 
     -- Determine proper version of Julia Stern
-    local juliaId
-    if difficulty == "Easy" then
-      juliaId = "13024"
-    elseif difficulty == "Standard" then
-      juliaId = "13025"
-    else
-      juliaId = "13026"
-    end
+    local JULIA_IDS            = {
+      Easy     = "13024",
+      Standard = "13025",
+      Hard     = "13026",
+      Expert   = "13026",
+    }
+    local juliaId              = JULIA_IDS[difficulty]
 
     -- Get card list (each card has a data and metadata field)
-    local cardList = CardSource.call("getCardsForListOfSets", listOfSets)
+    local cardList             = CardSource.call("getCardsForListOfSets", listOfSets)
     printToAll(string.format(
       "Gathered %d cards based on selected difficulty (%s) and player count (%d).",
       #cardList,
@@ -160,16 +163,13 @@ function setup(_, playerColor)
 
       -- skip RFG cards
       if not mapRFG[id] then
-        if mapSetAside[id] or md.encounterSet == "Infected" then
-          -- handle set aside cards
-          -- TODO
+        if mapSetAside[id] then
+          table.insert(setAsideObjects, card.data)
         elseif md.type == "Location" then
-          -- handle locations
           if string.contains(md.traits, locationTraitToUse) then
             spawnCardAtPosition(card.data, PlayAreaApi.gridToWorld(LOCATION_GRIDS[id]))
           end
-        elseif id == "" then -- TODO: ID
-          -- spawn this civilian
+        elseif id == "13027" then -- Waterfront Civilian
           if civiliansToSpawn == 2 then
             civiliansToSpawn = civiliansToSpawn - 1
             spawnCardAtPosition(card.data, PlayAreaApi.gridToWorld({ -0.5, 1 })) -- at Garrison Street
@@ -177,24 +177,48 @@ function setup(_, playerColor)
             civiliansToSpawn = civiliansToSpawn - 1
             spawnCardAtPosition(card.data, PlayAreaApi.gridToWorld({ 1.5, -1 })) -- at Main Street
           else
-            -- set aside
-            -- TODO
+            table.insert(setAsideObjects, card.data)
           end
         else
-          -- add to encounter deck
-          table.insert(encounterDeckCardList, card.data)
+          table.insert(encounterDeckObjects, card.data)
         end
       end
     end
 
     -- Move mini-cards to Water Street
-    -- TODO
+    local shouldMove = {}
+    for _, matColor in ipairs(PlayermatApi.getUsedMatColors()) do
+      local miniId = PlayermatApi.getActiveInvestigatorData(matColor).miniId
+      shouldMove[miniId] = true
+    end
+
+    local movedMiniCount = 0
+    local MINI_OFFSET    = {
+      Vector(1, 0, 1),
+      Vector(-1, 0, 1),
+      Vector(-1, 0, -1),
+      Vector(1, 0, -1),
+    }
+    local basePos        = PlayAreaApi.gridToWorld(LOCATION_GRIDS["13008"])
+    for _, minicard in ipairs(getObjectsWithTag("MiniCard")) do
+      local md = JSON.decode(minicard.getGMNotes())
+      if md and md.id and shouldMove[md.id] then
+        movedMiniCount = movedMiniCount + 1
+        local targetPos = basePos + MINI_OFFSET[movedMiniCount]
+        minicard.setPosition(targetPos)
+        shouldMove[md.id] = false
+      end
+    end
+
+    if movedMiniCount > 0 then
+      printToAll(string.format("Moved %d mini cards to Water Street.", movedMiniCount))
+    end
 
     -- Shuffle Julia with two random cards
     local lairCardList = {
       getCardById(juliaId).data,
-      TableLib.pickRandom(encounterDeckCardList, true),
-      TableLib.pickRandom(encounterDeckCardList, true)
+      TableLib.pickRandom(encounterDeckObjects, true),
+      TableLib.pickRandom(encounterDeckObjects, true)
     }
     TableLib.shuffle(lairCardList)
 
@@ -203,12 +227,13 @@ function setup(_, playerColor)
       local grid = { LAIR_GRIDS[i][1] - 0.5, LAIR_GRIDS[i][2] }
       spawnCardAtPosition(cardData, PlayAreaApi.gridToWorld(grid), Vector(0, 270, 180))
     end
+    printToAll("Shuffled Julia Stern with two random cards of the encounter deck and placed those cards beneath the Lair locations.")
 
     -- Create encounter deck
     local deckPosition   = MythosAreaApi.getEncounterDeckPosition()
     local deckRotation   = MythosAreaApi.getEncounterDiscardRotation()
     local deckdata       = DeckLib.generateDeckDataFromCardList(
-      TableLib.shuffle(encounterDeckCardList),
+      TableLib.shuffle(encounterDeckObjects),
       deckPosition,
       deckRotation
     )
@@ -216,6 +241,25 @@ function setup(_, playerColor)
     spawnObjectData({ data = deckdata })
     printToAll("Encounter deck created.")
 
+    -- Handle Infected
+    local infectedCards = CardSource.call("getCardsForListOfSets", { "Infected" })
+    local infectedDeckObjects = {}
+    for _, card in ipairs(infectedCards) do
+      table.insert(infectedDeckObjects, card.data)
+    end
+    local infectedDeckData = DeckLib.generateDeckDataFromCardList(
+      infectedDeckObjects,
+      Vector(0, 0, 0),
+      Vector(0, 270, 0)
+    )
+    infectedDeckData["Nickname"] = "Infected"
+
+    -- Create Set Aside
+    table.insert(setAsideObjects, infectedDeckData)
+    spawnSetAsideChest(setAsideObjects)
+    printToAll("Set aside cards spawned.")
+
+    -- Remove this helper
     trash.putObject(self)
   end
 
@@ -236,4 +280,41 @@ function spawnCardAtPosition(cardData, position, rotation)
     scaleZ = 1
   }
   return spawnObjectData({ data = cardData })
+end
+
+function spawnSetAsideChest(objects)
+  local MythosArea = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "MythosArea")
+  local position   = MythosArea.positionToWorld(Vector(2.191, 0.1, -0.462))
+  local rotation   = MythosArea.getRotation() - Vector(0, 45, 0)
+  return spawnObjectData({
+    data = {
+      ColorDiffuse     = { b = 0, g = 0, r = 0 },
+      ContainedObjects = objects,
+      CustomMesh       = {
+        DiffuseURL =
+        "https://steamusercontent-a.akamaihd.net/ugc/764975951334960553/C518D80E31E27DB23EEAC8CF9253E59798865790/",
+        MaterialIndex = 1,
+        MeshURL =
+        "https://steamusercontent-a.akamaihd.net/ugc/2038485431565955058/F72FECE5488594A28292C06997A2E28A8B8961C5/",
+        NormalURL =
+        "https://steamusercontent-a.akamaihd.net/ugc/764975951334960069/E70E4A58A1B7827F1E5E2AF9FF44DF0BD5DA33F7/",
+        TypeIndex = 6
+      },
+      Hands            = false,
+      HideWhenFaceDown = false,
+      Name             = "Custom_Model_Bag",
+      Nickname         = "Set-aside",
+      Transform        = {
+        posX   = position.x,
+        posY   = 1.565,
+        posZ   = position.z,
+        rotX   = rotation.x,
+        rotY   = rotation.y,
+        rotZ   = rotation.z,
+        scaleX = 2,
+        scaleY = 2,
+        scaleZ = 2
+      }
+    }
+  })
 end
