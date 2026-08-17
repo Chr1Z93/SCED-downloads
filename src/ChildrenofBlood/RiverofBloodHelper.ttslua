@@ -40,28 +40,32 @@ local LOCATION_GRIDS     = {
   ["13023"] = { 0, -2 }
 }
 
-local LAIR_GRIDS         = { { 0, 2 }, { -1, 0 }, { 0, -2 } }
+local BENEATH_LAIR_GRIDS = { { -0.5, 2 }, { -1.5, 0 }, { -0.5, -2 } }
 
 local DIFFICULTY_CONFIGS = {
   Easy = {
-    juliaId        = "13024",
-    locationTrait  = "Dawn",
-    additionalSets = { "Preyed Upon", "Vermin" }
+    referenceRotation = 0,
+    juliaId           = "13024",
+    locationTrait     = "Dawn",
+    additionalSets    = { "Preyed Upon", "Vermin" }
   },
   Standard = {
-    juliaId        = "13025",
-    locationTrait  = "Dawn",
-    additionalSets = { "Preyed Upon", "Vermin" }
+    referenceRotation = 0,
+    juliaId           = "13025",
+    locationTrait     = "Dawn",
+    additionalSets    = { "Preyed Upon", "Vermin" }
   },
   Hard = {
-    juliaId        = "13026",
-    locationTrait  = "Dusk",
-    additionalSets = { "Agents of Zburamoarte", "Mongrels" }
+    referenceRotation = 180,
+    juliaId           = "13026",
+    locationTrait     = "Dusk",
+    additionalSets    = { "Agents of Zburamoarte", "Mongrels" }
   },
   Expert = {
-    juliaId        = "13026",
-    locationTrait  = "Dusk",
-    additionalSets = { "Agents of Zburamoarte", "Mongrels" }
+    referenceRotation = 180,
+    juliaId           = "13026",
+    locationTrait     = "Dusk",
+    additionalSets    = { "Agents of Zburamoarte", "Mongrels" }
   }
 }
 
@@ -80,18 +84,6 @@ function onLoad()
   })
 end
 
-function showOptionsDialogAndWait(player, title, options, default)
-  local result
-  player.showOptionsDialog(
-    title,
-    options,
-    default,
-    function(value) result = value end
-  )
-  CoroutineLib.yieldCondition(function() return result ~= nil end)
-  return result
-end
-
 function setup(_, playerColor)
   if setupRunning then return end
   setupRunning = true
@@ -100,7 +92,7 @@ function setup(_, playerColor)
 
   local function setupCoroutine()
     -- Ask for difficulty
-    local difficulty = showOptionsDialogAndWait(
+    local difficulty = CoroutineLib.showOptionsDialogAndWait(
       player,
       "Choose Difficulty:",
       { "Easy", "Standard", "Hard", "Expert" },
@@ -109,7 +101,7 @@ function setup(_, playerColor)
     local difficultyConfig = DIFFICULTY_CONFIGS[difficulty]
 
     -- Ask for investigator count
-    local investigatorCount = showOptionsDialogAndWait(
+    local investigatorCount = CoroutineLib.showOptionsDialogAndWait(
       player,
       "Choose Investigator Count:",
       { 1, 2, 3, 4 },
@@ -136,9 +128,10 @@ function setup(_, playerColor)
     end
 
     -- Get reference to card source
-    local objList = getObjectsWithTag("CoB-Cards")
+    local objList = getObjectsWithTag("CardSource")
     if #objList == 0 then
       broadcastToAll("Couldn't find campaign card source!", "Red")
+      setupRunning = false
       return
     end
 
@@ -183,26 +176,23 @@ function setup(_, playerColor)
           table.insert(setAsideObjects, card.data)
         elseif md.type == "ScenarioReference" then
           local position = MythosAreaApi.getScenarioReferenceCardPosition()
-          local rotation = MythosAreaApi.getRotation()
-          if difficulty == "Hard" or difficulty == "Expert" then
-            rotation = rotation + Vector(0, 0, 180)
-          end
-          spawnCardAtPosition(card.data, position, rotation)
+          local rotation = MythosAreaApi.getRotation() + Vector(0, 0, difficultyConfig.referenceRotation)
+          DeckLib.spawnCard(card.data, position, rotation)
         elseif md.type == "Act" then
           table.insert(actObjects, card.data)
         elseif md.type == "Agenda" then
           table.insert(agendaObjects, card.data)
         elseif md.type == "Location" then
           if string.contains(md.traits, difficultyConfig.locationTrait) then
-            spawnCardAtPosition(card.data, PlayAreaApi.gridToWorld(LOCATION_GRIDS[id]))
+            DeckLib.spawnCard(card.data, PlayAreaApi.gridToWorld(LOCATION_GRIDS[id]))
           end
         elseif id == "13027" then -- Waterfront Civilian
           if civiliansToSpawn == 2 then
             civiliansToSpawn = civiliansToSpawn - 1
-            spawnCardAtPosition(card.data, PlayAreaApi.gridToWorld({ -0.5, 1 })) -- at Garrison Street
+            DeckLib.spawnCard(card.data, PlayAreaApi.gridToWorld({ -0.5, 1 })) -- at Garrison Street
           elseif civiliansToSpawn == 1 then
             civiliansToSpawn = civiliansToSpawn - 1
-            spawnCardAtPosition(card.data, PlayAreaApi.gridToWorld({ 1.5, -1 })) -- at Main Street
+            DeckLib.spawnCard(card.data, PlayAreaApi.gridToWorld({ 1.5, -1 })) -- at Main Street
           else
             table.insert(setAsideObjects, card.data)
           end
@@ -222,14 +212,12 @@ function setup(_, playerColor)
 
     -- Place beneath each Lair location
     for i, cardData in ipairs(lairCardList) do
-      local grid = { LAIR_GRIDS[i][1] - 0.5, LAIR_GRIDS[i][2] }
-      spawnCardAtPosition(cardData, PlayAreaApi.gridToWorld(grid), Vector(0, 270, 180))
+      DeckLib.spawnCard(cardData, PlayAreaApi.gridToWorld(BENEATH_LAIR_GRIDS[i]), Vector(0, 270, 180))
     end
-    printToAll(
-      "Shuffled Julia Stern with two random cards of the encounter deck and placed those cards beneath the Lair locations.")
 
     -- Handle Infected
-    table.insert(setAsideObjects, getDeckDataForSet(CardSource, "Infected"))
+    local infectedDeckData = CardSource.call("getDeckDataForSet", "Infected")
+    table.insert(setAsideObjects, infectedDeckData)
 
     -- Spawn scenario content
     spawnDeckOrCard(agendaObjects, "Agenda Deck")
@@ -239,7 +227,7 @@ function setup(_, playerColor)
 
     -- Blood Reference Card
     local bloodReference = CardSource.call("getCardById", "13119")
-    spawnCardAtPosition(bloodReference.data, MythosAreaApi.getStoryCardPosition(), MythosAreaApi.getRotation())
+    DeckLib.spawnCard(bloodReference.data, MythosAreaApi.getStoryCardPosition(), MythosAreaApi.getRotation())
 
     -- Move mini-cards to Water Street
     moveInvestigatorMinis(LOCATION_GRIDS["13008"], "Water Street")
@@ -282,62 +270,29 @@ function moveInvestigatorMinis(grid, name)
   end
 end
 
-function spawnCardAtPosition(cardData, position, rotation)
-  rotation = rotation or Vector(0, 270, 0)
-  cardData.Transform = {
-    posX = position.x,
-    posY = position.y,
-    posZ = position.z,
-    rotX = rotation.x,
-    rotY = rotation.y,
-    rotZ = rotation.z,
-    scaleX = 1,
-    scaleY = 1,
-    scaleZ = 1
-  }
-  return spawnObjectData({ data = cardData })
-end
-
 function spawnDeckOrCard(objects, name)
   if #objects == 0 then return end
 
-  local position, rotation
+  local position
   if name == "Act Deck" then
     position = MythosAreaApi.getActPosition()
-    rotation = MythosAreaApi.getRotation()
   elseif name == "Agenda Deck" then
     position = MythosAreaApi.getAgendaPosition()
-    rotation = MythosAreaApi.getRotation()
   elseif name == "Encounter Deck" then
     position = MythosAreaApi.getEncounterDeckPosition()
-    rotation = MythosAreaApi.getRotation()
     TableLib.shuffle(objects)
   else
     printToAll("Invalid name for 'spawnDeckOrCard()'!")
     return
   end
 
-  if #objects == 1 then
-    spawnCardAtPosition(objects[1], position, rotation)
-  else
-    local deckdata = DeckLib.generateDeckDataFromCardList(objects, position, rotation)
-    deckdata["Nickname"] = name
-    spawnObjectData({ data = deckdata })
-  end
-  printToAll(name .. " created.")
-end
+  local rotation = MythosAreaApi.getRotation()
 
-function getDeckDataForSet(CardSource, setName)
-  local cards       = CardSource.call("getCardsForListOfSets", { setName })
-  local deckObjects = {}
-  for _, card in ipairs(cards) do
-    table.insert(deckObjects, card.data)
+  if #objects == 1 then
+    return DeckLib.spawnCard(objects[1], position, rotation)
+  else
+    local deckdata = DeckLib.generateDeckData(objects, position, rotation)
+    deckdata["Nickname"] = name
+    return spawnObjectData({ data = deckdata })
   end
-  local deckData = DeckLib.generateDeckDataFromCardList(
-    deckObjects,
-    Vector(0, 0, 0),
-    MythosAreaApi.getRotation()
-  )
-  deckData["Nickname"] = setName
-  return deckData
 end
