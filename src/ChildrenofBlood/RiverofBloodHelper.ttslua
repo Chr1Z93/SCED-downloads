@@ -157,13 +157,15 @@ function setup(_, playerColor)
     ))
 
     -- Handling for Civilians
-    local civiliansToSpawn     = (investigatorCount > 2) and 2 or 1
+    local civiliansToSpawn = (investigatorCount > 2) and 2 or 1
 
     -- Sort cards
-    local setAsideObjects      = {}
-    local encounterDeckObjects = {}
-    local actObjects           = {}
-    local agendaObjects        = {}
+    local scenarioObjects  = {
+      setAside      = {},
+      encounterDeck = {},
+      actDeck       = {},
+      agendaDeck    = {}
+    }
     for _, card in ipairs(cardList) do
       local md = card.metadata
       local id = md.id
@@ -171,15 +173,15 @@ function setup(_, playerColor)
       -- skip RFG cards
       if not mapRFG[id] then
         if mapSetAside[id] then
-          table.insert(setAsideObjects, card.data)
+          table.insert(scenarioObjects.setAside, card.data)
         elseif md.type == "ScenarioReference" then
           local position = MythosAreaApi.getScenarioReferenceCardPosition()
           local rotation = MythosAreaApi.getRotation() + Vector(0, 0, difficultyConfig.referenceRotation)
           DeckLib.spawnCard(card.data, position, rotation)
         elseif md.type == "Act" then
-          table.insert(actObjects, card.data)
+          table.insert(scenarioObjects.actDeck, card.data)
         elseif md.type == "Agenda" then
-          table.insert(agendaObjects, card.data)
+          table.insert(scenarioObjects.agendaDeck, card.data)
         elseif md.type == "Location" then
           if string.contains(md.traits, difficultyConfig.locationTrait) then
             DeckLib.spawnCard(card.data, PlayAreaApi.gridToWorld(LOCATION_GRIDS[id]))
@@ -192,10 +194,10 @@ function setup(_, playerColor)
             civiliansToSpawn = civiliansToSpawn - 1
             DeckLib.spawnCard(card.data, PlayAreaApi.gridToWorld({ 1.5, -1 })) -- at Main Street
           else
-            table.insert(setAsideObjects, card.data)
+            table.insert(scenarioObjects.setAside, card.data)
           end
         else
-          table.insert(encounterDeckObjects, card.data)
+          table.insert(scenarioObjects.encounterDeck, card.data)
         end
       end
     end
@@ -205,8 +207,8 @@ function setup(_, playerColor)
     -- Shuffle Julia with two random cards
     local lairCardList = {
       getCardById(difficultyConfig.juliaId).data,
-      TableLib.pickRandom(encounterDeckObjects, true),
-      TableLib.pickRandom(encounterDeckObjects, true)
+      TableLib.pickRandom(scenarioObjects.encounterDeck, true),
+      TableLib.pickRandom(scenarioObjects.encounterDeck, true)
     }
     TableLib.shuffle(lairCardList)
 
@@ -217,13 +219,13 @@ function setup(_, playerColor)
 
     -- Handle Infected
     local infectedDeckData = CardSource.call("getDeckDataForSet", "Infected")
-    table.insert(setAsideObjects, infectedDeckData)
+    table.insert(scenarioObjects.setAside, infectedDeckData)
 
     -- Spawn scenario content
-    HelperLib.spawnMythosDeckOrCard(agendaObjects, "Agenda Deck")
-    HelperLib.spawnMythosDeckOrCard(actObjects, "Act Deck")
-    HelperLib.spawnMythosDeckOrCard(encounterDeckObjects, "Encounter Deck", true)
-    MythosAreaApi.spawnSetAsideChest(setAsideObjects)
+    HelperLib.spawnMythosDeckOrCard(scenarioObjects.agendaDeck, "Agenda Deck")
+    HelperLib.spawnMythosDeckOrCard(scenarioObjects.actDeck, "Act Deck")
+    HelperLib.spawnMythosDeckOrCard(scenarioObjects.encounterDeck, "Encounter Deck", true)
+    MythosAreaApi.spawnSetAsideChest(scenarioObjects.setAside)
 
     -- Blood Reference Card
     local bloodReference = CardSource.call("getCardById", "13119")
