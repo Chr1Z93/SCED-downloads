@@ -1,6 +1,19 @@
 do
-  local HelperLib = {}
-  local SearchLib = require("util/SearchLib")
+  local HelperLib     = {}
+
+  local DeckLib       = require("util/DeckLib")
+  local MythosAreaApi = require("mythos/MythosAreaApi")
+  local PlayAreaApi   = require("playarea/PlayAreaApi")
+  local PlayermatApi  = require("playermat/PlayermatApi")
+  local SearchLib     = require("util/SearchLib")
+  local TableLib      = require("util/TableLib")
+
+  local MINI_OFFSET   = {
+    Vector(1, 0, 1),
+    Vector(-1, 0, 1),
+    Vector(-1, 0, -1),
+    Vector(1, 0, -1),
+  }
 
   -- Checks if a card has clues on it
   ---@param card tts__Object Card to check for clues
@@ -11,13 +24,15 @@ do
 
   function HelperLib.getMetadata(objectOrNotes)
     if objectOrNotes == nil then return {} end
+    local rawNotes
     if type(objectOrNotes) == "string" then
-      return JSON.decode(objectOrNotes) or {}
+      rawNotes = objectOrNotes
     elseif type(objectOrNotes) == "table" then
-      return JSON.decode(objectOrNotes["GMNotes"] or objectOrNotes["gm_notes"]) or {}
+      rawNotes = objectOrNotes["GMNotes"] or objectOrNotes["gm_notes"]
     else
-      return JSON.decode(objectOrNotes.getGMNotes()) or {}
+      rawNotes = objectOrNotes.getGMNotes()
     end
+    return JSON.decode(rawNotes) or {}
   end
 
   -- Simple method to check if the given point is in a specified area
@@ -42,6 +57,59 @@ do
       end
     end
     return false
+  end
+
+  function HelperLib.moveInvestigatorMinis(grid, name)
+    local shouldMove = {}
+    for _, matColor in ipairs(PlayermatApi.getUsedMatColors()) do
+      local miniId = PlayermatApi.getActiveInvestigatorData(matColor).miniId
+      shouldMove[miniId] = true
+    end
+
+    local movedMiniCount = 0
+    local basePos        = PlayAreaApi.gridToWorld(grid)
+    for _, minicard in ipairs(getObjectsWithTag("MiniCard")) do
+      local md = JSON.decode(minicard.getGMNotes())
+      if md and md.id and shouldMove[md.id] then
+        movedMiniCount = movedMiniCount + 1
+        minicard.setPosition(basePos + MINI_OFFSET[movedMiniCount])
+        shouldMove[md.id] = nil
+      end
+    end
+
+    if movedMiniCount > 0 and name then
+      printToAll(string.format("Moved %d mini cards to %s.", movedMiniCount, name))
+    end
+  end
+
+  function HelperLib.spawnMythosDeckOrCard(objects, name, shuffle)
+    if #objects == 0 then return end
+
+    local position
+    if name == "Act Deck" then
+      position = MythosAreaApi.getActPosition()
+    elseif name == "Agenda Deck" then
+      position = MythosAreaApi.getAgendaPosition()
+    elseif name == "Encounter Deck" then
+      position = MythosAreaApi.getEncounterDeckPosition()
+    else
+      printToAll("Unhandled name for 'spawnMythosDeckOrCard()'!")
+      return
+    end
+
+    if shuffle then
+      TableLib.shuffle(objects)
+    end
+
+    local rotation = MythosAreaApi.getRotation()
+
+    if #objects == 1 then
+      return DeckLib.spawnCard(objects[1], position, rotation)
+    else
+      local deckdata = DeckLib.generateDeckData(objects, position, rotation)
+      deckdata["Nickname"] = name
+      return spawnObjectData({ data = deckdata })
+    end
   end
 
   return HelperLib
