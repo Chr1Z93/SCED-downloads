@@ -1,0 +1,233 @@
+local CoroutineLib       = require("util/CoroutineLib")
+local DeckLib            = require("util/DeckLib")
+local GUIDReferenceApi   = require("core/GUIDReferenceApi")
+local HelperLib          = require("HelperLib")
+local MythosAreaApi      = require("mythos/MythosAreaApi")
+local PlayAreaApi        = require("playarea/PlayAreaApi")
+
+local LOCATION_GRIDS     = {
+  -- Version 1
+  ["13039"] = { -1, 1 }, -- Factory Floor West (Day)
+  ["13040"] = { 1, 1 },  -- Factory Floor East (Day)
+  ["13041"] = { -1, 0 }, -- Manager's Office (Day)
+  ["13042"] = { 0, 0 },  -- Loading Dock (Day)
+  ["13043"] = { 1, 0 },  -- Storage (Day)
+  -- Version 2
+  ["13044"] = { -1, 1 }, -- Factory Floor West (Night)
+  ["13045"] = { 1, 1 },  -- Factory Floor East (Night)
+  ["13046"] = { -1, 0 }, -- Manager's Office (Night)
+  ["13047"] = { 0, 0 },  -- Loading Dock (Night)
+  ["13048"] = { 1, 0 },  -- Storage (Night)
+}
+
+local DIFFICULTY_CONFIGS = {
+  Easy = {
+    cavernId      = "13049",
+    zburamoarteId = "13058",
+    sideChambers  = { "13052", "13053", "13054" }
+  },
+  Standard = {
+    cavernId      = "13049",
+    zburamoarteId = "13059",
+    sideChambers  = { "13052", "13053", "13054" }
+  },
+  Hard = {
+    cavernId      = "13050",
+    zburamoarteId = "13060",
+    sideChambers  = { "13055", "13056", "13057" }
+  },
+  Expert = {
+    cavernId      = "13050",
+    zburamoarteId = "13060",
+    sideChambers  = { "13055", "13056", "13057" }
+  }
+}
+
+-- Constants
+local JAVIER_ID          = "13061"
+local NIGHT_WATCHMAN_ID  = "13062"
+local FACTORY_WORKER_ID  = "13063"
+
+local setupRunning       = false
+
+function onLoad()
+  self.createButton({
+    label          = "Set Up",
+    click_function = "setup",
+    function_owner = self,
+    position       = { 0, 0.11, 0 },
+    height         = 160,
+    width          = 500,
+    scale          = { x = 1.75, y = 1.75, z = 1.75 },
+    font_size      = 90
+  })
+end
+
+function setup(_, playerColor)
+  if setupRunning then
+    return
+  end
+
+  setupRunning = true
+
+  local function setupCoroutine()
+    -- Ask for difficulty
+    local difficulty = CoroutineLib.showOptionsDialogAndWait(
+      playerColor,
+      "Choose Difficulty:",
+      { "Easy", "Standard", "Hard", "Expert" },
+      "Standard"
+    )
+    local difficultyConfig = DIFFICULTY_CONFIGS[difficulty]
+
+    -- Ask for investigator count
+    local investigatorCount = CoroutineLib.showOptionsDialogAndWait(
+      playerColor,
+      "Choose Investigator Count:",
+      { 1, 2, 3, 4 },
+      PlayAreaApi.getInvestigatorCount()
+    )
+    PlayAreaApi.setInvestigatorCount(investigatorCount)
+
+    -- Ask for scenario version
+    local scenarioVersion = CoroutineLib.showOptionsDialogAndWait(
+      playerColor,
+      "Choose:",
+      { "Search during the day", "Search after dark" }
+    )
+    local isDay = scenarioVersion == "Search during the day"
+    local locationTrait = isDay and "Day" or "Night"
+
+    -- Gather all relevant encounter sets
+    -- (except for Infected & Flying Terrors, which are always set aside)
+    local listOfSets = { "New Horizons", "Sanguine Secrets", "Afflicted" }
+
+    if isDay then
+      table.insert(listOfSets, "Vermin")
+      table.insert(listOfSets, "Bloodthirst")
+      table.insert(listOfSets, "Blood Blight")
+      table.insert(listOfSets, "Hunted")
+    else
+      table.insert(listOfSets, "Reeking Decay")
+      table.insert(listOfSets, "Preyed Upon")
+      table.insert(listOfSets, "Children of Blood")
+      table.insert(listOfSets, "Stalked")
+    end
+
+    local objList = getObjectsWithTag("CardSource")
+    if #objList == 0 then
+      broadcastToAll("Couldn't find campaign card source!", "Red")
+      setupRunning = false
+      return
+    end
+
+    local CardSource = objList[1]
+    local cardList   = CardSource.call("getCardsForListOfSets", listOfSets)
+    printToAll(string.format(
+      "Performing setup for  \"%s\" difficulty, %d investigators and \"%s\".",
+      difficulty,
+      investigatorCount,
+      scenarioVersion
+    ))
+
+    local mapSetAside = {
+      ["13064"]                   = true, -- Blighted Worker
+      ["13065"]                   = true, -- Echoing in Darkness
+      ["13066"]                   = true, -- Sanguine Song
+      ["13067"]                   = true, -- Forged Permit
+      ["13051"]                   = true, -- Descending Tunnel
+      [difficultyConfig.cavernId] = true, -- Cavern Entrance
+    }
+
+    for _, id in ipairs(difficultyConfig.sideChambers) do
+      mapSetAside[id] = true
+    end
+
+    local mapRFG = {
+      ["13058"] = true, -- Zburamoarte
+      ["13059"] = true, -- Zburamoarte
+      ["13060"] = true, -- Zburamoarte
+    }
+
+    if isDay then
+      mapRFG["13033"]           = true -- Quiet Night
+      mapRFG["13035"]           = true -- Digging Deeper v.II
+      mapRFG[NIGHT_WATCHMAN_ID] = true
+      mapSetAside[JAVIER_ID]    = true
+    else
+      mapRFG["13032"]                = true -- Busy Day
+      mapRFG["13034"]                = true -- Digging Deeper v.I
+      mapRFG[FACTORY_WORKER_ID]      = true
+      mapRFG[JAVIER_ID]              = true
+      mapSetAside[NIGHT_WATCHMAN_ID] = true
+    end
+
+    -- Handling for factory workers
+    local workersSpawned = 0
+
+    -- Sort cards
+    local scenarioObjects = {
+      encounterDeck = {},
+      actDeck       = {},
+      agendaDeck    = {},
+      setAside      = {}
+    }
+    for _, card in ipairs(cardList) do
+      local md = card.metadata
+      local id = md.id
+
+      if not mapRFG[id] then
+        if mapSetAside[id] then
+          table.insert(scenarioObjects.setAside, card.data)
+        elseif md.type == "ScenarioReference" then
+          DeckLib.spawnCard(card.data, MythosAreaApi.getScenarioReferenceCardPosition(), MythosAreaApi.getRotation())
+        elseif md.type == "Act" then
+          table.insert(scenarioObjects.actDeck, card.data)
+        elseif md.type == "Agenda" then
+          table.insert(scenarioObjects.agendaDeck, card.data)
+        elseif md.type == "Location" then
+          if string.contains(md.traits, locationTrait) then
+            DeckLib.spawnCard(card.data, PlayAreaApi.gridToWorld(LOCATION_GRIDS[id]))
+          end
+        elseif id == FACTORY_WORKER_ID and isDay and workersSpawned < 2 then
+          local grid = (workersSpawned == 0) and { -1.5, 1 } or { 1.5, 1 }
+          DeckLib.spawnCard(card.data, PlayAreaApi.gridToWorld(grid))
+          workersSpawned = workersSpawned + 1
+        else
+          table.insert(scenarioObjects.encounterDeck, card.data)
+        end
+      end
+    end
+
+    -- Starting Location
+    broadcastToAll("Investigators may choose either Factory Floor location as their starting location.", "White")
+    HelperLib.moveInvestigatorMinis(LOCATION_GRIDS["13039"], "Factory Floor")
+
+    -- Handle Zburamoarte
+    table.insert(scenarioObjects.setAside, CardSource.call("getCardById", difficultyConfig.zburamoarteId).data)
+
+    -- Handle Infected
+    local infectedDeckData = CardSource.call("getDeckDataForSet", "Infected")
+    table.insert(scenarioObjects.setAside, infectedDeckData)
+
+    -- Handle Flying Terrors
+    local flyingTerrorsDeckData = CardSource.call("getDeckDataForSet", "Flying Terrors")
+    table.insert(scenarioObjects.setAside, flyingTerrorsDeckData)
+
+    -- Spawn scenario content
+    HelperLib.spawnMythosDeckOrCard(scenarioObjects.agendaDeck, "Agenda Deck")
+    HelperLib.spawnMythosDeckOrCard(scenarioObjects.actDeck, "Act Deck")
+    HelperLib.spawnMythosDeckOrCard(scenarioObjects.encounterDeck, "Encounter Deck", true)
+    MythosAreaApi.spawnSetAsideChest(scenarioObjects.setAside)
+
+    -- Blood Token Reference
+    local bloodReference = CardSource.call("getCardById", "13119")
+    DeckLib.spawnCard(bloodReference.data, MythosAreaApi.getStoryCardPosition(), MythosAreaApi.getRotation())
+
+    -- Remove this helper
+    local trash = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+    trash.putObject(self)
+  end
+
+  CoroutineLib.start(setupCoroutine)
+end
