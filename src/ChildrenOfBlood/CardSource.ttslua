@@ -19,12 +19,6 @@ function isIndexReady()
   return indexingDone
 end
 
-function startIndexBuild()
-  cardIdIndex = {}
-  setIndex    = {}
-  CoroutineLib.start(buildIndex)
-end
-
 -- Create the card index by iterating over all cards in the bag
 function buildIndex()
   indexingDone    = false
@@ -33,6 +27,12 @@ function buildIndex()
   processContainedObjects(self.getData().ContainedObjects or {})
   sortIndices()
   indexingDone = true
+end
+
+function startIndexBuild()
+  cardIdIndex = {}
+  setIndex    = {}
+  CoroutineLib.start(buildIndex)
 end
 
 -- Processes the contained objects for cards to add to the index
@@ -88,7 +88,7 @@ function addCardToIndex(cardData)
   cardIdIndex[cardMetadata.id] = { data = cardData, metadata = cardMetadata }
 
   -- write to set index
-  writeToNestedTable(setIndex, card.metadata.encounterSet, cardMetadata.id)
+  writeToNestedTable(setIndex, cardMetadata.encounterSet, cardMetadata.id)
 end
 
 -- helper function to ensure nested tables are initialized - last argument will be used as table element
@@ -107,11 +107,8 @@ function writeToNestedTable(rootTable, ...)
 end
 
 function sortIndices()
-  -- sort set index
-  for _, set in pairs(setIndex) do
-    for _, indexTable in pairs(set) do
-      table.sort(indexTable)
-    end
+  for set, cardIds in pairs(setIndex) do
+    table.sort(cardIds)
   end
 end
 
@@ -124,10 +121,16 @@ function getCardsForListOfSets(listOfSets)
   if not isIndexReady() then return {} end
   local result = {}
   for _, set in ipairs(listOfSets) do
-    local cardId = setIndex[set]
-    local card   = cardIdIndex[cardId]
-    for i = 1, (card.metadata.quantity or 1) do
-      table_insert(result, card)
+    local cardIds = setIndex[set]
+    if cardIds then
+      for _, cardId in ipairs(cardIds) do
+        local card = cardIdIndex[cardId]
+        if card then
+          for _ = 1, (card.metadata.quantity or 1) do
+            table_insert(result, card)
+          end
+        end
+      end
     end
   end
   return result
