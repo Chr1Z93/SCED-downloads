@@ -41,7 +41,7 @@ local LOCATION_GRIDS     = {
   ["13023"] = { 0, -2 }
 }
 
-local BENEATH_LAIR_GRIDS = { { -0.5, 2 }, { -1.5, 0 }, { -0.5, -2 } }
+local BENEATH_LAIR_GRIDS = { { -0.35, 2 }, { -1.35, 0 }, { -0.35, -2 } }
 
 local DIFFICULTY_CONFIGS = {
   Easy = {
@@ -79,9 +79,9 @@ function onLoad()
     function_owner = self,
     position       = { 0, 0.11, 0 },
     height         = 1120,
-    width          = 3500,
+    width          = 3250,
     scale          = { x = 0.25, y = 0.25, z = 0.25 },
-    font_size      = 630
+    font_size      = 650
   })
 end
 
@@ -135,7 +135,21 @@ function setup(_, playerColor)
       return
     end
 
-    local CardSource                 = objList[1]
+    local CardSource = objList[1]
+
+    -- Handle chaos bag setup
+    local trash      = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+    local selector   = getObjectFromGUID("92d5f8")
+    if selector then
+      selector.call("clickFun", difficulty)
+      trash.putObject(selector)
+    end
+
+    -- Spawn Blood Token Helpers
+    local setupBag = getObjectFromGUID("1eacbb")
+    if setupBag then
+      setupBag.call("buttonClick_spawn")
+    end
 
     local mapSetAside                = {
       ["13110"] = true, -- Night Feeder
@@ -192,10 +206,10 @@ function setup(_, playerColor)
         elseif id == "13027" then -- Waterfront Civilian
           if civiliansToSpawn == 2 then
             civiliansToSpawn = civiliansToSpawn - 1
-            DeckLib.spawnCard(card.data, PlayAreaApi.gridToWorld({ -0.5, 1 })) -- at Garrison Street
+            DeckLib.spawnCard(card.data, PlayAreaApi.gridToWorld({ -0.65, 1 })) -- at Garrison Street
           elseif civiliansToSpawn == 1 then
             civiliansToSpawn = civiliansToSpawn - 1
-            DeckLib.spawnCard(card.data, PlayAreaApi.gridToWorld({ 1.5, -1 })) -- at Main Street
+            DeckLib.spawnCard(card.data, PlayAreaApi.gridToWorld({ 1.35, -1 })) -- at Main Street
           else
             table.insert(scenarioObjects.setAside, card.data)
           end
@@ -211,8 +225,8 @@ function setup(_, playerColor)
     HelperLib.moveInvestigatorMinis(LOCATION_GRIDS["13008"], "Water Street")
 
     -- Shuffle Julia with two random cards
-    table.insert(TableLib.pickRandom(scenarioObjects.encounterDeck, true))
-    table.insert(TableLib.pickRandom(scenarioObjects.encounterDeck, true))
+    table.insert(lairCardList, TableLib.pickRandom(scenarioObjects.encounterDeck, true))
+    table.insert(lairCardList, TableLib.pickRandom(scenarioObjects.encounterDeck, true))
     TableLib.shuffle(lairCardList)
 
     -- Place beneath each Lair location
@@ -221,7 +235,7 @@ function setup(_, playerColor)
     end
 
     -- Handle Infected
-    local infectedDeckData = CardSource.call("getDeckDataForSet", "Infected")
+    local infectedDeckData = TableLib.copy(CardSource.call("getDeckDataForSet", "Infected"), true)
     table.insert(scenarioObjects.setAside, infectedDeckData)
 
     -- Spawn scenario content
@@ -231,11 +245,12 @@ function setup(_, playerColor)
     MythosAreaApi.spawnSetAsideChest(scenarioObjects.setAside)
 
     -- Blood Reference Card
-    local bloodReference = CardSource.call("getCardById", "13119")
+    local bloodReference = TableLib.copy(CardSource.call("getCardById", "13119"), true)
     DeckLib.spawnCard(bloodReference.data, MythosAreaApi.getStoryCardPosition(), MythosAreaApi.getRotation())
 
+    printToAll("Setup completed.", "Green")
+
     -- Remove this helper
-    local trash = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
     trash.putObject(self)
   end
 
