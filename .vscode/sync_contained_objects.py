@@ -1,7 +1,7 @@
-# This script rebuilds the ContainedObjects-order key in a JSON file from the accompanying folder.
+# This script rebuilds the ContainedObjects-order key in a JSON file
+# and all nested JSON objects in its accompanying folders.
 
 import json
-import os
 from pathlib import Path
 import sys
 from typing import List, Dict, Any
@@ -9,19 +9,22 @@ from typing import List, Dict, Any
 
 def get_contained_file_names(folder_path: Path) -> List[str]:
     """
-    Lists all json files within the given folder, stripping their file extensions.
-    The list is sorted alphabetically.
+    Lists all JSON files directly within the given folder,
+    stripping their file extensions.
+
+    The list is sorted in reverse alphabetical order.
     """
-    file_names = []
 
     # Check if the folder exists and is a directory
     if not folder_path.is_dir():
-        print(f"Warning: Associated folder not found. Returning empty list.")
+        print(f"  Warning: Associated folder not found: {folder_path}")
         return []
+
+    file_names = []
 
     # Iterate over all items in the directory
     for item in folder_path.iterdir():
-        if item.is_file() and item.suffix == ".json":
+        if item.is_file() and item.suffix.lower() == ".json":
             file_names.append(item.stem)
 
     # Sort the list in reverse alphabetical order
@@ -29,44 +32,46 @@ def get_contained_file_names(folder_path: Path) -> List[str]:
     return file_names
 
 
-def process_json_contained_objects(json_file_path: str):
+def process_json_contained_objects(json_file_path: Path):
     """
-    Parses the main JSON file, determines the associated folder, lists and sorts
-    the contained files, updates the 'ContainedObjects_order' key, and saves the
-    updated JSON file with alphabetically sorted keys and a trailing newline.
+    Processes a JSON file and recursively processes all JSON files
+    contained in its associated folder hierarchy.
     """
-    print(f"Starting process for: {json_file_path}")
-    main_json_path = Path(json_file_path)
-
-    # Check if the main JSON file exists
-    if not main_json_path.exists():
-        print(f"Error: Main JSON file not found at {json_file_path}")
-        return
 
     # Determine the associated folder path
     # The folder name is the JSON filename without the final extension (.json)
     # e.g., 'DerPfadnachCarcosa.6ad5dd.json' -> 'DerPfadnachCarcosa.6ad5dd'
-    folder_name = main_json_path.stem
-    associated_folder_path = main_json_path.parent / folder_name
-    print(f"Looking for contained objects in folder: {associated_folder_path}")
+    associated_folder_path = json_file_path.parent / json_file_path.stem
 
-    # Get the list of file names from the associated folder
+    if not associated_folder_path.exists():
+        return
+
+    print(f"  Looking for contained objects in: {associated_folder_path}")
+
+    # Get direct children only
     contained_objects_list = get_contained_file_names(associated_folder_path)
-    print(f"Found {len(contained_objects_list)} json files.")
 
     # Parse the JSON file
-    with open(main_json_path, "r", encoding="utf-8") as f:
+    with json_file_path.open("r", encoding="utf-8") as f:
         data: Dict[str, Any] = json.load(f)
 
     # Update the 'ContainedObjects_order' key
     data["ContainedObjects_order"] = contained_objects_list
 
     # Save the file: keys sorted alphabetically and ending with a newline
-    with open(main_json_path, "w", encoding="utf-8") as f:
+    with json_file_path.open("w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False, sort_keys=True)
         f.write("\n")
 
-    print(f"Updated 'ContainedObjects_order' in {json_file_path}")
+    print(f"    Updated 'ContainedObjects_order' ({len(contained_objects_list)} objects).")
+
+    # Recursively process nested JSON files.
+    if associated_folder_path.is_dir():
+        for nested_json_path in sorted(
+            associated_folder_path.rglob("*.json"),
+            key=lambda path: str(path).lower(),
+        ):
+            process_json_contained_objects(nested_json_path)
 
 
 if __name__ == "__main__":
@@ -75,16 +80,18 @@ if __name__ == "__main__":
         print("No path provided.")
         sys.exit(1)
 
-    target_path = sys.argv[1]
+    target_path = Path(sys.argv[1])
 
-    if os.path.isfile(target_path) and target_path.lower().endswith(".json"):
-        print(f"Single file detected.")
+    if target_path.is_file() and target_path.suffix.lower() == ".json":
+        print("Single file detected.")
         process_json_contained_objects(target_path)
-    elif os.path.isdir(target_path):
-        print(f"Folder detected. Checking contents...")
-        for entry in os.listdir(target_path):
-            full_path = os.path.join(target_path, entry)
-            if os.path.isfile(full_path) and full_path.lower().endswith(".json"):
-                process_json_contained_objects(full_path)
+
+    elif target_path.is_dir():
+        print("Folder detected. Checking contents...")
+
+        for entry in target_path.iterdir():
+            if entry.is_file() and entry.suffix.lower() == ".json":
+                process_json_contained_objects(entry)
+
     else:
-        print(f"Error: Path is invalid.")
+        print("Error: Path is invalid.")
