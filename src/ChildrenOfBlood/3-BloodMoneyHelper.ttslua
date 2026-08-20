@@ -1,0 +1,253 @@
+local ChaosBagApi        = require("chaosbag/ChaosBagApi")
+local CoroutineLib       = require("util/CoroutineLib")
+local DeckLib            = require("util/DeckLib")
+local GUIDReferenceApi   = require("core/GUIDReferenceApi")
+local HelperLib          = require("HelperLib")
+local MythosAreaApi      = require("mythos/MythosAreaApi")
+local PlayAreaApi        = require("playarea/PlayAreaApi")
+local TableLib           = require("util/TableLib")
+
+local FACEDOWN           = Vector(0, 270, 180)
+local FACEUP             = Vector(0, 270, 0)
+local SPAWN_GRIDS        = {
+  ["13076"] = { 0, 0 },   -- Foyer
+  ["13077"] = { 1, 1 },   -- Dining Hall
+  ["13078"] = { -1, 1 },  -- Study
+  ["13080"] = { 2, 1 },   -- Kitchen
+  ["13081"] = { -2, 1 },  -- Office
+  ["13083"] = { 1.35, 1 } -- Priscilla Thomas (at Dining Hall)
+}
+
+local DIFFICULTY_CONFIGS = {
+  Easy     = { referenceRotation = 0, howardId = "13084", juliaId = "13087" },
+  Standard = { referenceRotation = 0, howardId = "13085", juliaId = "13088" },
+  Hard     = { referenceRotation = 180, howardId = "13086", juliaId = "13089" },
+  Expert   = { referenceRotation = 180, howardId = "13086", juliaId = "13089" }
+}
+
+local setupRunning       = false
+
+function onLoad()
+  self.createButton({
+    label          = "Set Up",
+    click_function = "setup",
+    function_owner = self,
+    position       = { 0, 0.11, 0 },
+    height         = 1120,
+    width          = 3250,
+    scale          = { x = 0.25, y = 0.25, z = 0.25 },
+    font_size      = 650
+  })
+end
+
+function setup(_, playerColor)
+  if setupRunning then return end
+  setupRunning = true
+
+  local function setupCoroutine()
+    -- Ask for difficulty
+    local difficulty = CoroutineLib.showOptionsDialogAndWait(
+      playerColor,
+      "Choose Difficulty:",
+      { "Easy", "Standard", "Hard", "Expert" },
+      "Standard"
+    )
+    local difficultyConfig = DIFFICULTY_CONFIGS[difficulty]
+
+    -- Ask for investigator count
+    local investigatorCount = tonumber(CoroutineLib.showOptionsDialogAndWait(
+      playerColor,
+      "Choose Investigator Count:",
+      { 1, 2, 3, 4 },
+      PlayAreaApi.getInvestigatorCount()
+    ))
+    PlayAreaApi.setInvestigatorCount(investigatorCount)
+
+    -- Ask about Zburamoarte
+    local zburamoarteChoice   = CoroutineLib.showOptionsDialogAndWait(
+      playerColor,
+      "Was Zburamoarte defeated?",
+      { "Yes", "No" }
+    )
+    local zburamoarteDefeated = zburamoarteChoice == "Yes"
+
+    -- Ask about Julia
+    local juliaChoice         = CoroutineLib.showOptionsDialogAndWait(
+      playerColor,
+      "Was Julia Stern killed?",
+      { "Yes", "No" }
+    )
+    local juliaKilled         = juliaChoice == "Yes"
+
+    -- Handle chaos bag setup
+    local trash               = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+    local selector            = getObjectFromGUID("92d5f8")
+    if selector then
+      selector.call("clickFun", difficulty)
+      trash.putObject(selector)
+    end
+
+    CoroutineLib.yieldSeconds(0.25)
+
+    -- Spawn Blood Token Helpers
+    local setupBag = getObjectFromGUID("1eacbb")
+    if setupBag then
+      setupBag.call("buttonClick_spawn")
+    end
+
+    -- Adjust chaos bag
+    local tokenList = ChaosBagApi.getChaosBagState()
+    local cultistCount = 0
+    for _, token in ipairs(tokenList) do
+      if token == "cultist" then
+        cultistCount = cultistCount + 1
+      end
+    end
+
+    if cultistCount < 2 then
+      for i = (2 - cultistCount), 1, -1 do
+        table.insert(tokenList, "cultist")
+      end
+      ChaosBagApi.setChaosBagState(tokenList, true)
+      broadcastToAll("Added " .. 2 - cultistCount .. " Cultist token(s) to the chaos bag.", "White")
+    end
+
+    -- Encounter Sets
+    local listOfSets = {
+      "Blood Money",
+      "Agents of Zburamoarte",
+      "Bloodthirst",
+      "Blood Blight",
+      "Sanguine Secrets",
+      "Children of Blood",
+      "Hunted",
+      "Arcane Lock"
+    }
+
+    if investigatorCount >= 3 then
+      table.insert(listOfSets, "Afflicted")
+    end
+
+    local objList = getObjectsWithTag("CardSource")
+
+    if #objList == 0 then
+      broadcastToAll("Couldn't find campaign card source!", "Red")
+      setupRunning = false
+      return
+    end
+
+    local CardSource = objList[1]
+    local cardList = CardSource.call("getCardsForListOfSets", listOfSets)
+    printToAll(string.format(
+      "Performing setup for  \"%s\" difficulty and %d investigator(s).",
+      difficulty,
+      investigatorCount
+    ))
+
+    -- Agenda Variant
+    local unusedAgenda2 = "13071" -- Feeding Frenzy v.II
+    if zburamoarteDefeated then
+      unusedAgenda2 = "13070"     -- Feeding Frenzy v.I
+    end
+
+    -- Set Aside
+    local mapSetAside = {
+      ["13079"] = true, -- Master Bedroom
+      ["13091"] = true, -- Child of Blood
+      ["13092"] = true, -- Sanguine Rebirth
+      ["13093"] = true, -- Chosen of Zburamoarte
+      ["13097"] = true, -- Spawn of Zburamoarte
+      ["13112"] = true, -- Sanguine Cultist
+      ["13113"] = true, -- Blood-Crazed Zealot
+      [difficultyConfig.howardId] = true
+    }
+
+    local mapRFG = {
+      ["13084"] = true, -- Howard
+      ["13085"] = true, -- Howard
+      ["13086"] = true, -- Howard
+      ["13087"] = true, -- Julia
+      ["13088"] = true, -- Julia
+      ["13089"] = true, -- Julia
+      ["13114"] = true, -- Morbid Rituals
+      [unusedAgenda2] = true
+    }
+    mapRFG[difficultyConfig.howardId] = nil
+
+    -- Julia
+    if not juliaKilled then
+      mapSetAside[difficultyConfig.juliaId] = true
+      mapRFG[difficultyConfig.juliaId] = nil
+    end
+
+    -- Balcony
+    if difficulty == "Easy" or difficulty == "Standard" then
+      mapSetAside["13082"] = true
+    else
+      mapRFG["13082"] = true
+    end
+
+    -- Suspicious Guests
+    local suspiciousGuestsToSpawn = math.min(investigatorCount, 3)
+
+    -- Sort cards
+    local scenarioObjects = {
+      encounterDeck = {},
+      agendaDeck    = {},
+      actDeck       = {},
+      setAside      = {}
+    }
+    for _, card in ipairs(cardList) do
+      local md = card.metadata
+      local id = md.id
+
+      -- skip RFG cards
+      if not mapRFG[id] then
+        if mapSetAside[id] then
+          table.insert(scenarioObjects.setAside, card.data)
+        elseif md.type == "ScenarioReference" then
+          local position = MythosAreaApi.getScenarioReferenceCardPosition()
+          local rotation = MythosAreaApi.getRotation() + Vector(0, 0, difficultyConfig.referenceRotation)
+          DeckLib.spawnCard(card.data, position, rotation)
+        elseif md.type == "Act" then
+          table.insert(scenarioObjects.actDeck, card.data)
+        elseif md.type == "Agenda" then
+          table.insert(scenarioObjects.agendaDeck, card.data)
+        elseif SPAWN_GRIDS[id] then
+          local rotation = (md.type == "Location" and id ~= "13076") and FACEDOWN or FACEUP
+          DeckLib.spawnCard(card.data, PlayAreaApi.gridToWorld(SPAWN_GRIDS[id]), rotation)
+        elseif id == "13090" and suspiciousGuestsToSpawn > 0 then
+          -- Suspicious Guests
+          local locId = "13078" -- Study
+          if suspiciousGuestsToSpawn == 2 then
+            locId = "13081"     -- Office
+          elseif suspiciousGuestsToSpawn == 3 then
+            locId = "13077"     -- Dining Hall
+          end
+          DeckLib.spawnCard(card.data, PlayAreaApi.gridToWorld(SPAWN_GRIDS[locId]) - Vector(0, 0, 3))
+          suspiciousGuestsToSpawn = suspiciousGuestsToSpawn - 1
+        else
+          table.insert(scenarioObjects.encounterDeck, card.data)
+        end
+      end
+    end
+
+    -- Starting Location
+    HelperLib.moveInvestigatorMinis(SPAWN_GRIDS["13076"], "Foyer")
+
+    -- Spawn scenario content
+    HelperLib.spawnMythosDeckOrCard(scenarioObjects.agendaDeck, "Agenda Deck")
+    HelperLib.spawnMythosDeckOrCard(scenarioObjects.actDeck, "Act Deck")
+    HelperLib.spawnMythosDeckOrCard(scenarioObjects.encounterDeck, "Encounter Deck", true)
+    MythosAreaApi.spawnSetAsideChest(scenarioObjects.setAside)
+
+    -- Blood Token Reference
+    local bloodReference = TableLib.copy(CardSource.call("getCardById", "13119"), true)
+    DeckLib.spawnCard(bloodReference.data, MythosAreaApi.getStoryCardPosition(), MythosAreaApi.getRotation())
+
+    printToAll("Setup completed.", "Green")
+    trash.putObject(self)
+  end
+
+  CoroutineLib.start(setupCoroutine)
+end

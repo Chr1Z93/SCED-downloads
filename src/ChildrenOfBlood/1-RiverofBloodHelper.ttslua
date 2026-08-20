@@ -1,0 +1,258 @@
+local CoroutineLib       = require("util/CoroutineLib")
+local DeckLib            = require("util/DeckLib")
+local GUIDReferenceApi   = require("core/GUIDReferenceApi")
+local HelperLib          = require("HelperLib")
+local MythosAreaApi      = require("mythos/MythosAreaApi")
+local PlayAreaApi        = require("playarea/PlayAreaApi")
+local TableLib           = require("util/TableLib")
+
+local FACEDOWN           = Vector(0, 270, 180)
+local LOCATION_GRIDS     = {
+  -- Waterfront Warehouse
+  ["13020"] = { 0, 2 },
+  ["13021"] = { 0, 2 },
+
+  -- Garrison Street
+  ["13010"] = { -1, 1 },
+  ["13011"] = { -1, 1 },
+
+  -- Water Street
+  ["13008"] = { 1, 1 },
+  ["13009"] = { 1, 1 },
+
+  -- Erwin Bridge
+  ["13016"] = { 0, 0 },
+  ["13017"] = { 0, 0 },
+
+  -- Unvisited Isle
+  ["13018"] = { -1, 0 },
+  ["13019"] = { -1, 0 },
+
+  -- River Docks
+  ["13012"] = { -1, -1 },
+  ["13013"] = { -1, -1 },
+
+  -- Main Street
+  ["13014"] = { 1, -1 },
+  ["13015"] = { 1, -1 },
+
+  -- Back Alley
+  ["13022"] = { 0, -2 },
+  ["13023"] = { 0, -2 }
+}
+
+local BENEATH_LAIR_GRIDS = { { -0.35, 2 }, { -1.35, 0 }, { -0.35, -2 } }
+
+local DIFFICULTY_CONFIGS = {
+  Easy = {
+    referenceRotation = 0,
+    juliaId           = "13024",
+    locationTrait     = "Dawn",
+    additionalSets    = { "Preyed Upon", "Vermin" }
+  },
+  Standard = {
+    referenceRotation = 0,
+    juliaId           = "13025",
+    locationTrait     = "Dawn",
+    additionalSets    = { "Preyed Upon", "Vermin" }
+  },
+  Hard = {
+    referenceRotation = 180,
+    juliaId           = "13026",
+    locationTrait     = "Dusk",
+    additionalSets    = { "Agents of Zburamoarte", "Mongrels" }
+  },
+  Expert = {
+    referenceRotation = 180,
+    juliaId           = "13026",
+    locationTrait     = "Dusk",
+    additionalSets    = { "Agents of Zburamoarte", "Mongrels" }
+  }
+}
+
+local setupRunning       = false
+
+function onLoad()
+  self.createButton({
+    label          = "Set Up",
+    click_function = "setup",
+    function_owner = self,
+    position       = { 0, 0.11, 0 },
+    height         = 1120,
+    width          = 3250,
+    scale          = { x = 0.25, y = 0.25, z = 0.25 },
+    font_size      = 650
+  })
+end
+
+function setup(_, playerColor)
+  if setupRunning then return end
+  setupRunning = true
+
+  local function setupCoroutine()
+    -- Ask for difficulty
+    local difficulty = CoroutineLib.showOptionsDialogAndWait(
+      playerColor,
+      "Choose Difficulty:",
+      { "Easy", "Standard", "Hard", "Expert" },
+      "Standard"
+    )
+    local difficultyConfig = DIFFICULTY_CONFIGS[difficulty]
+
+    -- Ask for investigator count
+    local investigatorCount = tonumber(CoroutineLib.showOptionsDialogAndWait(
+      playerColor,
+      "Choose Investigator Count:",
+      { 1, 2, 3, 4 },
+      PlayAreaApi.getInvestigatorCount()
+    ))
+    PlayAreaApi.setInvestigatorCount(investigatorCount)
+
+    -- Gather all relevant encounter sets
+    -- (except for Infected, which is separately handled because it's fully set aside)
+    local listOfSets = {
+      -- CoB sets
+      "River of Blood", "Blood Blight", "Blood Moon", "Children of Blood", "Hunted", "Misinformation",
+      -- Core 2026 sets
+      "Dead Ends", "Flying Terrors"
+    }
+
+    -- Adjust the list based on difficulty
+    for _, setName in ipairs(difficultyConfig.additionalSets) do
+      table.insert(listOfSets, setName)
+    end
+
+    -- Adjust the list based on investigator count
+    if investigatorCount >= 3 then
+      table.insert(listOfSets, "Afflicted")
+    end
+
+    -- Get reference to card source
+    local objList = getObjectsWithTag("CardSource")
+    if #objList == 0 then
+      broadcastToAll("Couldn't find campaign card source!", "Red")
+      setupRunning = false
+      return
+    end
+
+    local CardSource = objList[1]
+
+    -- Handle chaos bag setup
+    local trash      = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+    local selector   = getObjectFromGUID("92d5f8")
+    if selector then
+      selector.call("clickFun", difficulty)
+      trash.putObject(selector)
+    end
+
+    CoroutineLib.yieldSeconds(0.25)
+
+    -- Spawn Blood Token Helpers
+    local setupBag = getObjectFromGUID("1eacbb")
+    if setupBag then
+      setupBag.call("buttonClick_spawn")
+    end
+
+    local mapSetAside                = {
+      ["13110"] = true, -- Night Feeder
+      ["13097"] = true, -- Spawn of Zburamoarte
+      ["13029"] = true, -- Detective Reynolds
+      ["13030"] = true, -- Fang of Zburamoarte
+    }
+    local mapRFG                     = {
+      ["13024"] = true, -- Julia Stern
+      ["13025"] = true, -- Julia Stern
+      ["13026"] = true, -- Julia Stern
+    }
+    mapRFG[difficultyConfig.juliaId] = nil
+
+    -- Get card list (each card has a data and metadata field)
+    local cardList                   = CardSource.call("getCardsForListOfSets", listOfSets)
+    printToAll(string.format(
+      "Performing setup for  \"%s\" difficulty and %d investigator(s).",
+      difficulty,
+      investigatorCount
+    ))
+
+    -- Handling for Civilians
+    local civiliansToSpawn = (investigatorCount > 2) and 2 or 1
+
+    -- Sort cards
+    local lairCardList     = {}
+    local scenarioObjects  = {
+      setAside      = {},
+      encounterDeck = {},
+      actDeck       = {},
+      agendaDeck    = {}
+    }
+    for _, card in ipairs(cardList) do
+      local md = card.metadata
+      local id = md.id
+
+      -- skip RFG cards
+      if not mapRFG[id] then
+        if mapSetAside[id] then
+          table.insert(scenarioObjects.setAside, card.data)
+        elseif md.type == "ScenarioReference" then
+          local position = MythosAreaApi.getScenarioReferenceCardPosition()
+          local rotation = MythosAreaApi.getRotation() + Vector(0, 0, difficultyConfig.referenceRotation)
+          DeckLib.spawnCard(card.data, position, rotation)
+        elseif md.type == "Act" then
+          table.insert(scenarioObjects.actDeck, card.data)
+        elseif md.type == "Agenda" then
+          table.insert(scenarioObjects.agendaDeck, card.data)
+        elseif md.type == "Location" then
+          if string.contains(md.traits, difficultyConfig.locationTrait) then
+            DeckLib.spawnCard(card.data, PlayAreaApi.gridToWorld(LOCATION_GRIDS[id]), FACEDOWN)
+          end
+        elseif id == "13027" then -- Waterfront Civilian
+          if civiliansToSpawn == 2 then
+            civiliansToSpawn = civiliansToSpawn - 1
+            DeckLib.spawnCard(card.data, PlayAreaApi.gridToWorld({ -0.65, 1 })) -- at Garrison Street
+          elseif civiliansToSpawn == 1 then
+            civiliansToSpawn = civiliansToSpawn - 1
+            DeckLib.spawnCard(card.data, PlayAreaApi.gridToWorld({ 1.35, -1 })) -- at Main Street
+          else
+            table.insert(scenarioObjects.setAside, card.data)
+          end
+        elseif id == difficultyConfig.juliaId then
+          table.insert(lairCardList, card.data)
+        else
+          table.insert(scenarioObjects.encounterDeck, card.data)
+        end
+      end
+    end
+
+    -- Starting Location
+    HelperLib.moveInvestigatorMinis(LOCATION_GRIDS["13008"], "Water Street")
+
+    -- Shuffle Julia with two random cards
+    table.insert(lairCardList, TableLib.pickRandom(scenarioObjects.encounterDeck, true))
+    table.insert(lairCardList, TableLib.pickRandom(scenarioObjects.encounterDeck, true))
+    TableLib.shuffle(lairCardList)
+
+    -- Place beneath each Lair location
+    for i, cardData in ipairs(lairCardList) do
+      DeckLib.spawnCard(cardData, PlayAreaApi.gridToWorld(BENEATH_LAIR_GRIDS[i]), Vector(0, 270, 180))
+    end
+
+    -- Handle Infected
+    local infectedDeckData = TableLib.copy(CardSource.call("getDeckDataForSet", "Infected"), true)
+    table.insert(scenarioObjects.setAside, infectedDeckData)
+
+    -- Spawn scenario content
+    HelperLib.spawnMythosDeckOrCard(scenarioObjects.agendaDeck, "Agenda Deck")
+    HelperLib.spawnMythosDeckOrCard(scenarioObjects.actDeck, "Act Deck")
+    HelperLib.spawnMythosDeckOrCard(scenarioObjects.encounterDeck, "Encounter Deck", true)
+    MythosAreaApi.spawnSetAsideChest(scenarioObjects.setAside)
+
+    -- Blood Reference Card
+    local bloodReference = TableLib.copy(CardSource.call("getCardById", "13119"), true)
+    DeckLib.spawnCard(bloodReference.data, MythosAreaApi.getStoryCardPosition(), MythosAreaApi.getRotation())
+
+    printToAll("Setup completed.", "Green")
+    trash.putObject(self)
+  end
+
+  CoroutineLib.start(setupCoroutine)
+end
