@@ -194,8 +194,9 @@ function setup(_, playerColor)
       [difficultyConfig.cavernId] = true, -- Cavern Entrance
     }
 
+    local mapChambers = {}
     for _, id in ipairs(difficultyConfig.sideChambers) do
-      mapSetAside[id] = true
+      mapChambers[id] = true
     end
 
     local mapRFG = {
@@ -227,6 +228,7 @@ function setup(_, playerColor)
       agendaDeck    = {},
       setAside      = {}
     }
+    local sideChambers = {}
     for _, card in ipairs(cardList) do
       local md = card.metadata
       local id = md.id
@@ -234,7 +236,14 @@ function setup(_, playerColor)
       -- skip RFG cards
       if not mapRFG[id] then
         if mapSetAside[id] then
+          -- flip set aside locations
+          if md.type == "Location" then
+            card.data.Transform.rotZ = 180
+          end
           table.insert(scenarioObjects.setAside, card.data)
+        elseif mapChambers[id] then
+          card.data.Transform.rotZ = 180
+          table.insert(sideChambers, card.data)
         elseif md.type == "ScenarioReference" then
           local position = MythosAreaApi.getScenarioReferenceCardPosition()
           local rotation = MythosAreaApi.getRotation() + Vector(0, 0, difficultyConfig.referenceRotation)
@@ -276,6 +285,11 @@ function setup(_, playerColor)
     -- Handle Charlie
     local charlie = TableLib.copy(CardSource.call("getCardById", "13105"), true)
     table.insert(scenarioObjects.setAside, charlie.data)
+
+    -- Handle set aside side chambers
+    local locationDeckData = DeckLib.generateDeckData(sideChambers, Vector(0, 0, 0), Vector(0, 270, 180))
+    locationDeckData.Nickname = "Side Chambers"
+    table.insert(scenarioObjects.setAside, locationDeckData)
 
     -- Spawn scenario content
     HelperLib.spawnMythosDeckOrCard(scenarioObjects.agendaDeck, "Agenda Deck")
