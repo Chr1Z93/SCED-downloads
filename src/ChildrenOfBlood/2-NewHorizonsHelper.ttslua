@@ -291,6 +291,9 @@ function setup(_, playerColor)
     locationDeckData.Nickname = "Side Chambers"
     table.insert(scenarioObjects.setAside, locationDeckData)
 
+    -- Apply custom sort to set aside
+    table.sort(scenarioObjects.setAside, sortSetAside)
+
     -- Spawn scenario content
     HelperLib.spawnMythosDeckOrCard(scenarioObjects.agendaDeck, "Agenda Deck")
     HelperLib.spawnMythosDeckOrCard(scenarioObjects.actDeck, "Act Deck")
@@ -306,4 +309,61 @@ function setup(_, playerColor)
   end
 
   CoroutineLib.start(setupCoroutine)
+end
+
+function sortSetAside(a, b)
+  -- Return true if a should come before b
+
+  local function getType(object)
+    local md = JSON.decode(object.GMNotes or "")
+    return md and md.type
+  end
+
+  local function getId(object)
+    local md = JSON.decode(object.GMNotes or "")
+    return md and md.id
+  end
+
+  -- Lower number = earlier in the set-aside chest
+  local priority = {
+    ["13049"] = 10, -- Cavern (Easy/Standard)
+    ["13050"] = 10, -- Cavern (Hard/Expert)
+    ["Set: Flying Terrors"] = 15,
+    ["13065"] = 20, -- Echoing in Darkness
+    ["Side Chambers"] = 30,
+    Asset = 900,
+    ["Set: Infected"] = 901
+  }
+
+  local function getPriority(object)
+    local objectNickname = object.Nickname
+    local id = getId(object)
+    local objectType = getType(object)
+
+    -- Specific cards and decks override type-based rules
+    if objectNickname and priority[objectNickname] then
+      return priority[objectNickname]
+    end
+
+    if id and priority[id] then
+      return priority[id]
+    end
+
+    -- General type-based rules
+    if objectType and priority[objectType] then
+      return priority[objectType]
+    end
+
+    -- Everything else goes here
+    return 500
+  end
+
+  local priorityA = getPriority(a)
+  local priorityB = getPriority(b)
+
+  if priorityA ~= priorityB then
+    return priorityA > priorityB
+  end
+
+  return false
 end
