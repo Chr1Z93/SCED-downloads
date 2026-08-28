@@ -170,17 +170,24 @@ function setup(_, playerColor)
     if zburamoarteDefeated then
       unusedAgenda2 = "13070"     -- Feeding Frenzy v.I
     end
+    local cultistDeck = {}
+    local mapCultists = {
+      ["13112"] = true, -- Sanguine Cultist
+      ["13113"] = true, -- Blood-Crazed Zealot
+    }
+
+    local childrenDeck = {}
+    local mapChildren = {
+      ["13091"] = true, -- Child of Blood
+      ["13103"] = true, -- Child of Blood (from Blood Money)
+    }
 
     -- Set Aside
     local mapSetAside = {
       ["13079"] = true, -- Master Bedroom
-      ["13091"] = true, -- Child of Blood
-      ["13103"] = true, -- Child of Blood
       ["13092"] = true, -- Sanguine Rebirth
       ["13093a"] = true, -- Chosen of Zburamoarte
       ["13097"] = true, -- Spawn of Zburamoarte
-      ["13112"] = true, -- Sanguine Cultist
-      ["13113"] = true, -- Blood-Crazed Zealot
       [difficultyConfig.howardId] = true
     }
 
@@ -231,6 +238,10 @@ function setup(_, playerColor)
             card.data.Transform.rotZ = 180
           end
           table.insert(scenarioObjects.setAside, card.data)
+        elseif mapCultists[id] then
+          table.insert(cultistDeck, card.data)
+        elseif mapChildren[id] then
+          table.insert(childrenDeck, card.data)
         elseif md.type == "ScenarioReference" then
           local position = MythosAreaApi.getScenarioReferenceCardPosition():setAt("y", 2.5)
           local rotation = MythosAreaApi.getRotation() + Vector(0, 0, difficultyConfig.referenceRotation)
@@ -261,6 +272,23 @@ function setup(_, playerColor)
     -- Starting Location
     HelperLib.moveInvestigatorMinis(SPAWN_GRIDS["13076"], "Foyer")
 
+    -- Handle Infected (not in campaign guide but necessary for resolutions)
+    local infectedDeckData = TableLib.copy(CardSource.call("getDeckDataForSet", "Infected"), true)
+    table.insert(scenarioObjects.setAside, infectedDeckData)
+
+    -- Handle set aside cultists
+    local cultistDeckData = DeckLib.generateDeckData(cultistDeck)
+    cultistDeckData.Nickname = "Set-Aside Cultists"
+    table.insert(scenarioObjects.setAside, cultistDeckData)
+
+    -- Handle set aside Children of Blood enemies
+    local childrenDeckData = DeckLib.generateDeckData(childrenDeck)
+    childrenDeckData.Nickname = "Set-Aside Children of Blood"
+    table.insert(scenarioObjects.setAside, childrenDeckData)
+
+    -- Apply custom sort to set aside
+    table.sort(scenarioObjects.setAside, sortSetAside)
+
     -- Spawn scenario content
     HelperLib.spawnMythosDeckOrCard(scenarioObjects.agendaDeck, "Agenda Deck")
     HelperLib.spawnMythosDeckOrCard(scenarioObjects.actDeck, "Act Deck")
@@ -276,4 +304,63 @@ function setup(_, playerColor)
   end
 
   CoroutineLib.start(setupCoroutine)
+end
+
+function sortSetAside(a, b)
+  -- Return true if a should come before b
+
+  local function getType(object)
+    local md = JSON.decode(object.GMNotes or "")
+    return md and md.type
+  end
+
+  local function getId(object)
+    local md = JSON.decode(object.GMNotes or "")
+    return md and md.id
+  end
+
+  -- Lower number = earlier in the set-aside chest
+  local priority = {
+    ["Set-Aside Cultists"] = 10,
+    ["13092"] = 20, -- Sanguine Rebirth
+    ["13079"] = 501, -- Master Bedroom
+    ["13082"] = 502, -- Balcony
+    ["13084"] = 503, -- Howard
+    ["13085"] = 503, -- Howard
+    ["13086"] = 503, -- Howard
+    ["Set: Infected"] = 599,
+    ["13093a"] = 600
+  }
+
+  local function getPriority(object)
+    local objectNickname = object.Nickname
+    local id = getId(object)
+    local objectType = getType(object)
+
+    -- Specific cards and decks override type-based rules
+    if objectNickname and priority[objectNickname] then
+      return priority[objectNickname]
+    end
+
+    if id and priority[id] then
+      return priority[id]
+    end
+
+    -- General type-based rules
+    if objectType and priority[objectType] then
+      return priority[objectType]
+    end
+
+    -- Everything else goes here
+    return 500
+  end
+
+  local priorityA = getPriority(a)
+  local priorityB = getPriority(b)
+
+  if priorityA ~= priorityB then
+    return priorityA > priorityB
+  end
+
+  return false
 end
