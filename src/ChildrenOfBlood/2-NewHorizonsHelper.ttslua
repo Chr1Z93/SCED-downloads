@@ -3,6 +3,7 @@ local CoroutineLib       = require("util/CoroutineLib")
 local DeckLib            = require("util/DeckLib")
 local GUIDReferenceApi   = require("core/GUIDReferenceApi")
 local HelperLib          = require("HelperLib")
+local i18nApi            = require("Global/i18nApi")
 local MythosAreaApi      = require("mythos/MythosAreaApi")
 local PlayAreaApi        = require("playarea/PlayAreaApi")
 local TableLib           = require("util/TableLib")
@@ -84,7 +85,7 @@ end
 function setup(_, playerColor)
   if setupRunning then
     Player[playerColor].showConfirmDialog(
-      "Setup already running. Do you want to restart it?",
+      i18nApi.getStrById("SetupAlreadyRunning"),
       function()
         self.script_state = JSON.encode({ setupColor = playerColor })
         self.reload()
@@ -194,8 +195,9 @@ function setup(_, playerColor)
       [difficultyConfig.cavernId] = true, -- Cavern Entrance
     }
 
+    local mapChambers = {}
     for _, id in ipairs(difficultyConfig.sideChambers) do
-      mapSetAside[id] = true
+      mapChambers[id] = true
     end
 
     local mapRFG = {
@@ -227,6 +229,7 @@ function setup(_, playerColor)
       agendaDeck    = {},
       setAside      = {}
     }
+    local sideChambers = {}
     for _, card in ipairs(cardList) do
       local md = card.metadata
       local id = md.id
@@ -234,9 +237,16 @@ function setup(_, playerColor)
       -- skip RFG cards
       if not mapRFG[id] then
         if mapSetAside[id] then
+          -- flip set aside locations
+          if md.type == "Location" then
+            card.data.Transform.rotZ = 180
+          end
           table.insert(scenarioObjects.setAside, card.data)
+        elseif mapChambers[id] then
+          card.data.Transform.rotZ = 180
+          table.insert(sideChambers, card.data)
         elseif md.type == "ScenarioReference" then
-          local position = MythosAreaApi.getScenarioReferenceCardPosition()
+          local position = MythosAreaApi.getScenarioReferenceCardPosition():setAt("y", 2.5)
           local rotation = MythosAreaApi.getRotation() + Vector(0, 0, difficultyConfig.referenceRotation)
           DeckLib.spawnCard(card.data, position, rotation)
         elseif md.type == "Act" then
@@ -277,6 +287,14 @@ function setup(_, playerColor)
     local charlie = TableLib.copy(CardSource.call("getCardById", "13105"), true)
     table.insert(scenarioObjects.setAside, charlie.data)
 
+    -- Handle set aside side chambers
+    local locationDeckData = DeckLib.generateDeckData(sideChambers, Vector(0, 0, 0), Vector(0, 270, 180))
+    locationDeckData.Nickname = "Side Chambers"
+    table.insert(scenarioObjects.setAside, locationDeckData)
+
+    -- Apply custom sort to set aside
+    table.sort(scenarioObjects.setAside, sortSetAside)
+
     -- Spawn scenario content
     HelperLib.spawnMythosDeckOrCard(scenarioObjects.agendaDeck, "Agenda Deck")
     HelperLib.spawnMythosDeckOrCard(scenarioObjects.actDeck, "Act Deck")
@@ -292,4 +310,61 @@ function setup(_, playerColor)
   end
 
   CoroutineLib.start(setupCoroutine)
+end
+
+function sortSetAside(a, b)
+  -- Return true if a should come before b
+
+  local function getType(object)
+    local md = JSON.decode(object.GMNotes or "")
+    return md and md.type
+  end
+
+  local function getId(object)
+    local md = JSON.decode(object.GMNotes or "")
+    return md and md.id
+  end
+
+  -- Lower number = earlier in the set-aside chest
+  local priority = {
+    ["13049"] = 10, -- Cavern (Easy/Standard)
+    ["13050"] = 10, -- Cavern (Hard/Expert)
+    ["Set: Flying Terrors"] = 15,
+    ["13065"] = 20, -- Echoing in Darkness
+    ["Side Chambers"] = 30,
+    Asset = 900,
+    ["Set: Infected"] = 901
+  }
+
+  local function getPriority(object)
+    local objectNickname = object.Nickname
+    local id = getId(object)
+    local objectType = getType(object)
+
+    -- Specific cards and decks override type-based rules
+    if objectNickname and priority[objectNickname] then
+      return priority[objectNickname]
+    end
+
+    if id and priority[id] then
+      return priority[id]
+    end
+
+    -- General type-based rules
+    if objectType and priority[objectType] then
+      return priority[objectType]
+    end
+
+    -- Everything else goes here
+    return 500
+  end
+
+  local priorityA = getPriority(a)
+  local priorityB = getPriority(b)
+
+  if priorityA ~= priorityB then
+    return priorityA > priorityB
+  end
+
+  return false
 end
