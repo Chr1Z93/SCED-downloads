@@ -7,6 +7,7 @@ do
   local PlayermatApi  = require("playermat/PlayermatApi")
   local SearchLib     = require("util/SearchLib")
   local TableLib      = require("util/TableLib")
+  local TokenManagerApi = require("tokens/TokenManagerApi")
 
   local OFFSET_X      = 2
   local OFFSET_Z      = 2
@@ -119,6 +120,27 @@ do
       end
       return spawnObjectData({ data = deckdata })
     end
+  end
+
+  function HelperLib.replenishLocation(card)
+    local md = JSON.decode(card.getGMNotes()) or {}
+    
+    -- determine specific metadata
+    local specificMd = card.is_face_down and md.locationBack or md.locationFront
+    if not specificMd or not specificMd.uses then return end
+
+    -- create "fake" replenishing data
+    for _, useInfo in ipairs(specificMd.uses) do
+      if useInfo.type == "Clue" then
+        useInfo.replenish = 99
+
+        if useInfo.countPerInvestigator then
+          useInfo.count = useInfo.countPerInvestigator * PlayAreaApi.getInvestigatorCount()
+        end
+      end
+    end
+
+    TokenManagerApi.maybeReplenishCard(card, specificMd.uses)
   end
 
   return HelperLib
