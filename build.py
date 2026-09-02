@@ -37,8 +37,8 @@ def exec_mod_manager(input_path, output_path):
 
 
 def sanitize_name(name):
-    # Here we remove all occurrences of '(' and ')'
-    return name.replace("(", "").replace(")", "").strip()
+    # Here we remove all occurrences of '(',')' and ','
+    return name.replace("(", "").replace(")", "").replace(",", "").strip()
 
 
 def __main__():
