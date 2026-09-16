@@ -30,7 +30,7 @@ EXCLUDED_FOLDERS = {
     "Darkham Horror",
     "Jumanji",
     "Night of Vespers",
-    "Rise, Rapture, Rise",
+    "Rise Rapture Rise",
     "The Crown of Egil",
     "The Ghosts of Onigawa",
     "Unofficial Return to The Scarlet Keys",
