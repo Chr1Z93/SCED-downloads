@@ -55,6 +55,11 @@ def process_json_contained_objects(json_file_path: Path):
     with json_file_path.open("r", encoding="utf-8") as f:
         data: Dict[str, Any] = json.load(f)
 
+    # Skip objects with states
+    if "States_path" in data:
+        print(f"  Parent object has states, skipping.")
+        return
+
     # Update the 'ContainedObjects_order' key
     data["ContainedObjects_order"] = contained_objects_list
 
