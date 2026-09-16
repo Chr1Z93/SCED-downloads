@@ -65,8 +65,8 @@ def get_base_command(script_dir):
     binary_name = binary_map.get(PLATFORM, "TTSModManager")
     binary_path = script_dir / "bin" / binary_name
 
-    if binary_path.is_file():
-        return [str(binary_path)], False
+    #if binary_path.is_file():
+    #    return [str(binary_path)], False
     return ["go", "run", "main.go"], True
 
 
