@@ -30,7 +30,7 @@ EXCLUDED_FOLDERS = {
     "Darkham Horror",
     "Jumanji",
     "Night of Vespers",
-    "Rise, Rapture, Rise",
+    "Rise Rapture Rise",
     "The Crown of Egil",
     "The Ghosts of Onigawa",
     "Unofficial Return to The Scarlet Keys",
@@ -447,11 +447,13 @@ if __name__ == "__main__":
     # Find and Group Folders
     all_languages = find_language_folders()
 
-    print("\n" + "=" * 67)
+    all_english_items = 0
+
+    print("\n" + "=" * 64)
     print(
-        f"{'Language':<20} {'Progress':>10} {'Stats':>13} {'Orphans':>10} {'No-ID':>10}"
+        f"{'Language':<20} {'Progress':>10} {'Matches':>10} {'Orphans':>10} {'No-ID':>10}"
     )
-    print("-" * 67)
+    print("-" * 64)
 
     for lang_name, paths in sorted(all_languages.items()):
         # Aggregate IDs from all folders associated with this language
@@ -477,13 +479,13 @@ if __name__ == "__main__":
         overall_pct = (total_found / total_required * 100) if total_required > 0 else 0
 
         # Aligned Console Output
-        # Language: 20, Progress: 10 (8 for num + 2 for ' %'), Stats: 13, Orphans: 10, No-ID: 10
+        # Language: 20, Progress: 10 (8 for num + 2 for ' %'), Matches: 10, Orphans: 10, No-ID: 10
         pct_str = f"{overall_pct:>7.2f} %"
-        stats_str = f"{total_found} / {total_required}"
+        matches_str = f"{total_found}"
         print(
             f"{lang_name:<20} "  # Column 1
             f"{pct_str:>10} "  # Column 2
-            f"{stats_str:>13} "  # Column 3
+            f"{matches_str:>10} "  # Column 3
             f"{len(orphans):>10} "  # Column 4
             f"{len(aggregated_no_ids):>10}"  # Column 5
         )
@@ -498,5 +500,8 @@ if __name__ == "__main__":
             total_required,
         )
 
+        all_english_items = total_required
+
     print("-" * 67)
-    print(f"\nFull reports saved to: {REPORT_PATH}")
+    print(f"\nTotal english items: {all_english_items}")
+    print(f"Full reports saved to: {REPORT_PATH}")

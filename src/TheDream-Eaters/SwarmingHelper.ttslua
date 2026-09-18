@@ -1,0 +1,87 @@
+local DeckLib         = require("util/DeckLib")
+local PlayermatApi    = require("playermat/PlayermatApi")
+local Zones           = require("playermat/Zones")
+
+local VALID_MATCOLORS = {
+  White  = true,
+  Orange = true,
+  Green  = true,
+  Red    = true
+}
+
+local lastprocessedCard
+
+function onLoad()
+  self.UI.setXmlTable({
+    {
+      tag = "Button",
+      attributes = {
+        onClick        = "markPlayerCards",
+        position       = "0 -150 -6",
+        rotation       = "0 0 180",
+        scale          = "0.1 0.1 1",
+        color          = "#ffffffdd",
+        outline        = "#000000dd",
+        outlineSize    = "25 25",
+        shadow         = "#000000dd",
+        shadowDistance = "35 -35",
+        width          = 2500,
+        height         = 800,
+        fontSize       = 270,
+        text           = "Mark Player Cards"
+      }
+    }
+  })
+end
+
+function markPlayerCards()
+  for matColor, _ in pairs(VALID_MATCOLORS) do
+    for _, obj in ipairs(PlayermatApi.searchAroundPlayermat(matColor, "isCardOrDeck")) do
+      if not obj.hasTag("Investigator") and not obj.hasTag("Minicard") then
+        if obj.type == "Card" then
+          obj.setMemo(matColor)
+        elseif obj.type == "Deck" then
+          local data = obj.getData()
+          for _, cardData in ipairs(data.ContainedObjects) do
+            cardData.Memo = matColor
+          end
+          obj.destruct()
+          spawnObjectData({ data = data })
+        end
+      end
+    end
+  end
+  broadcastToAll("Marked all player cards.")
+end
+
+function readMark(card)
+  local matColor = card.getMemo()
+  if VALID_MATCOLORS[matColor] then
+    return matColor
+  end
+end
+
+function onCollisionEnter(collisionInfo)
+  local obj = collisionInfo.collision_object
+  if obj.type ~= "Card" or obj == lastprocessedCard then return end
+  lastprocessedCard = obj
+
+  Wait.time(function()
+    if not lastProcessedCard or lastProcessedCard == obj then
+      lastProcessedCard = nil
+    end
+  end, 0.25)
+
+  local matColor = readMark(obj)
+  if matColor then
+    placeCardBelowPlayerDeck(obj, matColor)
+  else
+    broadcastToAll("Can't determine owner for this card.")
+  end
+end
+
+function placeCardBelowPlayerDeck(card, matColor)
+  local pos = Zones.getZonePosition(matColor, "Deck")
+  local rot = Zones.getDefaultCardRotation(matColor, "Deck")
+  DeckLib.placeOrMergeIntoDeck(card, pos, rot, true)
+end
