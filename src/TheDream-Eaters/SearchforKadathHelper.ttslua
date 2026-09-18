@@ -3,6 +3,7 @@ local GUIDReferenceApi  = require("core/GUIDReferenceApi")
 local HelperLib         = require("HelperLib")
 local MythosAreaApi     = require("mythos/MythosAreaApi")
 local PlayAreaApi       = require("playarea/PlayAreaApi")
+local PlayermatApi      = require("playermat/PlayermatApi")
 local VictoryDisplayApi = require("mythos/VictoryDisplayApi")
 
 local SET_ASIDE         = {
@@ -207,11 +208,11 @@ function cleanZone()
 
     if not handled and obj.type == "Card" and obj.hasTag("ScenarioCard") then
       local md = HelperLib.getMetadata(obj)
-      -- move enemies and treacheries to the encounter deck
+      -- move enemies and treacheries to the encounter discard pile
       if md.type == "Enemy" or md.type == "Treachery" then
-        encounterDeckObjects = MythosAreaApi.getEncounterDeckObjects()
-        encounterDeckObjects.draw.putObject(obj)
-        CoroutineLib.yieldCondition(function() return obj == nil end, 2)
+        obj.setPosition(MythosAreaApi.getEncounterDiscardPosition() + Vector(0, 5, 0))
+        obj.setRotation(MythosAreaApi.getRotation())
+        CoroutineLib.yieldCondition(function() return obj == nil end, 1)
         CoroutineLib.yieldSeconds(0.5)
       elseif obj.hasTag("Location") then
         -- move locations to victory display or set aside
@@ -230,6 +231,22 @@ function cleanZone()
     end
   end
 
+  -- clean the threat areas of enemies
+  local usedMats = PlayermatApi.getUsedMatColors()
+  for i = 1, #usedMats do
+    for _, obj in ipairs(PlayermatApi.searchThreatArea("isCard", usedMats[i])) do
+      if not obj.is_face_down then
+        local md = HelperLib.getMetadata(obj)
+        if md.type == "Enemy" and obj.hasTag("ScenarioCard") then
+          obj.setPosition(MythosAreaApi.getEncounterDiscardPosition() + Vector(0, 5, 0))
+          obj.setRotation(MythosAreaApi.getRotation())
+          CoroutineLib.yieldCondition(function() return obj == nil end, 1)
+          CoroutineLib.yieldSeconds(0.5)
+        end
+      end
+    end
+  end
+
   -- add in copies of Priest of A Thousand Masks
   local chest = MythosAreaApi.getSetAsideChest()
   for _, object in ipairs(chest.getObjects()) do
@@ -241,6 +258,7 @@ function cleanZone()
       break
     end
   end
+  broadcastToAll("Discard any player card enemies manually.", "Orange")
 end
 
 -- loop in reverse since we are removing cards from the deck and that changes the index
@@ -336,7 +354,7 @@ function placeEnemyFromContainer(id, name, container, locationName, side)
       end
     end
   end
-  broadcastToAll("Couldn't find " .. name, "Orange")
+  broadcastToAll("Didn't find enough copies of " .. name .. " in the encounter deck. Proceed without them in play.", "Orange")
 end
 
 function getLocationPositionByName(locationName)
