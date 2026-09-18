@@ -1,4 +1,5 @@
 local CoroutineLib      = require("util/CoroutineLib")
+local DeckLib           = require("util/DeckLib")
 local GUIDReferenceApi  = require("core/GUIDReferenceApi")
 local HelperLib         = require("HelperLib")
 local MythosAreaApi     = require("mythos/MythosAreaApi")
@@ -191,6 +192,9 @@ function cleanZone()
   local objects = zone.getObjects()
   table.insert(objects, encounterDeckObjects.draw)
 
+  local encounterDiscardPosition = MythosAreaApi.getEncounterDiscardPosition()
+  local encounterDiscardRotation = MythosAreaApi.getRotation()
+
   for _, obj in ipairs(objects) do
     local handled = false
 
@@ -210,9 +214,7 @@ function cleanZone()
       local md = HelperLib.getMetadata(obj)
       -- move enemies and treacheries to the encounter discard pile
       if md.type == "Enemy" or md.type == "Treachery" then
-        obj.setPosition(MythosAreaApi.getEncounterDiscardPosition() + Vector(0, 5, 0))
-        obj.setRotation(MythosAreaApi.getRotation())
-        CoroutineLib.yieldCondition(function() return obj == nil end, 1)
+        DeckLib.placeOrMergeIntoDeck(obj, encounterDiscardPosition, encounterDiscardRotation)
         CoroutineLib.yieldSeconds(0.5)
       elseif obj.hasTag("Location") then
         -- move locations to victory display or set aside
@@ -231,16 +233,12 @@ function cleanZone()
     end
   end
 
-  -- clean the threat areas of enemies
-  local usedMats = PlayermatApi.getUsedMatColors()
-  for i = 1, #usedMats do
-    for _, obj in ipairs(PlayermatApi.searchThreatArea("isCard", usedMats[i])) do
+  for _, matColor in ipairs(PlayermatApi.getUsedMatColors()) do
+    for _, obj in ipairs(PlayermatApi.searchThreatArea("isCard", matColor)) do
       if not obj.is_face_down then
         local md = HelperLib.getMetadata(obj)
         if md.type == "Enemy" and obj.hasTag("ScenarioCard") then
-          obj.setPosition(MythosAreaApi.getEncounterDiscardPosition() + Vector(0, 5, 0))
-          obj.setRotation(MythosAreaApi.getRotation())
-          CoroutineLib.yieldCondition(function() return obj == nil end, 1)
+          DeckLib.placeOrMergeIntoDeck(obj, encounterDiscardPosition, encounterDiscardRotation)
           CoroutineLib.yieldSeconds(0.5)
         end
       end
@@ -253,7 +251,6 @@ function cleanZone()
     if object.guid == "678204" then
       local priests = chest.takeObject({ index = object.index })
       encounterDeckObjects.draw.putObject(priests)
-      CoroutineLib.yieldCondition(function() return priests == nil end, 2)
       CoroutineLib.yieldSeconds(0.5)
       break
     end
