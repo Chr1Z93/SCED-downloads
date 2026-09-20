@@ -1,5 +1,5 @@
 local CoroutineLib      = require("util/CoroutineLib")
-local DeckLib           = require("util/DeckLib")
+local GlobalApi         = require("Global/GlobalApi")
 local GUIDReferenceApi  = require("core/GUIDReferenceApi")
 local HelperLib         = require("HelperLib")
 local MythosAreaApi     = require("mythos/MythosAreaApi")
@@ -192,9 +192,6 @@ function cleanZone()
   local objects = zone.getObjects()
   table.insert(objects, encounterDeckObjects.draw)
 
-  local encounterDiscardPosition = MythosAreaApi.getEncounterDiscardPosition()
-  local encounterDiscardRotation = MythosAreaApi.getRotation()
-
   for _, obj in ipairs(objects) do
     local handled = false
 
@@ -210,19 +207,30 @@ function cleanZone()
       removeCardsFromDeck(obj)
     end
 
-    if not handled and obj.type == "Card" and obj.hasTag("ScenarioCard") then
+    if not handled and obj.type == "Card" then
       local md = HelperLib.getMetadata(obj)
       -- move enemies and treacheries to the encounter discard pile
-      if md.type == "Enemy" or md.type == "Treachery" then
-        DeckLib.placeOrMergeIntoDeck(obj, encounterDiscardPosition, encounterDiscardRotation)
-        CoroutineLib.yieldSeconds(0.5)
-      elseif obj.hasTag("Location") then
+      if obj.hasTag("ScenarioCard") then
+        if md.type == "Enemy" or md.type == "Treachery" and md.id ~= "06150" then
+            GlobalApi.discardObjects(obj, "Mythos")
+            CoroutineLib.yieldSeconds(0.25)
+        elseif obj.hasTag("Location") then
         -- move locations to victory display or set aside
-        if md.locationFront and md.locationFront.victory and not obj.is_face_down and not HelperLib.cardHasClues(obj) then
-          PlayAreaApi.maybeUntrackLocation(obj)
-          VictoryDisplayApi.placeCard(obj)
+          if md.locationFront and md.locationFront.victory and not obj.is_face_down and not HelperLib.cardHasClues(obj) then
+            PlayAreaApi.maybeUntrackLocation(obj)
+            VictoryDisplayApi.placeCard(obj)
+          else
+            obj.setPosition(SET_ASIDE.position + Vector(0, 1, 0))
+          end
+        end
+      -- move player cards (enemies, attachments, etc.) to owner's discard pile if known
+      elseif obj.hasTag("PlayerCard") and not obj.hasTag("Location") then
+        local discardForMat = HelperLib.readMark(obj) or nil
+        if discardForMat ~= nil then
+          GlobalApi.discardObjects(obj, discardForMat)
+          CoroutineLib.yieldSeconds(0.25)
         else
-          obj.setPosition(SET_ASIDE.position + Vector(0, 1, 0))
+          broadcastToAll("Discard any other player card enemies & attachments manually.", "Orange")
         end
       end
     end
@@ -232,14 +240,24 @@ function cleanZone()
       obj.destruct()
     end
   end
-
+  -- remove enemies from the threat area
   for _, matColor in ipairs(PlayermatApi.getUsedMatColors()) do
     for _, obj in ipairs(PlayermatApi.searchThreatArea("isCard", matColor)) do
       if not obj.is_face_down then
         local md = HelperLib.getMetadata(obj)
-        if md.type == "Enemy" and obj.hasTag("ScenarioCard") then
-          DeckLib.placeOrMergeIntoDeck(obj, encounterDiscardPosition, encounterDiscardRotation)
-          CoroutineLib.yieldSeconds(0.5)
+        if md.type == "Enemy" and md.id ~= "06150" then
+          if obj.hasTag("ScenarioCard") then
+            GlobalApi.discardObjects(obj, "Mythos")
+            CoroutineLib.yieldSeconds(0.25)
+          elseif obj.hasTag("PlayerCard") then
+            local discardForMat = HelperLib.readMark(obj) or nil
+            if discardForMat ~= nil then
+              GlobalApi.discardObjects(obj, discardForMat)
+              CoroutineLib.yieldSeconds(0.25)
+            else
+              broadcastToAll("Discard any other player card enemies manually.", "Orange")
+            end
+          end
         end
       end
     end
@@ -255,7 +273,6 @@ function cleanZone()
       break
     end
   end
-  broadcastToAll("Discard any player card enemies manually.", "Orange")
 end
 
 -- loop in reverse since we are removing cards from the deck and that changes the index
