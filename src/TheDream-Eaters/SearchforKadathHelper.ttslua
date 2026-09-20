@@ -183,6 +183,16 @@ function setup(region)
   CoroutineLib.start(KadathCoroutine)
 end
 
+function discardPlayerCard(obj)
+  local matColor = HelperLib.getMatColorFromMemo(obj) or nil
+  if matColor then
+    GlobalApi.discardObjects(obj, matColor)
+    CoroutineLib.yieldSeconds(0.25)
+  else
+    printToAll("Unknown owner - handle manually: " .. obj.getName(), "Orange")
+  end
+end
+
 function cleanZone()
   -- clean the encounter deck
   local encounterDeckObjects = MythosAreaApi.getEncounterDeckObjects()
@@ -212,10 +222,10 @@ function cleanZone()
       -- move enemies and treacheries to the encounter discard pile
       if obj.hasTag("ScenarioCard") then
         if md.type == "Enemy" or md.type == "Treachery" and md.id ~= "06150" then
-            GlobalApi.discardObjects(obj, "Mythos")
-            CoroutineLib.yieldSeconds(0.25)
+          GlobalApi.discardObjects(obj, "Mythos")
+          CoroutineLib.yieldSeconds(0.25)
         elseif obj.hasTag("Location") then
-        -- move locations to victory display or set aside
+          -- move locations to victory display or set aside
           if md.locationFront and md.locationFront.victory and not obj.is_face_down and not HelperLib.cardHasClues(obj) then
             PlayAreaApi.maybeUntrackLocation(obj)
             VictoryDisplayApi.placeCard(obj)
@@ -223,15 +233,9 @@ function cleanZone()
             obj.setPosition(SET_ASIDE.position + Vector(0, 1, 0))
           end
         end
-      -- move player cards (enemies, attachments, etc.) to owner's discard pile if known
       elseif obj.hasTag("PlayerCard") and not obj.hasTag("Location") then
-        local discardForMat = HelperLib.readMark(obj) or nil
-        if discardForMat ~= nil then
-          GlobalApi.discardObjects(obj, discardForMat)
-          CoroutineLib.yieldSeconds(0.25)
-        else
-          broadcastToAll("Discard any other player card enemies & attachments manually.", "Orange")
-        end
+        -- move player cards (enemies, attachments, etc.) to owner's discard pile if known
+        discardPlayerCard(obj)
       end
     end
 
@@ -240,6 +244,7 @@ function cleanZone()
       obj.destruct()
     end
   end
+
   -- remove enemies from the threat area
   for _, matColor in ipairs(PlayermatApi.getUsedMatColors()) do
     for _, obj in ipairs(PlayermatApi.searchThreatArea("isCard", matColor)) do
@@ -250,13 +255,7 @@ function cleanZone()
             GlobalApi.discardObjects(obj, "Mythos")
             CoroutineLib.yieldSeconds(0.25)
           elseif obj.hasTag("PlayerCard") then
-            local discardForMat = HelperLib.readMark(obj) or nil
-            if discardForMat ~= nil then
-              GlobalApi.discardObjects(obj, discardForMat)
-              CoroutineLib.yieldSeconds(0.25)
-            else
-              broadcastToAll("Discard any other player card enemies manually.", "Orange")
-            end
+            discardPlayerCard(obj)
           end
         end
       end
