@@ -1,45 +1,39 @@
-local GUIDReferenceApi = require("core/GUIDReferenceApi")
-local PlayAreaApi      = require("playarea/PlayAreaApi")
-local TokenManagerApi  = require("tokens/TokenManagerApi")
+local GUIDReferenceApi     = require("core/GUIDReferenceApi")
+local PlayAreaApi          = require("playarea/PlayAreaApi")
+local TokenManagerApi      = require("tokens/TokenManagerApi")
 
-LOCATIONS              = {
+local LOCATIONS            = {
   {
-    name = "Heretics' Graves",
-    guids = { "34b9e9", "5bcc5d" },
+    name        = "Heretics' Graves",
+    guids       = { "34b9e9", "5bcc5d" },
     mapPosition = { x = -2, y = 0 }
   },
   {
-    name = "The Gallows",
-    guids = { "62d69d", "1042cb" },
+    name        = "The Gallows",
+    guids       = { "62d69d", "1042cb" },
     mapPosition = { x = -1, y = 1 }
   },
   {
-    name = "Chapel Attic",
-    guids = { "55d8f1", "e2b8fc" },
+    name        = "Chapel Attic",
+    guids       = { "55d8f1", "e2b8fc" },
     mapPosition = { x = 1, y = 1 }
   },
   {
-    name = "Chapel Crypt",
-    guids = { "06bdb3", "e2ad21" },
+    name        = "Chapel Crypt",
+    guids       = { "06bdb3", "e2ad21" },
     mapPosition = { x = 2, y = 0 }
   }
 }
 
-OTHER_LOCATION_GUIDS   = { "58b8c5", "6d3a3b", "82d626", "42fbac" }
+local OTHER_LOCATION_GUIDS = { "58b8c5", "6d3a3b", "82d626", "42fbac" }
+local HERETICS_GUID        = "a9af08"
+local HERETIC_OFFSET       = Vector(3.25, 0, 0)
+local HANGMANS_BROOK       = "1e9b4c"
+local usedLocations        = {}
 
-HERETICS_GUID          = "a9af08"
-HERETIC_OFFSET         = Vector(3.25, 0, 0)
-HANGMANS_BROOK         = "1e9b4c"
-
-SET_ASIDE              = {
-  position = { -5.75, 1.54, 19.25 },
-  rotation = { x = 0, y = 270, z = 0 }
-}
-
-function onLoad()
-  trash = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
-  if not trash then
-    printToAll("Trash not found!", "Red")
+function onLoad(saveData)
+  if saveData and saveData ~= "" then
+    usedLocations = JSON.decode(saveData).usedLocations or {}
   end
 
   self.createButton({
@@ -47,10 +41,10 @@ function onLoad()
     click_function = "setup",
     function_owner = self,
     position       = { 0, 0.11, -0.6 },
-    height         = 120,
-    width          = 525,
-    scale          = { x = 1.75, y = 1.75, z = 1.75 },
-    font_size      = 80
+    height         = 420,
+    width          = 1500,
+    scale          = { x = 0.5, y = 1, z = 0.5 },
+    font_size      = 280
   })
 
   self.createButton({
@@ -58,80 +52,106 @@ function onLoad()
     click_function = "spawnHeretics",
     function_owner = self,
     position       = { 0, 0.11, 0.4 },
-    height         = 240,
-    width          = 525,
-    scale          = { x = 1.75, y = 1.75, z = 1.75 },
-    font_size      = 80
+    height         = 800,
+    width          = 1800,
+    scale          = { x = 0.5, y = 1, z = 0.5 },
+    font_size      = 280
   })
+end
+
+function trashObject(obj)
+  if obj == nil then return end
+
+  local trash = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+  if trash then
+    trash.putObject(obj)
+  else
+    printToAll("Trash not found, destroying instead!", "Red")
+    printToAll("Destroyed: " .. obj.getName(), "Yellow")
+    obj.destruct()
+  end
 end
 
 function setup()
   if SETUP_DONE then return end
+
   usedLocations = {}
+
   for i, loc in ipairs(LOCATIONS) do
     local chosen = math.random(2)
-    local guid = loc.guids[chosen]
-    table.insert(usedLocations, guid)
-    local card = getObjectFromGUID(loc.guids[3 - chosen])
-    trash.putObject(card)
-    card = getObjectFromGUID(guid)
-    card.setPosition(PlayAreaApi.gridToWorld(loc.mapPosition))
-    card.setRotation({ 0, 270, 180 })
+    local chosenGuid = loc.guids[chosen]
+    table.insert(usedLocations, chosenGuid)
+
+    local unchosenCard = getObjectFromGUID(loc.guids[3 - chosen])
+    trashObject(unchosenCard)
+
+    local chosenCard = getObjectFromGUID(chosenGuid)
+    chosenCard.setPosition(PlayAreaApi.gridToWorld(loc.mapPosition))
+    chosenCard.setRotation({ 0, 270, 180 })
   end
+
+  self.script_state = JSON.encode({ usedLocations = usedLocations })
   SETUP_DONE = true
+
   local deck = getObjectFromGUID(HANGMANS_BROOK)
   if deck ~= nil then
     deck.shuffle()
-    local card = deck.takeObject()
-    trash.putObject(card)
+    trashObject(deck.takeObject())
   end
 end
 
 function spawnHeretics(_, playerColor)
-  heretics = getObjectFromGUID(HERETICS_GUID)
+  local heretics = getObjectFromGUID(HERETICS_GUID)
   local deckSize = heretics.getQuantity()
   if deckSize > 6 then
     Player[playerColor].showOptionsDialog("Choose setup", {
         "Eryn wants to meet",
         "Eryn does not want to meet"
       },
-      function(_, index)
-        if index == 1 then
-          addClues(2)
-        else
-          addClues(1)
-        end
-      end
+      function(_, index) addClues((index == 1) and 2 or 1) end
     )
   else
     addClues(1)
   end
 
   heretics.shuffle()
+
   for i = 1, 4 do
     heretics.takeObject({
       position = PlayAreaApi.gridToWorld(LOCATIONS[i].mapPosition) + HERETIC_OFFSET,
-      rotation = { 0, 270, 0 },
-      smooth   = true
+      rotation = { 0, 270, 0 }
     })
   end
-  trash.putObject(heretics)
+
+  trashObject(heretics)
+end
+
+function addCluesToLocation(guid, amount)
+  local card = getObjectFromGUID(guid)
+  if card ~= nil then
+    TokenManagerApi.addUseToCard(card, "clue", amount)
+  end
 end
 
 function addClues(extraClues)
   local count = PlayAreaApi.getInvestigatorCount()
-  for i, guid in ipairs(usedLocations) do
-    local card = getObjectFromGUID(guid)
-    if card ~= nil then
-      TokenManagerApi.addUseToCard(card, "clue", 2 * count)
+
+  if #usedLocations == 0 then
+    -- in case the players manually performed the location choosing
+    for _, locInfo in ipairs(LOCATIONS) do
+      for _, guid in ipairs(locInfo.guids) do
+        addCluesToLocation(guid, 2 * count)
+      end
+    end
+  else
+    for _, guid in ipairs(usedLocations) do
+      addCluesToLocation(guid, 2 * count)
     end
   end
 
-  for i, guid in ipairs(OTHER_LOCATION_GUIDS) do
-    local card = getObjectFromGUID(guid)
-    if card ~= nil then
-      TokenManagerApi.addUseToCard(card, "clue", extraClues * count)
-    end
+  for _, guid in ipairs(OTHER_LOCATION_GUIDS) do
+    addCluesToLocation(guid, extraClues * count)
   end
-  trash.putObject(self)
+
+  trashObject(self)
 end
