@@ -1,20 +1,20 @@
-local CardSpawner          = require("playercards/CardSpawner")
-local DeckLib              = require("util/DeckLib")
-local GlobalApi            = require("Global/GlobalApi")
-local GUIDReferenceApi     = require("core/GUIDReferenceApi")
-local PlayermatApi         = require("playermat/PlayermatApi")
-local SearchLib            = require("util/SearchLib")
+local CardSpawner      = require("playercards/CardSpawner")
+local DeckLib          = require("util/DeckLib")
+local GlobalApi        = require("Global/GlobalApi")
+local GUIDReferenceApi = require("core/GUIDReferenceApi")
+local PlayermatApi     = require("playermat/PlayermatApi")
+local SearchLib        = require("util/SearchLib")
 
-local CAST_POS             = {
+local CAST_POS         = {
   DRAW    = { x = 1.05, y = 0.05, z = 0.16 },
   DISCARD = { x = -1.05, y = 0.05, z = 0.16 }
 }
-local colliding            = false
-local helpVisibleToPlayers = {}
-local playerTekelili       = {}
+local colliding        = false
+local helpViewers      = {}
+local playerTekelili   = {}
 
 -- contains the ArkhamDB IDs to spawn a new Tekeli-li Deck from the AllCardsBag
-local NEW_DECK_DATA        = {
+local NEW_DECK_DATA    = {
   ["08723"] = 3,
   ["08724"] = 3,
   ["08725"] = 2,
@@ -129,17 +129,17 @@ function removeAll()
         obj.destruct()
       end
     elseif obj.type == "Deck" then
-      local data = obj.getData()
+      local data                = obj.getData()
       local containedObjectsNew = {}
-      local deckIdsNew = {}
-      local manipulated = false
+      local deckIdsNew          = {}
+      local manipulated         = false
 
       for i, cardData in ipairs(data.ContainedObjects) do
         local keepCard = true
         local md = JSON.decode(cardData.GMNotes) or {}
         if md.id and NEW_DECK_DATA[md.id] then
-          count = count + 1
-          keepCard = false
+          count       = count + 1
+          keepCard    = false
           manipulated = true
         end
 
@@ -206,9 +206,7 @@ function spawnStoredTekelili(matColor)
   end
 
   local pos = PlayermatApi.getDrawPosition(matColor)
-  local rot = PlayermatApi.returnRotation(matColor)
-  rot.z = 180
-
+  local rot = PlayermatApi.returnRotation(matColor):setAt("z", 180)
   CardSpawner.spawnCards(cardsToSpawn, pos, rot, true)
   playerTekelili[matColor] = nil
 end
@@ -225,11 +223,11 @@ function drawTekelili(player)
   local matColor = PlayermatApi.getMatColor(player.color)
   local pos      = PlayermatApi.getEncounterCardDrawPosition(matColor, false)
   local rot      = PlayermatApi.returnRotation(matColor)
-  if deck.type == "Card" then
-    DeckLib.placeOrMergeIntoDeck(deck, Vector(pos), rot)
-  else
-    DeckLib.placeOrMergeIntoDeck(deck.takeObject(), Vector(pos), rot)
+  local card     = deck
+  if deck.type == "Deck" then
+    card = deck.takeObject({ position = deck.getPosition() + Vector(0, 1, 0) })
   end
+  DeckLib.placeOrMergeIntoDeck(card, Vector(pos), rot)
 
   local pName = GlobalApi.getColoredName(player.color)
   printToAll(pName .. " drew a Tekeli-li card to their playermat.")
@@ -301,10 +299,10 @@ end
 
 -- toggles the help text for the player that clicks it
 function toggleHelp(player)
-  if helpVisibleToPlayers[player.color] then
-    helpVisibleToPlayers[player.color] = nil
+  if helpViewers[player.color] then
+    helpViewers[player.color] = nil
   else
-    helpVisibleToPlayers[player.color] = true
+    helpViewers[player.color] = true
   end
   updateHelpVisibility()
 end
@@ -360,7 +358,7 @@ end
 -- updates the visibility of the help text
 function updateHelpVisibility()
   local visibility = ""
-  for playerColor, _ in pairs(helpVisibleToPlayers) do
+  for playerColor, _ in pairs(helpViewers) do
     if string.len(visibility) > 0 then
       visibility = visibility .. "|" .. playerColor
     else
