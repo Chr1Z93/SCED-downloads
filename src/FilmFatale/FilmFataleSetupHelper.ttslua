@@ -1,0 +1,259 @@
+local ChaosBagApi        = require("chaosbag/ChaosBagApi")
+local CoroutineLib       = require("util/CoroutineLib")
+local DeckLib            = require("util/DeckLib")
+local GUIDReferenceApi   = require("core/GUIDReferenceApi")
+local HelperLib          = require("HelperLib")
+local i18nApi            = require("Global/i18nApi")
+local MythosAreaApi      = require("mythos/MythosAreaApi")
+local PlayAreaApi        = require("playarea/PlayAreaApi")
+local TableLib           = require("util/TableLib")
+local TokenSpawnTrackerApi            = require("tokens/TokenSpawnTrackerApi")
+
+local ACT1_GUID = "0d20cc"
+
+function onLoad(saveData)
+  self.createButton({
+    label          = "Interlude:\nTake Two",
+    click_function = "setup",
+    function_owner = self,
+    position       = { 0, 0.11, 0 },
+    height         = 1520,
+    width          = 3250,
+    scale          = { x = 0.25, y = 0.25, z = 0.25 },
+    font_size      = 650
+  })
+  -- allow setup restart
+  if saveData and saveData ~= "" then
+    local loadedData = JSON.decode(saveData)
+    if loadedData.setupColor then
+      self.script_state = ""
+      if Player[loadedData.setupColor].seated then
+        setup(_, loadedData.setupColor)
+      end
+    end
+  end
+end
+
+function setup(_, playerColor)
+  if setupRunning then
+    Player[playerColor].showConfirmDialog(
+      i18nApi.getStrById("SetupAlreadyRunning"),
+      function()
+        self.script_state = JSON.encode({ setupColor = playerColor })
+        self.reload()
+      end
+    )
+    return
+  end
+  setupRunning = true
+
+  local function setupCoroutine()
+     -- remove clues from players
+    local masterClueCounter = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "MasterClueCounter")
+    if masterClueCounter ~= nil then
+      masterClueCounter.call("removeAllPlayerClues")
+    end
+    -- remove Act 1 card
+    local trash = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+    local act1Card = getObjectFromGUID(ACT1_GUID)
+    trash.putObject(act1Card)
+
+    chest = MythosAreaApi.getSetAsideChest()
+    -- Ask for scenario version
+    local act2Version = checkPropStatus()
+    if act2Version == "need choice" then
+      act2Version = CoroutineLib.showOptionsDialogAndWait(
+        playerColor, "Choose one Prop to set aside:",
+        { "Helios Telescope", "Staff of the Serpent", "Accursed Cape" }, "Helios Telescope"
+      )
+    end
+
+    -- Remove all locations in play except the relevant Act 2 location
+    if act2Version == "Helios Telescope" then
+      locationForAct2ID = "72009"
+      bagForAct2GUID = "c03abf"
+      act2EncounterSetGUID = "f3f3f3"
+      encounterSetName = "A Cosmic Journey"
+      newToken = "tablet"
+      propGUID = "76439b"
+      locationOfProp = {1.32, 1.60, -5.23} -- next to Act deck 
+    elseif act2Version == "Staff of the Serpent" then
+      locationForAct2ID = "72010"
+      bagForAct2GUID = "57eebf"
+      act2EncounterSetGUID = "cf6ea1"
+      encounterSetName = "The Forgotten Island"
+      newToken = "elder"
+      propGUID = "ca0587"
+      locationOfProp = {-22.81, 1.53, -10.33} -- at Ruins of Serpent King 
+    else
+      locationForAct2ID = "72011"
+      bagForAct2GUID = "ee4e08"
+      act2EncounterSetGUID = "d9f373"
+      encounterSetName = "The Abominable Contessa"
+      newToken = "cultist"
+      propGUID = "aec8ec"
+    end
+
+    for locGuid, _ in pairs(PlayAreaApi.getTrackedLocations()) do
+      local obj = getObjectFromGUID(locGuid)
+      local metadata = JSON.decode(obj.getGMNotes()) or {}
+      if metadata.id ~= locationForAct2ID then
+        TokenSpawnTrackerApi.resetTokensSpawned(obj)
+        obj.setRotation(obj.getRotation():setAt("z", 180))
+        chest.putObject(obj)
+      else
+        locationToKeep = obj
+      end
+    end
+
+    CoroutineLib.yieldSeconds(0.5)
+    local bounds = locationToKeep.getBounds()
+
+    -- define the area "near" the central location
+    local bufferAround = 2
+    areaNearCenter = {}
+    areaNearCenter.minX = bounds.center.x - bounds.size.x / 2 - bufferAround
+    areaNearCenter.maxX = bounds.center.x + bounds.size.x / 2 + bufferAround
+    areaNearCenter.minZ = bounds.center.z - bounds.size.z / 2 - bufferAround
+    areaNearCenter.maxZ = bounds.center.z + bounds.size.z / 2 + bufferAround
+
+    local zone = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "PlayAreaZone")
+  
+    objectsToDelete = {}
+    for _, obj in ipairs(zone.getObjects()) do
+      if not HelperLib.isInArea(obj.getPosition(), areaNearCenter) then -- keep cards that are "at" the location to keep for the next Act
+        if obj.type == "Card" and obj.hasTag("ScenarioCard") then
+          -- move enemies and treacheries to the encounter discard pile
+          if not obj.hasTag("Asset") and not HelperLib.isInArea(obj.getPosition(), areaNearCenter) then
+            broadcastToAll("Discarded " .. obj.getName())
+            CoroutineLib.yieldSeconds(0.2)
+            obj.setPosition(MythosAreaApi.getEncounterDiscardPosition() + Vector(0, 5, 0))
+          end
+        elseif obj.memo == "clueDoom" then -- delete clues and doom tokens
+          table.insert(objectsToDelete, obj)
+        end
+      end
+    end
+
+    for _, token in ipairs(objectsToDelete) do
+      token.destruct()
+    end
+
+    -- Replenish clues on location that stays
+    HelperLib.replenishLocation(locationToKeep)
+
+    -- Move mini cards
+    local pos = locationToKeep.getPosition()
+    local name = locationToKeep.getName()
+    HelperLib.moveInvestigatorMinis(PlayAreaApi.worldToGrid(pos), name)
+
+    local bagForAct2 = chest.takeObject({guid = bagForAct2GUID, position = {-3.10, 1.40, 14.76}})
+
+    CoroutineLib.yieldSeconds(0.25)
+    
+    bagForAct2.call("buttonClick_place")
+    bagForAct2.destruct()
+    
+    -- Move Prop to appropriate location
+  
+    -- It might be in the set-aside container already
+    if HelperLib.checkContainerForGuid(chest, propGUID) then
+      propAsset = chest.takeObject({ guid = propGUID })
+    else
+      propAsset = getObjectFromGUID(propGUID)
+    end
+    
+    propAsset.setRotation(propAsset.getRotation():setAt("z", 0))
+    if locationOfProp ~= nil then
+      propAsset.setPosition(locationOfProp)
+    else
+      chest.putObject(propAsset)
+    end
+
+    -- Set Up Encounter Deck and Reel Deck
+    local discardPos = MythosAreaApi.getEncounterDiscardPosition()
+    local discardRot = MythosAreaApi.getRotation()
+    local extraCardsBag = chest.takeObject({guid = "ab00ef", position = {2.22, 1.40, 9.16}, rotation = discardRot})
+    
+    CoroutineLib.yieldSeconds(0.5)
+ 
+    extraCardsBag.takeObject({guid = act2EncounterSetGUID, position = discardPos, rotation = discardRot})
+    CoroutineLib.yieldSeconds(1)
+    MythosAreaApi.reshuffleEncounterDeck(true)
+    broadcastToAll("Shuffled remaining cards from '".. encounterSetName .."' into the encounter deck along with the discard pile.",
+      "White")
+
+    local reelDeck = extraCardsBag.takeObject({position = {1.30, 1.64, 5.72}, rotation = discardRot})
+    reelDeck.setName("Reel Deck")
+    CoroutineLib.yieldSeconds(0.25)
+    extraCardsBag.takeObject({position = {1.30, 1.64, 5.72}, rotation = discardRot})
+    CoroutineLib.yieldSeconds(1)
+    extraCardsBag.destruct()
+    reelDeck.flip()
+    reelDeck.shuffle()
+
+    -- Adjust chaos bag
+    local tokenList = ChaosBagApi.getChaosBagState()
+    local newTokenCount = 0
+    for _, token in ipairs(tokenList) do
+      if token == newToken then
+        newTokenCount = newTokenCount + 1
+      end
+    end
+
+    if newTokenCount ~= 2 then
+      for i = 1, 2 - newTokenCount do
+        table.insert(tokenList, newToken)
+      end
+      ChaosBagApi.setChaosBagState(tokenList, true)
+      broadcastToAll("Added new tokens to the chaos bag.", "White")
+    end
+
+  end
+  CoroutineLib.start(setupCoroutine)
+end
+
+function checkPropStatus()
+  local telescopeInVd = false
+  local staffInVd = false
+  local capeInVd = false
+
+  -- loop through VD objects
+  for _, obj in ipairs(HelperLib.getVictoryDisplayObjects()) do
+    local md = HelperLib.getMetadata(obj)
+
+    if md.id == "72005" then
+      telescopeInVd = true
+    elseif md.id == "72006" then
+      staffInVd = true
+    elseif md.id == "72007" then
+      capeInVd = true
+    end
+  end
+
+  -- proceed based on prop status
+  if telescopeInVd == true and staffInVd == true and capeInVd == true then
+    -- Adjust chaos bag
+    local tokenList = ChaosBagApi.getChaosBagState()
+    local zeroCount = 0
+    for _, token in ipairs(tokenList) do
+      if token == "0" then
+        zeroCount = zeroCount + 1
+      end
+    end
+
+    if zeroCount ~= 3 then
+      table.insert(tokenList, "0")
+      ChaosBagApi.setChaosBagState(tokenList, true)
+      broadcastToAll("Added \"0\" token to the chaos bag.", "White")
+
+      return "need choice"
+    end
+  elseif telescopeInVd == false then
+    return "Helios Telescope"
+  elseif staffInVd == false then
+    return "Staff of the Serpent"
+  else
+    return "Accursed Cape"
+  end
+end
