@@ -1,0 +1,352 @@
+local DeckLib       = require("util/DeckLib")
+local GlobalApi     = require("Global/GlobalApi")
+local PlayermatApi  = require("playermat/PlayermatApi")
+local SearchLib     = require("util/SearchLib")
+
+local CAST_POS      = {
+  DRAW    = { x = 1.05, y = 0.05, z = 0.16 },
+  DISCARD = { x = -1.05, y = 0.05, z = 0.16 }
+}
+local DECK_NAME     = self.getDescription()
+local helpViewers   = {}
+local isReshuffling = false
+
+---------------------------------------------------------
+-- main functionality
+---------------------------------------------------------
+
+function onLoad()
+  for _, obj in ipairs(getObjects()) do
+    if obj.hasTag("DeckHelperDrawn") then
+      addReturnMenu(obj)
+    end
+  end
+  createXml()
+end
+
+function onObjectSpawn(obj)
+  if obj.hasTag("DeckHelperDrawn") then
+    addReturnMenu(obj)
+  end
+end
+
+function addReturnMenu(obj)
+  obj.clearContextMenu()
+  obj.addContextMenuItem("Discard to Helper", function()
+    DeckLib.placeOrMergeIntoDeck(obj, self.positionToWorld(CAST_POS.DISCARD), self.getRotation())
+  end)
+end
+
+---------------------------------------------------------
+-- XML UI creation
+---------------------------------------------------------
+
+function createXml()
+  local xml = {}
+
+  -- Defaults
+  table.insert(xml, {
+    tag = "Defaults",
+    children = {
+      {
+        tag = "Text",
+        attributes = {
+          font      = "font_teutonic-arkham",
+          color     = "White",
+          alignment = "MiddleCenter"
+        }
+      },
+      {
+        tag = "TableLayout",
+        attributes = {
+          rotation            = "0 0 180",
+          height              = 130,
+          width               = 1600,
+          scale               = "0.25 0.25 1",
+          cellBackgroundColor = "clear"
+        }
+      },
+      {
+        tag = "Row",
+        attributes = { dontUseTableRowBackground = true }
+      },
+      {
+        tag = "Button",
+        attributes = {
+          font          = "font_teutonic-arkham",
+          colors        = "#e3e3e3|#009acb|#005a77",
+          textAlignment = "MiddleCenter"
+        }
+      }
+    }
+  })
+
+  -- Header
+  table.insert(xml, {
+    tag        = "Panel",
+    attributes = {
+      position = "0 -136 -6",
+      rotation = "0 0 180",
+      height   = 130,
+      width    = 1500
+    },
+    children   = {
+      {
+        tag = "Text",
+        attributes = {
+          height   = 1800,
+          width    = 2800,
+          fontSize = 275,
+          scale    = "0.1 0.1 1",
+          text     = DECK_NAME:upper()
+        }
+      }
+    }
+  })
+
+  -- Spot Labels
+  table.insert(xml, {
+    tag        = "TableLayout",
+    attributes = { position = "0 -96 -6", cellSpacing = 125 },
+    children   = {
+      {
+        tag      = "Row",
+        children = {
+          {
+            tag      = "Cell",
+            children = {
+              {
+                tag = "Text",
+                attributes = { fontSize = 80, text = "DECK" }
+              }
+            }
+          },
+          {
+            tag      = "Cell",
+            children = {
+              {
+                tag = "Text",
+                attributes = { fontSize = 80, text = "DISCARD" }
+              }
+            }
+          }
+        }
+      }
+    }
+  })
+
+  local buttonBar = {
+    tag        = "TableLayout",
+    attributes = { position = "0 139 -6", cellSpacing = 40 },
+    children   = {
+      {
+        tag      = "Row",
+        children = {
+          {
+            tag      = "Cell",
+            children = {
+              {
+                tag        = "Button",
+                attributes = {
+                  fontSize = 85,
+                  onClick  = "drawCard",
+                  text     = "Draw Card"
+                }
+              }
+            }
+          },
+          {
+            tag      = "Cell",
+            children = {
+              {
+                tag        = "Button",
+                attributes = {
+                  fontSize = 85,
+                  onClick  = "discardTopCard",
+                  text     = "Discard Top Card"
+                }
+              }
+            }
+          },
+          {
+            tag      = "Cell",
+            children = {
+              {
+                tag = "Button",
+                attributes = {
+                  fontSize = 85,
+                  onClick  = "reshuffle",
+                  text     = "← Reshuffle"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  table.insert(xml, buttonBar)
+
+  local helpButton = {
+    tag = "Panel",
+    attributes = {
+      position = "-180 -130 -6",
+      rotation = "0 0 180",
+      height   = 100,
+      width    = 100,
+      scale    = "0.25 0.25 1"
+    },
+    children = {
+      {
+        tag = "Button",
+        attributes = {
+          fontSize = 90,
+          onClick  = "toggleHelp",
+          text     = "?"
+        }
+      }
+    }
+  }
+  table.insert(xml, helpButton)
+
+  local helpPanel = {
+    tag = "Panel",
+    attributes = {
+      active   = false,
+      id       = "helpPanel",
+      position = "-370 -40 -6",
+      rotation = "0 0 180",
+      height   = 240,
+      width    = 300,
+      color    = "#000000CC"
+    },
+    children = {
+      {
+        tag = "Text",
+        attributes = {
+          id                 = "helpText",
+          rectAlignment      = "MiddleCenter",
+          height             = 2300,
+          width              = 2800,
+          scale              = "0.1 0.1 1",
+          fontSize           = 200,
+          color              = "#F5F5F5",
+          backgroundColor    = "#FF0000",
+          alignment          = "MiddleLeft",
+          horizontalOverflow = "wrap",
+          text               =
+          "This tool is meant for special decks the players have to draw from\n(for example the Spectral Encounter Deck from TCU - Wages of Sin).\n\nThe buttons below the deck / discard can be used to draw cards to playermats or reshuffle the discard pile.\n\nDrawn cards have a special context menu entry to discard to this helper."
+        }
+      }
+    }
+  }
+  table.insert(xml, helpPanel)
+  self.UI.setXmlTable(xml)
+end
+
+---------------------------------------------------------
+-- XML click functions
+---------------------------------------------------------
+
+-- draws a card to the playermat of the requesting player
+function drawCard(player)
+  local deck = getDeck("DRAW")
+  if not deck then
+    if getDeck("DISCARD") then
+      player.showConfirmDialog("Reshuffle discard and draw?", function()
+        reshuffle(nil, nil, nil, player)
+      end)
+    end
+    return
+  end
+
+  local matColor = PlayermatApi.getMatColor(player.color)
+  local pos      = PlayermatApi.getEncounterCardDrawPosition(matColor, false)
+  local rot      = PlayermatApi.returnRotation(matColor)
+  local card     = deck
+  if deck.type == "Deck" then
+    card = deck.takeObject({ position = deck.getPosition() + Vector(0, 1, 0) })
+  end
+  card.addTag("DeckHelperDrawn")
+  addReturnMenu(card)
+  DeckLib.placeOrMergeIntoDeck(card, Vector(pos), rot)
+
+  local pName = GlobalApi.getColoredName(player.color)
+  printToAll(pName .. " drew a card from the " .. DECK_NAME .. ".")
+end
+
+function discardTopCard()
+  local deck = getDeck("DRAW")
+  if not deck then return end
+
+  local pos  = self.positionToWorld(CAST_POS.DISCARD)
+  local rot  = self.getRotation()
+  local card = deck
+  if deck.type == "Deck" then
+    card = deck.takeObject({ position = deck.getPosition() + Vector(0, 1, 0) })
+  end
+  card.addTag("DeckHelperDrawn")
+  addReturnMenu(card)
+  DeckLib.placeOrMergeIntoDeck(card, Vector(pos), rot)
+end
+
+function reshuffle(_, _, _, playerToDrawAfter)
+  -- flag to avoid multiple calls
+  if isReshuffling then return false end
+  isReshuffling = true
+
+  -- disable flag after 1s delay
+  Wait.time(function() isReshuffling = false end, 1)
+
+  local discardDeck = getDeck("DISCARD")
+  if discardDeck then
+    local faceDownRotation = self.getRotation():setAt("z", 180)
+    local newPos           = self.positionToWorld(CAST_POS.DRAW)
+    DeckLib.placeOrMergeIntoDeck(discardDeck, newPos, faceDownRotation, nil, true)
+
+    broadcastToAll(DECK_NAME .. ": Shuffled discard pile into deck.", "White")
+    if playerToDrawAfter then
+      drawCard(playerToDrawAfter)
+    end
+  else
+    broadcastToAll(DECK_NAME .. ": Discard pile is already empty.", "Red")
+  end
+end
+
+-- toggles the help text for the player that clicks it
+function toggleHelp(player)
+  if helpViewers[player.color] then
+    helpViewers[player.color] = nil
+  else
+    helpViewers[player.color] = true
+  end
+  updateHelpVisibility()
+end
+
+---------------------------------------------------------
+-- helper functions
+---------------------------------------------------------
+
+-- returns the first object found, type can be "deck" or "discard"
+function getDeck(type)
+  local result = SearchLib.atPosition(self.positionToWorld(CAST_POS[type]), "isCardOrDeck")
+  if #result > 0 then
+    return result[1]
+  end
+  return nil
+end
+
+-- updates the visibility of the help text
+function updateHelpVisibility()
+  local visibility = ""
+  for playerColor, _ in pairs(helpViewers) do
+    if string.len(visibility) > 0 then
+      visibility = visibility .. "|" .. playerColor
+    else
+      visibility = playerColor
+    end
+  end
+  self.UI.setAttribute("helpText", "visibility", visibility)
+  self.UI.setAttribute("helpPanel", "visibility", visibility)
+  self.UI.setAttribute("helpPanel", "active", string.len(visibility) > 0)
+end
