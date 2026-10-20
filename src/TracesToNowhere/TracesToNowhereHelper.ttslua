@@ -58,6 +58,34 @@ function setup(_, playerColor)
   setupRunning = true
 
   local function setupCoroutine()
+    -- Ask for difficulty
+    local difficulty = CoroutineLib.showOptionsDialogAndWait(
+      playerColor,
+      "Choose Difficulty:",
+      { "Campaign", "Easy", "Standard", "Hard", "Expert" },
+      "Campaign"
+    )
+
+    -- Ask for investigator count
+    local investigatorCount = tonumber(CoroutineLib.showOptionsDialogAndWait(
+      playerColor,
+      "Choose Investigator Count:",
+      { 1, 2, 3, 4 },
+      PlayAreaApi.getInvestigatorCount()
+    ))
+    PlayAreaApi.setInvestigatorCount(investigatorCount)
+
+    -- Handle chaos bag setup
+    local trash    = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+    local selector = getObjectFromGUID("92d5f8")
+    if selector then
+      if difficulty ~= "Campaign" then
+        selector.call("clickFun", difficulty)
+      end
+      trash.putObject(selector)
+      CoroutineLib.yieldSeconds(0.25)
+    end
+
     local objList = getObjectsWithTag("CardSource_TtN")
     if #objList == 0 then
       broadcastToAll("Couldn't find scenario card source!", "Red")
@@ -67,7 +95,12 @@ function setup(_, playerColor)
 
     local CardSource = objList[1]
     local cardList   = CardSource.call("getCardsForListOfSets", { "Traces to Nowhere" })
-    printToAll("Performing setup")
+    printToAll(string.format(
+      "Performing setup for  \"%s\" difficulty and %d investigator%s.",
+      difficulty,
+      investigatorCount,
+      investigatorCount == 1 and "" or "s"
+    ))
 
     -- Set Aside
     local mapSetAside = {
@@ -90,15 +123,16 @@ function setup(_, playerColor)
       ["73024"] = true,
       ["73025"] = true,
       ["73026"] = true,
+    }
 
+    local mapRFG = {
       -- 4x Witness story assets
       ["73034"] = true,
       ["73035"] = true,
       ["73036"] = true,
       ["73037"] = true,
+      ["73049"] = true, -- Aziza Steer
     }
-
-    local mapRFG = {}
 
     -- Sort cards
     local scenarioObjects = {
@@ -107,6 +141,9 @@ function setup(_, playerColor)
       actDeck       = {},
       setAside      = {}
     }
+
+    local hasSpawnedEnforcer = false
+
     for _, card in ipairs(cardList) do
       local md = card.metadata
       local id = md.id
@@ -129,6 +166,9 @@ function setup(_, playerColor)
           table.insert(scenarioObjects.agendaDeck, card.data)
         elseif SPAWN_GRIDS[id] then
           DeckLib.spawnCard(card.data, PlayAreaApi.gridToWorld(SPAWN_GRIDS[id]), FACEDOWN)
+        elseif md.id == "73039" and not hasSpawnedEnforcer then
+          DeckLib.spawnCard(card.data, PlayAreaApi.gridToWorld({ 1.35, -1 }), FACEUP)
+          hasSpawnedEnforcer = true
         elseif md.type == "Location" then
           card.data.Transform.rotZ = 180
           table.insert(scenarioObjects.setAside, card.data)
@@ -138,11 +178,32 @@ function setup(_, playerColor)
       end
     end
 
+    -- Create Leads deck
+    local leadsDeckCards = {}
+
+    -- Add 4x Witness story asset
+    for _, cardId in ipairs({ "73034", "73035", "73036", "73037" }) do
+      table.insert(leadsDeckCards, TableLib.copy(CardSource.call("getCardById", cardId), true).data)
+    end
+
+    -- Add 1/2 Encounter cards
+    for i = 1, (investigatorCount > 2 and 2 or 1) do
+      table.insert(leadsDeckCards, TableLib.pickRandom(scenarioObjects.encounterDeck, true))
+    end
+
+    -- Shuffle and spawn
+    TableLib.shuffle(leadsDeckCards)
+    local leadsDeckData = DeckLib.generateDeckData(leadsDeckCards, PlayAreaApi.gridToWorld({ 1.5, 2.75 }), FACEDOWN)
+    leadsDeckData.Nickname = "Leads Deck"
+    spawnObjectData({ data = leadsDeckData })
+
     -- Starting Location
     HelperLib.moveInvestigatorMinis(SPAWN_GRIDS["73008"], "Steer's Office")
 
     -- Handle Dimensional Madness
     local dimensionalMadnessDeckData = TableLib.copy(CardSource.call("getDeckDataForSet", "Dimensional Madness"), true)
+    TableLib.reverse(dimensionalMadnessDeckData.ContainedObjects)
+    TableLib.reverse(dimensionalMadnessDeckData.DeckIDs)
     table.insert(scenarioObjects.setAside, dimensionalMadnessDeckData)
 
     -- Apply custom sort to set aside
@@ -154,8 +215,15 @@ function setup(_, playerColor)
     HelperLib.spawnMythosDeckOrCard(scenarioObjects.encounterDeck, "Encounter Deck", true)
     MythosAreaApi.spawnSetAsideChest(scenarioObjects.setAside)
 
-    printToAll("Setup completed.", "Green")
-    local trash = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+    -- Abducted Aziza Steer
+    local abductedAziza = TableLib.copy(CardSource.call("getCardById", "73049"), true)
+    DeckLib.spawnCard(
+      abductedAziza.data,
+      MythosAreaApi.getStoryCardPosition(),
+      MythosAreaApi.getRotation():setAt("z", 180)
+    )
+
+    broadcastToAll("Setup completed.", "Green")
     trash.putObject(self)
   end
 
@@ -177,21 +245,16 @@ function sortSetAside(a, b)
 
   -- Lower number = earlier in the set-aside chest
   local priority = {
-    ["Set-Aside Cultists"] = 10,
-    ["13092"]              = 20,  -- Sanguine Rebirth
-    ["13079"]              = 501, -- Master Bedroom
-    ["13082"]              = 502, -- Balcony
-    ["13084"]              = 503, -- Howard
-    ["13085"]              = 503, -- Howard
-    ["13086"]              = 503, -- Howard
-    ["Set: Infected"]      = 599,
-    ["13093a"]             = 600
+    ["Asset"]                    = 50,
+    ["Enemy"]                    = 75,
+    ["Location"]                 = 100,
+    ["Set: Dimensional Madness"] = 900
   }
 
   local function getPriority(object)
     local objectNickname = object.Nickname
-    local id = getId(object)
-    local objectType = getType(object)
+    local id             = getId(object)
+    local objectType     = getType(object)
 
     -- Specific cards and decks override type-based rules
     if objectNickname and priority[objectNickname] then
