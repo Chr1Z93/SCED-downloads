@@ -151,10 +151,6 @@ function setup(_, playerColor)
       -- skip RFG cards
       if not mapRFG[id] then
         if mapSetAside[id] then
-          -- flip set aside locations
-          if md.type == "Location" then
-            card.data.Transform.rotZ = 180
-          end
           table.insert(scenarioObjects.setAside, card.data)
         elseif md.type == "ScenarioReference" then
           local position = MythosAreaApi.getScenarioReferenceCardPosition():setAt("y", 2.5)
@@ -166,11 +162,14 @@ function setup(_, playerColor)
           table.insert(scenarioObjects.agendaDeck, card.data)
         elseif SPAWN_GRIDS[id] then
           DeckLib.spawnCard(card.data, PlayAreaApi.gridToWorld(SPAWN_GRIDS[id]), FACEDOWN)
-        elseif md.id == "73039" and not hasSpawnedEnforcer then
+        elseif id == "73039" and not hasSpawnedEnforcer then
           DeckLib.spawnCard(card.data, PlayAreaApi.gridToWorld({ 1.35, -1 }), FACEUP)
           hasSpawnedEnforcer = true
         elseif md.type == "Location" then
-          card.data.Transform.rotZ = 180
+          if not string.contains(md.traits, "Crime Scene") then
+            -- flip non-crime scene locations
+            card.data.Transform.rotZ = 180
+          end
           table.insert(scenarioObjects.setAside, card.data)
         else
           table.insert(scenarioObjects.encounterDeck, card.data)
@@ -201,10 +200,35 @@ function setup(_, playerColor)
     HelperLib.moveInvestigatorMinis(SPAWN_GRIDS["73008"], "Steer's Office")
 
     -- Handle Dimensional Madness
-    local dimensionalMadnessDeckData = TableLib.copy(CardSource.call("getDeckDataForSet", "Dimensional Madness"), true)
-    TableLib.reverse(dimensionalMadnessDeckData.ContainedObjects)
-    TableLib.reverse(dimensionalMadnessDeckData.DeckIDs)
-    table.insert(scenarioObjects.setAside, dimensionalMadnessDeckData)
+    local otherworldLocations = {}
+    local otherCards = {}
+    local azizaCards = {}
+    for _, card in ipairs(CardSource.call("getCardsForListOfSets", { "Dimensional Madness" })) do
+      local md = card.metadata
+      local id = md.id
+
+      if id == "73053" then
+        table.insert(scenarioObjects.setAside, card.data)
+      elseif id == "73059" then
+        table.insert(azizaCards, card.data)
+      elseif md.type == "Location" then
+        table.insert(otherworldLocations, card.data)
+      else
+        table.insert(otherCards, card.data)
+      end
+    end
+
+    local otherworldDeck    = DeckLib.generateDeckData(otherworldLocations, nil, FACEDOWN)
+    otherworldDeck.Nickname = "Otherworld Locations"
+    table.insert(scenarioObjects.setAside, otherworldDeck)
+
+    local otherDeck    = DeckLib.generateDeckData(otherCards, nil, FACEUP)
+    otherDeck.Nickname = "Dimensional Madness (Enemies & Treacheries)"
+    table.insert(scenarioObjects.setAside, otherDeck)
+
+    local azizaDeck    = DeckLib.generateDeckData(azizaCards, nil, FACEUP)
+    azizaDeck.Nickname = "Reward (Aziza Steer)"
+    table.insert(scenarioObjects.setAside, azizaDeck)
 
     -- Apply custom sort to set aside
     table.sort(scenarioObjects.setAside, sortSetAside)
@@ -245,10 +269,13 @@ function sortSetAside(a, b)
 
   -- Lower number = earlier in the set-aside chest
   local priority = {
-    ["Asset"]                    = 50,
-    ["Enemy"]                    = 75,
-    ["Location"]                 = 100,
-    ["Set: Dimensional Madness"] = 900
+    ["Asset"]                                       = 50,
+    ["Enemy"]                                       = 75,
+    ["Location"]                                    = 100,
+    ["73053"]                                       = 600,
+    ["Dimensional Madness (Enemies & Treacheries)"] = 700,
+    ["Otherworld Locations"]                        = 800,
+    ["Reward (Aziza Steer)"]                        = 900
   }
 
   local function getPriority(object)
