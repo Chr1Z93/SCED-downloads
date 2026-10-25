@@ -19,9 +19,34 @@ local SPAWN_GRIDS      = {
 }
 
 local setupRunning     = false
+local setupCompleted   = false
+local chaosBagState, setupColor
+
+function updateSave()
+  return JSON.encode({
+    chaosBagState  = chaosBagState,
+    setupColor     = setupColor,
+    setupCompleted = setupCompleted
+  })
+end
 
 function onLoad(saveData)
-  self.createButton({
+  buttonCreation()
+
+  if saveData and saveData ~= "" then
+    local loadedData = JSON.decode(saveData)
+    chaosBagState    = loadedData.chaosBagState
+    setupCompleted   = loadedData.setupCompleted
+
+    -- allow setup restart
+    if loadedData.setupColor and Player[loadedData.setupColor].seated then
+      setup(nil, loadedData.setupColor)
+    end
+  end
+end
+
+function buttonCreation()
+  local buttonParameters = {
     label          = "Set Up",
     click_function = "setup",
     function_owner = self,
@@ -30,18 +55,16 @@ function onLoad(saveData)
     width          = 3250,
     scale          = { x = 0.25, y = 0.25, z = 0.25 },
     font_size      = 650
-  })
+  }
 
-  -- allow setup restart
-  if saveData and saveData ~= "" then
-    local loadedData = JSON.decode(saveData)
-    if loadedData.setupColor then
-      self.script_state = ""
-      if Player[loadedData.setupColor].seated then
-        setup(nil, loadedData.setupColor)
-      end
-    end
+  if setupCompleted then
+    buttonParameters.label          = "Restore\nChaos Bag"
+    buttonParameters.click_function = "restoreChaosBag"
+    buttonParameters.height         = 1900
   end
+
+  self.clearButtons()
+  self.createButton(buttonParameters)
 end
 
 function setup(_, playerColor)
@@ -49,7 +72,8 @@ function setup(_, playerColor)
     Player[playerColor].showConfirmDialog(
       i18nApi.getStrById("SetupAlreadyRunning"),
       function()
-        self.script_state = JSON.encode({ setupColor = playerColor })
+        setupColor = playerColor
+        updateSave()
         self.reload()
       end
     )
@@ -62,8 +86,8 @@ function setup(_, playerColor)
     local difficulty = CoroutineLib.showOptionsDialogAndWait(
       playerColor,
       "Choose Difficulty:",
-      { "Campaign", "Easy", "Standard", "Hard", "Expert" },
-      "Campaign"
+      { "Easy", "Standard", "Hard", "Expert" },
+      "Standard"
     )
 
     -- Ask for investigator count
@@ -76,14 +100,17 @@ function setup(_, playerColor)
     PlayAreaApi.setInvestigatorCount(investigatorCount)
 
     -- Handle chaos bag setup
+    chaosBagState = ChaosBagApi.getChaosBagState()
+    updateSave()
+
     local trash    = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
     local selector = getObjectFromGUID("92d5f8")
     if selector then
-      if difficulty ~= "Campaign" then
-        selector.call("clickFun", difficulty)
-      end
+      selector.call("clickFun", difficulty)
       trash.putObject(selector)
       CoroutineLib.yieldSeconds(0.25)
+    else
+      broadcastToAll("Warning: Difficulty Selector not found.", "Orange")
     end
 
     local objList = getObjectsWithTag("CardSource_TtN")
@@ -248,10 +275,20 @@ function setup(_, playerColor)
     )
 
     broadcastToAll("Setup completed.", "Green")
-    trash.putObject(self)
+    setupCompleted = true
+    updateSave()
+    buttonCreation()
   end
 
   CoroutineLib.start(setupCoroutine)
+end
+
+function restoreChaosBag()
+  ChaosBagApi.setChaosBagState(chaosBagState, true)
+  broadcastToAll("Chaos Bag restored.", "Green")
+
+  local trash = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+  trash.putObject(self)
 end
 
 function sortSetAside(a, b)
