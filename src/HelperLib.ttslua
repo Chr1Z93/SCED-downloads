@@ -40,6 +40,7 @@ do
     else
       rawNotes = objectOrNotes.getGMNotes()
     end
+    if rawNotes == nil or rawNotes == "" then return {} end
     return JSON.decode(rawNotes) or {}
   end
 
@@ -130,6 +131,89 @@ do
       end
       return spawnObjectData({ data = deckdata })
     end
+  end
+
+  -- Sorts an object list by configured nickname, metadata ID, or metadata type.
+  -- Higher priority values are sorted first; unmatched objects use priority 500.
+  ---@param objects table Set-aside object data
+  ---@param priority? table Optional priority map
+  function HelperLib.sortObjectList(objects, priority)
+    priority = priority or {}
+
+    local function getPriority(object)
+      local metadata = HelperLib.getMetadata(object)
+      return priority[object.Nickname]
+          or priority[metadata.id]
+          or priority[metadata.type]
+          or 500
+    end
+
+    table.sort(objects, function(a, b)
+      return getPriority(a) > getPriority(b)
+    end)
+  end
+
+  -- Combines objects with matching names, fields, or extractor results into decks.
+  ---@param objects table Object data to combine
+  ---@param criteria? string|function an object/metadata field, or a key extractor
+  ---@return table: Combined object data in first-match order
+  function HelperLib.combineObjects(objects, criteria)
+    if criteria == nil or type(criteria) ~= "string" and type(criteria) ~= "function" then
+      error("combineObjects criteria must be a string or function")
+    end
+
+    local groups      = {}
+    local keysByIndex = {}
+    for index, object in ipairs(objects) do
+      local metadata = HelperLib.getMetadata(object)
+      local key
+      if type(criteria) == "function" then
+        key = criteria(object, metadata)
+      else
+        key = object[criteria] or metadata[criteria]
+      end
+
+      if key ~= nil then
+        keysByIndex[index] = key
+        groups[key]        = groups[key] or {}
+        table.insert(groups[key], object)
+      end
+    end
+
+    local combined  = {}
+    local processed = {}
+    for index, object in ipairs(objects) do
+      local key   = keysByIndex[index]
+      local group = key ~= nil and groups[key] or nil
+      if group == nil or #group == 1 then
+        table.insert(combined, object)
+      elseif not processed[key] then
+        local cardList = {}
+        for _, groupObject in ipairs(group) do
+          if type(groupObject.ContainedObjects) == "table" then
+            for _, cardData in ipairs(groupObject.ContainedObjects) do
+              table.insert(cardList, cardData)
+            end
+          else
+            table.insert(cardList, groupObject)
+          end
+        end
+
+        if #cardList > 1 then
+          local deckData    = DeckLib.generateDeckData(cardList)
+          deckData.Nickname = tostring(key)
+          processed[key]    = true
+          table.insert(combined, deckData)
+        else
+          for _, groupObject in ipairs(group) do
+            table.insert(combined, groupObject)
+          end
+          processed[key] = true
+        end
+      end
+    end
+
+    return combined
   end
 
   function HelperLib.getMatColorFromMemo(card)
