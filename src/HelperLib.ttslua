@@ -153,12 +153,12 @@ do
     end)
   end
 
-  -- Combines objects with matching names, fields, or extractor results into decks.
+  -- Combines objects with matching names, fields, or extractor results into decks in place.
   ---@param objects table Object data to combine
   ---@param criteria? string|function an object/metadata field, or a key extractor
-  ---@return table: Combined object data in first-match order
+  ---@return table: The mutated object list in first-match order
   function HelperLib.combineObjects(objects, criteria)
-    if criteria == nil or type(criteria) ~= "string" and type(criteria) ~= "function" then
+    if criteria == nil or (type(criteria) ~= "string" and type(criteria) ~= "function") then
       error("combineObjects criteria must be a string or function")
     end
 
@@ -200,8 +200,13 @@ do
         end
 
         if #cardList > 1 then
-          local deckData    = DeckLib.generateDeckData(cardList)
-          deckData.Nickname = tostring(key)
+          local rotation    = Vector(
+            cardList[1].Transform.rotX,
+            cardList[1].Transform.rotY,
+            cardList[1].Transform.rotZ
+          )
+          local deckData    = DeckLib.generateDeckData(cardList, nil, rotation)
+          deckData.Nickname = "Deck: " .. key
           processed[key]    = true
           table.insert(combined, deckData)
         else
@@ -213,7 +218,13 @@ do
       end
     end
 
-    return combined
+    for index = #objects, 1, -1 do
+      objects[index] = nil
+    end
+    for _, object in ipairs(combined) do
+      table.insert(objects, object)
+    end
+    return objects
   end
 
   function HelperLib.getMatColorFromMemo(card)
