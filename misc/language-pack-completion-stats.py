@@ -47,6 +47,7 @@ EXCLUDED_FOLDERS = {
     "The Grand Oak Hotel",
     "The Symphony of Erich Zann",
     "The Woods of the Black Goat",
+    "Where Theres Smoke Theres Fire",
 }
 
 NOT_ORPHANS = {
@@ -64,9 +65,6 @@ NOT_ORPHANS = {
     *(f"TAR{i:02}" for i in range(22)),  # RtTCU Tarot cards
 }
 
-# Define prefixes we want to skip
-# EXCLUDED_PREFIXES = ("CB", "CG", "CL", "SB", "SN", "CT", "ES")
-
 # Derived Paths
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -83,7 +81,8 @@ LP_PATH = ROOT_PATH / "language-pack"
 CACHE_FILE = SCRIPT_DIR / "language-pack-completion-stats_cache.json"
 
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
 )
 
 # ==========================================
