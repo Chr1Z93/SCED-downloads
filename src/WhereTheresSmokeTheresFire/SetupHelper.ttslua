@@ -1,0 +1,266 @@
+local ChaosBagApi      = require("chaosbag/ChaosBagApi")
+local CoroutineLib     = require("util/CoroutineLib")
+local DeckLib          = require("util/DeckLib")
+local GUIDReferenceApi = require("core/GUIDReferenceApi")
+local HelperLib        = require("HelperLib")
+local i18nApi          = require("Global/i18nApi")
+local MythosAreaApi    = require("mythos/MythosAreaApi")
+local PlayAreaApi      = require("playarea/PlayAreaApi")
+local TableLib         = require("util/TableLib")
+
+local CARDSOURCE_TAG   = "CardSource_WTSTF"
+local FACEDOWN         = Vector(0, 270, 180)
+local FACEUP           = Vector(0, 270, 0)
+local SPAWN_GRIDS      = {
+  ["12145"] = { 0, 1 },    -- Downtown
+  ["12146"] = { 0, 1 },    -- Downtown
+  ["12147"] = { -1, -1 },  -- Uptown
+  ["12148"] = { -1, -1 },  -- Uptown
+  ["12149"] = { -1, 1 },   -- Northside
+  ["12150"] = { 1, 1 },    -- Easttown
+  ["12151"] = { 0, 0 },    -- Merchant Disctrict
+  ["12152"] = { 1, 0 },    -- Waterfront District
+  ["12153"] = { 0, -1 },   -- Southside
+  ["12154"] = { 1, -1 },   -- French Hill
+  ["12156"] = { -1, 0 },   -- Miskatonic University
+  ["12179"] = { 1.35, 1 }, -- Elokoss
+  ["12115"] = { 0, 2 },    -- Dr. Henry Armitage
+}
+
+local setupRunning     = false
+local setupCompleted   = false
+local chaosBagState, setupColor
+
+function updateSave()
+  return JSON.encode({
+    chaosBagState  = chaosBagState,
+    setupColor     = setupColor,
+    setupCompleted = setupCompleted
+  })
+end
+
+function onLoad(saveData)
+  buttonCreation()
+
+  if saveData and saveData ~= "" then
+    local loadedData = JSON.decode(saveData)
+    chaosBagState    = loadedData.chaosBagState
+    setupCompleted   = loadedData.setupCompleted
+
+    -- allow setup restart
+    if loadedData.setupColor and Player[loadedData.setupColor].seated then
+      setup(nil, loadedData.setupColor)
+    end
+  end
+end
+
+function buttonCreation()
+  local buttonParameters = {
+    label          = "Set Up",
+    click_function = "setup",
+    function_owner = self,
+    position       = { 0, 0.11, 0 },
+    height         = 1120,
+    width          = 3250,
+    scale          = { x = 0.25, y = 0.25, z = 0.25 },
+    font_size      = 650
+  }
+
+  if setupCompleted then
+    buttonParameters.label          = "Restore\nChaos Bag"
+    buttonParameters.click_function = "restoreChaosBag"
+    buttonParameters.height         = 1900
+  end
+
+  self.clearButtons()
+  self.createButton(buttonParameters)
+end
+
+function setup(_, playerColor)
+  if setupRunning then
+    Player[playerColor].showConfirmDialog(
+      i18nApi.getStrById("SetupAlreadyRunning"),
+      function()
+        setupColor = playerColor
+        updateSave()
+        self.reload()
+      end
+    )
+    return
+  end
+  setupRunning = true
+
+  local function setupCoroutine()
+    -- Ask for difficulty
+    local difficulty = CoroutineLib.showOptionsDialogAndWait(
+      playerColor,
+      "Choose Difficulty:",
+      { "Standard", "Expert", "Nightmare" },
+      "Standard"
+    )
+
+    -- Ask for investigator count
+    local investigatorCount = tonumber(CoroutineLib.showOptionsDialogAndWait(
+      playerColor,
+      "Choose Investigator Count:",
+      { 1, 2, 3, 4 },
+      PlayAreaApi.getInvestigatorCount()
+    ))
+    PlayAreaApi.setInvestigatorCount(investigatorCount)
+
+    -- Handle chaos bag setup
+    chaosBagState = ChaosBagApi.getChaosBagState()
+    updateSave()
+
+    local trash    = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+    local selector = getObjectFromGUID("92d5f8")
+    if selector then
+      selector.call("clickFun", difficulty)
+      trash.putObject(selector)
+      CoroutineLib.yieldSeconds(0.25)
+    else
+      broadcastToAll("Warning: Difficulty Selector not found.", "Orange")
+    end
+
+    local objList = getObjectsWithTag(CARDSOURCE_TAG)
+    if #objList == 0 then
+      broadcastToAll("Couldn't find scenario card source!", "Red")
+      setupRunning = false
+      return
+    end
+
+    local CardSource = objList[1]
+    local cardList   = CardSource.call("getCardsForListOfSets", {
+      "Smoke and Mirrors",
+      "Arkham",
+      "People of Arkham",
+      "Fire!",
+      "Ashen Pilgrims",
+      "Reeking Decay",
+      "Hallucinations",
+      "Bad Weather",
+      "Queen of Ash",
+      "Gangs of Arkham",
+      "Spreading Flames" -- for Armitage
+    })
+    printToAll(string.format(
+      "Performing setup for  \"%s\" difficulty and %d investigator%s.",
+      difficulty,
+      investigatorCount,
+      investigatorCount == 1 and "" or "s"
+    ))
+
+    -- Set Aside
+    local mapSetAside       = {
+      ["12155"] = true, -- Miskatonic University
+      ["12164"] = true, -- Rogue Gangster
+
+      -- People of Arkham
+      ["12139"] = true,
+      ["12141"] = true,
+      ["12144"] = true,
+
+      -- Smoke and Mirrors cards
+      ["12137"] = true,
+      ["12138"] = true,
+
+      -- Queen of Ash cards
+      ["12180"] = true,
+      ["12177"] = true,
+      ["12178"] = true,
+    }
+
+    local mapRFG            = {}
+
+    -- Randomize Downtown
+    local removedDowntown   = TableLib.pickRandom({ "12145", "12146" })
+    mapRFG[removedDowntown] = true
+
+    -- Randomize Uptown
+    local removedUptown     = TableLib.pickRandom({ "12147", "12148" })
+    mapRFG[removedUptown]   = true
+
+    -- Handle People of Arkham
+    local randomId          = TableLib.pickRandom({ "12140", "12142", "12143" })
+    mapSetAside[randomId]   = true
+    local peopleGrids       = { { 0.35, 1 }, { 0.35, -1 } }
+
+    -- Sort cards
+    local scenarioObjects   = {
+      encounterDeck = {},
+      agendaDeck    = {},
+      actDeck       = {},
+      setAside      = {}
+    }
+
+    for _, card in ipairs(cardList) do
+      local md = card.metadata
+      local id = md.id
+
+      -- skip RFG cards
+      if not mapRFG[id] then
+        if mapSetAside[id] then
+          table.insert(scenarioObjects.setAside, card.data)
+        elseif md.type == "ScenarioReference" then
+          local position = MythosAreaApi.getScenarioReferenceCardPosition():setAt("y", 2.5)
+          local rotation = MythosAreaApi.getRotation()
+          DeckLib.spawnCard(card.data, position, rotation)
+        elseif md.type == "Act" then
+          table.insert(scenarioObjects.actDeck, card.data)
+        elseif md.type == "Agenda" then
+          table.insert(scenarioObjects.agendaDeck, card.data)
+        elseif md.encounterSet == "People of Arkham" then
+          DeckLib.spawnCard(card.data, PlayAreaApi.gridToWorld(TableLib.pickRandom(peopleGrids)), FACEDOWN)
+        elseif SPAWN_GRIDS[id] then
+          DeckLib.spawnCard(card.data, PlayAreaApi.gridToWorld(SPAWN_GRIDS[id]), FACEDOWN)
+        else
+          table.insert(scenarioObjects.encounterDeck, card.data)
+        end
+      end
+    end
+
+    -- Starting Location
+    HelperLib.moveInvestigatorMinis(SPAWN_GRIDS["12156"], "Miskatonic University")
+
+    HelperLib.sortObjectList(scenarioObjects.setAside, {
+      ["Asset"]    = 50,
+      ["Enemy"]    = 75,
+      ["Location"] = 100,
+    })
+    HelperLib.combineObjects(scenarioObjects.setAside, "encounterSet")
+
+    -- Spawn scenario content
+    HelperLib.spawnMythosDeckOrCard(scenarioObjects.agendaDeck, "Agenda Deck")
+    HelperLib.spawnMythosDeckOrCard(scenarioObjects.actDeck, "Act Deck")
+    HelperLib.spawnMythosDeckOrCard(scenarioObjects.encounterDeck, "Encounter Deck", true)
+    MythosAreaApi.spawnSetAsideChest(scenarioObjects.setAside)
+
+    printToAll("Choose an investigator to begin with Dr. Henry Armitage in play under their control.\n" ..
+      "He does not take up an ally slot for this scenario.")
+
+    -- Handle adjustment based on investigator count
+    if investigatorCount == 1 then
+      broadcastToAll("The lead investigator gains 3 clues from the token bank.")
+    elseif investigatorCount == 2 then
+      broadcastToAll("The lead investigator gains 2 clues from the token bank.")
+    elseif investigatorCount == 4 then
+      local DoomCounter = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "DoomCounter")
+      DoomCounter.call("addVal", 1)
+    end
+
+    broadcastToAll("Setup completed.", "Green")
+    setupCompleted = true
+    updateSave()
+    buttonCreation()
+  end
+
+  CoroutineLib.start(setupCoroutine)
+end
+
+function restoreChaosBag()
+  ChaosBagApi.setChaosBagState(chaosBagState, true)
+  broadcastToAll("Chaos Bag restored.", "Green")
+
+  local trash = GUIDReferenceApi.getObjectByOwnerAndType("Mythos", "Trash")
+  trash.putObject(self)
+end
