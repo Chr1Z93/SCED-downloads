@@ -1,5 +1,6 @@
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 PATHS = {
@@ -22,7 +23,7 @@ def read_library():
 
 
 def exec_mod_manager(input_path, output_path):
-    subprocess.run(
+    result = subprocess.run(
         [
             resolve(PATHS["modexec"]),
             "--objin",
@@ -32,8 +33,19 @@ def exec_mod_manager(input_path, output_path):
             "--moddir",
             resolve(PATHS["moddir"]),
         ],
-        check=True,
+        capture_output=True,
+        text=True,
     )
+
+    if result.stdout:
+        print(result.stdout, end="")
+    if result.stderr:
+        print(result.stderr, file=sys.stderr, end="")
+
+    if result.returncode != 0:
+        raise subprocess.CalledProcessError(result.returncode, result.args)
+    if result.stdout.strip() or result.stderr.strip():
+        raise RuntimeError("TTS Mod Manager produced output; treating this as a build failure.")
 
 
 def sanitize_name(name):
