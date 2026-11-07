@@ -1,0 +1,2727 @@
+{
+  "GUID": "128f8c",
+  "Name": "Custom_Model_Bag",
+  "Transform": {
+    "rotY": 270.0,
+    "scaleX": 2.21,
+    "scaleY": 0.46,
+    "scaleZ": 2.42
+  },
+  "Nickname": "Dark Skies",
+  "Description": "Investigator Pack",
+  "AltLookAngle": {
+    "x": 0.0,
+    "y": 0.0,
+    "z": 0.0
+  },
+  "ColorDiffuse": {
+    "r": 1.0,
+    "g": 1.0,
+    "b": 1.0
+  },
+  "LayoutGroupSortIndex": 0,
+  "Value": 0,
+  "Locked": false,
+  "Grid": true,
+  "Snap": true,
+  "IgnoreFoW": false,
+  "MeasureMovement": false,
+  "DragSelectable": true,
+  "Autoraise": true,
+  "Sticky": true,
+  "Tooltip": true,
+  "GridProjection": false,
+  "HideWhenFaceDown": false,
+  "Hands": false,
+  "MaterialIndex": -1,
+  "MeshIndex": -1,
+  "CustomMesh": {
+    "MeshURL": "https://steamusercontent-a.akamaihd.net/ugc/62583916778515333/9F0BE0C211BE3BD1725B4B855F5D3C9C0D020394/",
+    "DiffuseURL": "https://steamusercontent-a.akamaihd.net/ugc/18043216756744725228/EEADAFA3995ECFD896009F020F2B67B8F70582B6/",
+    "NormalURL": "",
+    "ColliderURL": "",
+    "Convex": true,
+    "MaterialIndex": 3,
+    "TypeIndex": 6,
+    "CustomShader": {
+      "SpecularColor": {
+        "r": 1.0,
+        "g": 1.0,
+        "b": 1.0
+      },
+      "SpecularIntensity": 0.0,
+      "SpecularSharpness": 2.0,
+      "FresnelStrength": 0.0
+    },
+    "CastShadows": true
+  },
+  "Bag": {
+    "Order": 0
+  },
+  "LuaScript": "-- Bundled by luabundle {\"version\":\"1.6.0\"}\nlocal __bundle_require, __bundle_loaded, __bundle_register, __bundle_modules = (function(superRequire)\n\tlocal loadingPlaceholder = {[{}] = true}\n\n\tlocal register\n\tlocal modules = {}\n\n\tlocal require\n\tlocal loaded = {}\n\n\tregister = function(name, body)\n\t\tif not modules[name] then\n\t\t\tmodules[name] = body\n\t\tend\n\tend\n\n\trequire = function(name)\n\t\tlocal loadedModule = loaded[name]\n\n\t\tif loadedModule then\n\t\t\tif loadedModule == loadingPlaceholder then\n\t\t\t\treturn nil\n\t\t\tend\n\t\telse\n\t\t\tif not modules[name] then\n\t\t\t\tif not superRequire then\n\t\t\t\t\tlocal identifier = type(name) == 'string' and '\\\"' .. name .. '\\\"' or tostring(name)\n\t\t\t\t\terror('Tried to require ' .. identifier .. ', but no such module has been registered')\n\t\t\t\telse\n\t\t\t\t\treturn superRequire(name)\n\t\t\t\tend\n\t\t\tend\n\n\t\t\tloaded[name] = loadingPlaceholder\n\t\t\tloadedModule = modules[name](require, loaded, register, modules)\n\t\t\tloaded[name] = loadedModule\n\t\tend\n\n\t\treturn loadedModule\n\tend\n\n\treturn require, loaded, register, modules\nend)(nil)\n__bundle_register(\"MemoryBag\", function(require, _LOADED, __bundle_register, __bundle_modules)\nfunction updateSave()\n  self.script_state = JSON.encode({ ml = memoryList, setupButton = setupButton })\nend\n\nfunction onLoad(savedData)\n  if savedData and savedData ~= \"\" then\n    local loadedData = JSON.decode(savedData)\n    memoryList       = loadedData.ml\n    setupButton      = loadedData.setupButton\n  end\n\n  memoryList = memoryList or {}\n  self.addContextMenuItem(\"Toggle setup button\", toggleSetupButton)\n\n  -- make sure the model is loaded so that we can use the bounds\n  Wait.condition(function()\n    Wait.frames(function()\n      generateButtonData()\n      createMemoryActionButtons()\n    end, 5)\n  end, function() return not self.loading_custom end)\nend\n\nfunction generateButtonData()\n  local selfScale  = self.getScale()\n  local selfBounds = self.getBoundsNormalized()\n  buttonScale      = Vector(1 / selfScale.x, 1, 1 / selfScale.z)\n\n  local buttonX    = math.max(selfBounds.size.x / 5, 1.5) / selfScale.x\n  local buttonY    = -(selfBounds.size.y / 2 + selfBounds.offset.y) / selfScale.y + 0.5\n  local buttonZ    = {}\n  for i = 1, 4 do\n    buttonZ[i] = (selfBounds.size.z / 2 + i * 1.15 - 0.15) / selfScale.z\n  end\n\n  local upperButtonMult = 1.1\n  buttonData = {\n    [\"Add\"]       = {\n      tooltip = \"Add highlighted objects to memory\",\n      pos     = { buttonX * upperButtonMult, buttonY, -buttonZ[1] },\n      fColor  = { 0.25, 1, 0.25 }\n    },\n    [\"Cancel\"]    = {\n      tooltip = \"Abort setup mode\",\n      pos     = { -buttonX * upperButtonMult, buttonY, -buttonZ[1] },\n    },\n    [\"Internal\"]  = {\n      tooltip = \"Copy memory from internal bags\",\n      pos     = { -buttonX * upperButtonMult, buttonY, -buttonZ[4] },\n    },\n    [\"Place\"]     = {\n      pos   = { buttonX, buttonY, buttonZ[1] },\n      fSize = 350,\n      w     = 1200\n    },\n    [\"Recall\"]    = {\n      pos   = { -buttonX, buttonY, buttonZ[1] },\n      fSize = 350,\n      w     = 1200\n    },\n    [\"Remove\"]    = {\n      tooltip = \"Remove highlighted objects from memory\",\n      pos     = { buttonX * upperButtonMult, buttonY, -buttonZ[2] },\n      fColor  = { 1, 0.25, 0.25 }\n    },\n    [\"Reset\"]     = {\n      tooltip = \"Completely reset memory\",\n      pos     = { -buttonX * upperButtonMult, buttonY, -buttonZ[3] },\n    },\n    [\"Selection\"] = {\n      tooltip = \"Add / Remove highlight for selected objects\",\n      pos     = { -buttonX * upperButtonMult, buttonY, -buttonZ[2] },\n    },\n    [\"Setup\"]     = {\n      pos   = { 0, buttonY, -buttonZ[1] },\n      fSize = 350\n    },\n    [\"Update\"]    = {\n      tooltip = \"Update memory for placed objects\",\n      pos     = { buttonX * upperButtonMult, buttonY, -buttonZ[3] },\n      fColor  = { 0.75, 0.75, 1 }\n    }\n  }\n  for label, data in pairs(buttonData) do\n    data.click = \"buttonClick_\" .. string.lower(string.gsub(label, \"%s+\", \"\"))\n  end\nend\n\nfunction createListofButtons(list)\n  for _, name in ipairs(list) do\n    createButtonByName(name)\n  end\nend\n\nfunction createButtonByName(label)\n  local bd = buttonData[label]\n  self.createButton({\n    label          = label,\n    tooltip        = bd.tooltip,\n    position       = bd.pos,\n    height         = bd.h or 500,\n    width          = bd.w or 1500,\n    font_size      = bd.fSize or 325,\n    font_color     = bd.fColor or { 1, 1, 1 },\n    click_function = bd.click,\n    function_owner = self,\n    color          = { 0, 0, 0 },\n    scale          = buttonScale\n  })\nend\n\n-- context menu function to toggle the setup button visibility\nfunction toggleSetupButton()\n  setupButton = not setupButton\n  broadcastToAll(\"Setup button \" .. (setupButton and \"en\" or \"dis\") .. \"abled\")\n  updateSave()\n  removeAllHighlights()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_setup()\n  tempList = {}\n  self.clearButtons()\n  createButtonsOnAllObjects()\n  createSetupActionButtons()\nend\n\nfunction broadcastFeedback(str1, count, name, str2, color)\n  local displayName = name .. (count ~= 1 and \"s\" or \"\")\n  local parts       = {}\n  local candidates  = { str1, count, displayName, str2 }\n  for i = 1, 4 do\n    local val = candidates[i]\n    if val and val ~= \"\" then\n      table.insert(parts, tostring(val))\n    end\n  end\n\n  broadcastToAll(table.concat(parts, \" \"), color or { 1, 1, 1 })\nend\n\nfunction createButtonsOnAllObjects()\n  buttonIndexMap = {}\n\n  local buttonCount = 0\n  for _, obj in ipairs(getObjects()) do\n    if obj ~= self and obj.type ~= \"Scripting\" and obj.type ~= \"Hand\" then\n      local globalPos = obj.getPosition() + Vector(0, obj.getBounds().size.y / 2 + 1, 0)\n      local buttonPos = self.positionToLocal(globalPos):scale(Vector(-1, 1, 1))\n      local fName     = \"selectButton_\" .. buttonCount\n      _G[fName]       = function() buttonClick_selectObject(obj) end\n      self.createButton({\n        click_function = fName,\n        function_owner = self,\n        position       = buttonPos,\n        height         = 600,\n        width          = 600,\n        color          = { 0.75, 0.25, 0.25, 0.75 },\n        scale          = buttonScale\n      })\n      buttonIndexMap[obj.getGUID()] = buttonCount\n      buttonCount = buttonCount + 1\n    end\n  end\nend\n\nfunction createSetupActionButtons()\n  createListofButtons({ \"Cancel\", \"Selection\", \"Reset\", \"Internal\", \"Add\" })\n  if next(memoryList) then\n    createListofButtons({ \"Remove\", \"Update\" })\n  end\nend\n\nfunction buttonClick_selectObject(obj)\n  local guid = obj.getGUID()\n  local index = buttonIndexMap[guid]\n  if not index then return end\n\n  if not tempList[guid] then\n    self.editButton({ index = index, color = { 0, 1, 0, 0.75 } })\n    tempList[guid] = {\n      pos  = roundVector(obj.getPosition(), 3),\n      rot  = roundVector(obj.getRotation(), 0),\n      lock = obj.getLock()\n    }\n    obj.highlightOn({ 0, 1, 0 })\n  else\n    self.editButton({ index = index, color = { 0.75, 0.25, 0.25, 0.75 } })\n    tempList[guid] = nil\n    obj.highlightOff()\n  end\nend\n\nfunction buttonClick_cancel()\n  broadcastToAll(\"Setup Canceled\")\n  removeAllHighlights()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_selection(_, playerColor)\n  local objList = Player[playerColor].getSelectedObjects()\n\n  if #objList == 0 then\n    broadcastToAll(\"No objects selected!\")\n    return\n  end\n\n  broadcastFeedback(\"Toggled selection for\", #objList, \"object\")\n  for _, obj in ipairs(objList) do\n    buttonClick_selectObject(obj)\n  end\nend\n\nfunction buttonClick_add()\n  local count = 0\n  for _ in pairs(tempList) do\n    count = count + 1\n  end\n  broadcastFeedback(\"Added\", count, \"object\", \"from selection\")\n\n  -- copy data from tempList to memoryList\n  for guid, entry in pairs(tempList) do\n    memoryList[guid] = entry\n  end\n\n  updateSave()\n  removeAllHighlights()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_update()\n  local count = 0\n  for guid in pairs(memoryList) do\n    local obj = getObjectFromGUID(guid)\n    if obj ~= nil then\n      count = count + 1\n      memoryList[guid] = {\n        pos  = roundVector(obj.getPosition(), 3),\n        rot  = roundVector(obj.getRotation(), 0),\n        lock = obj.getLock()\n      }\n    end\n  end\n  broadcastFeedback(\"Updated data for\", count, \"object\")\n  updateSave()\nend\n\nfunction buttonClick_remove()\n  local count = 0\n  for guid in pairs(tempList) do\n    count = count + 1\n    memoryList[guid] = nil\n  end\n  broadcastFeedback(nil, count, \"object\", \"removed\")\n\n  updateSave()\n  removeAllHighlights()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_setNew()\n  local count = 0\n  for _, obj in ipairs(getObjects()) do\n    if memoryList[obj.guid] then\n      count = count + 1\n      memoryList[obj.guid].pos = roundVector(obj.getPosition(), 3)\n      memoryList[obj.guid].rot = roundVector(obj.getRotation(), 0)\n      memoryList[obj.guid].lock = obj.getLock()\n    end\n  end\n  broadcastFeedback(\"Updated data for\", count, \"object\")\n  updateSave()\n  createMemoryActionButtons()\nend\n\nfunction buttonClick_reset()\n  memoryList = {}\n  updateSave()\n  removeAllHighlights()\n  broadcastToAll(\"Tool Reset\")\n  self.clearButtons()\n\n  if setupButton then\n    createButtonByName(\"Setup\")\n  end\nend\n\nfunction buttonClick_internal()\n  local count = 0\n  for _, objInfo in ipairs(self.getObjects()) do\n    local data = objInfo.lua_script_state\n    if data ~= nil then\n      local j = JSON.decode(data)\n      if j ~= nil and j.ml ~= nil then\n        count = count + 1\n        for guid, entry in pairs(j.ml) do\n          memoryList[guid] = entry\n        end\n      end\n    end\n  end\n\n  if count > 0 then\n    broadcastFeedback(\"Added\", count, \"internal bag\", \"to existing memory\")\n  end\nend\n\nfunction createMemoryActionButtons()\n  self.clearButtons()\n\n  if next(memoryList) then\n    createListofButtons({ \"Place\", \"Recall\" })\n  end\n\n  if setupButton then\n    createButtonByName(\"Setup\")\n  end\nend\n\n-- Sends objects from bag/table to their saved position/rotation\nfunction buttonClick_place()\n  -- get names of contained objects\n  local guidToName = {}\n  for _, bagObjData in ipairs(self.getData().ContainedObjects or {}) do\n    guidToName[bagObjData[\"GUID\"]] = bagObjData[\"Nickname\"]\n  end\n\n  local updateGuids = {}\n  local placeCount  = 0\n  local moveCount   = 0\n  for guid, entry in pairs(memoryList) do\n    local obj = getObjectFromGUID(guid)\n    if obj ~= nil and (obj.getName() == guidToName[guid] or guidToName[guid] == nil) then\n      -- If obj is out on the table and has the same name (or there's no contained copy), move it\n      moveCount = moveCount + 1\n      obj.setRotation(entry.rot)\n      obj.setPositionSmooth(entry.pos)\n      obj.setLock(entry.lock)\n    elseif guidToName[guid] then\n      -- If obj is inside of the bag\n      placeCount = placeCount + 1\n      local item = self.takeObject({\n        guid     = guid,\n        position = entry.pos,\n        rotation = entry.rot,\n        smooth   = false\n      })\n      item.setLock(entry.lock)\n\n      if obj ~= nil then\n        updateGuids[guid] = item.getGUID()\n      end\n    end\n  end\n\n  -- update memoryList if we placed an item that got a new GUID\n  if next(updateGuids) then\n    for oldGuid, newGuid in pairs(updateGuids) do\n      memoryList[newGuid] = memoryList[oldGuid]\n      memoryList[oldGuid] = nil\n    end\n    updateSave()\n  end\n\n  if placeCount > 0 then\n    broadcastFeedback(nil, placeCount, \"object\", \"placed\")\n  end\n\n  if moveCount > 0 then\n    broadcastFeedback(nil, moveCount, \"object\", \"moved\")\n  end\n\n  if placeCount == 0 and moveCount == 0 then\n    broadcastToAll(\"Bag is empty and no matching objects were found in play.\")\n  end\nend\n\nfunction buttonClick_recall()\n  local count = 0\n  for guid in pairs(memoryList) do\n    local obj = getObjectFromGUID(guid)\n    if obj ~= nil then\n      self.putObject(obj)\n      count = count + 1\n    end\n  end\n  broadcastFeedback(nil, count, \"object\", \"recalled\")\nend\n\nfunction removeAllHighlights()\n  -- Only clear objects we actually touched\n  for guid in pairs(tempList or {}) do\n    local obj = getObjectFromGUID(guid)\n    if obj then obj.highlightOff() end\n  end\n  tempList = {}\nend\n\n-- Round vector to the Nth decimal\nfunction roundVector(vec, dec)\n  local mult = 10 ^ (dec or 0)\n  return {\n    x = math.floor(vec.x * mult + 0.5) / mult,\n    y = math.floor(vec.y * mult + 0.5) / mult,\n    z = math.floor(vec.z * mult + 0.5) / mult\n  }\nend\nend)\n__bundle_register(\"__root\", function(require, _LOADED, __bundle_register, __bundle_modules)\nrequire(\"MemoryBag\")\nend)\nreturn __bundle_require(\"__root\")",
+  "LuaScriptState": "{\"ml\":{\"08ef30\":{\"lock\":false,\"pos\":{\"x\":-15.024,\"y\":1.001,\"z\":4.695},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"0992c9\":{\"lock\":false,\"pos\":{\"x\":7.976,\"y\":0.974,\"z\":1.11},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"0b10e3\":{\"lock\":false,\"pos\":{\"x\":-1.42,\"y\":0.974,\"z\":9.656},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"1a67a6\":{\"lock\":false,\"pos\":{\"x\":-7.507,\"y\":0.974,\"z\":12.793},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"1d34fb\":{\"lock\":false,\"pos\":{\"x\":-13.097,\"y\":1.001,\"z\":12.805},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"1d668d\":{\"lock\":false,\"pos\":{\"x\":5.689,\"y\":0.974,\"z\":4.272},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"24667f\":{\"lock\":false,\"pos\":{\"x\":-8.524,\"y\":0.974,\"z\":1.101},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"2ba5b5\":{\"lock\":false,\"pos\":{\"x\":-15.253,\"y\":1.001,\"z\":9.529},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"2d117c\":{\"lock\":false,\"pos\":{\"x\":-0.314,\"y\":0.974,\"z\":12.909},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"3cd042\":{\"lock\":false,\"pos\":{\"x\":-6.626,\"y\":1.001,\"z\":12.982},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"3ed74f\":{\"lock\":false,\"pos\":{\"x\":5.689,\"y\":0.974,\"z\":1.11},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"47514d\":{\"lock\":false,\"pos\":{\"x\":7.976,\"y\":0.974,\"z\":4.272},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"4ce03f\":{\"lock\":false,\"pos\":{\"x\":-19.84,\"y\":0.974,\"z\":9.471},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"5c248f\":{\"lock\":false,\"pos\":{\"x\":-19.922,\"y\":0.974,\"z\":1.166},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"5f53a7\":{\"lock\":false,\"pos\":{\"x\":-1.53,\"y\":0.974,\"z\":1.059},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"60657b\":{\"lock\":false,\"pos\":{\"x\":-22.21,\"y\":0.974,\"z\":1.166},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"694a44\":{\"lock\":false,\"pos\":{\"x\":-15.255,\"y\":0.974,\"z\":1.259},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"6b150a\":{\"lock\":false,\"pos\":{\"x\":-7.214,\"y\":0.974,\"z\":-5.119},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"6e4e97\":{\"lock\":false,\"pos\":{\"x\":-6.236,\"y\":0.974,\"z\":4.263},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"7d47f8\":{\"lock\":false,\"pos\":{\"x\":-22.21,\"y\":0.974,\"z\":4.329},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"816fb7\":{\"lock\":false,\"pos\":{\"x\":-12.968,\"y\":0.974,\"z\":4.422},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"85b6a7\":{\"lock\":false,\"pos\":{\"x\":-8.524,\"y\":0.974,\"z\":4.263},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"8eb65c\":{\"lock\":false,\"pos\":{\"x\":0.613,\"y\":1.001,\"z\":12.875},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"922e51\":{\"lock\":false,\"pos\":{\"x\":-1.53,\"y\":0.974,\"z\":4.222},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"934b39\":{\"lock\":false,\"pos\":{\"x\":-22.127,\"y\":0.974,\"z\":9.471},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"a554ed\":{\"lock\":false,\"pos\":{\"x\":-6.24,\"y\":0.974,\"z\":9.502},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"a7b33d\":{\"lock\":false,\"pos\":{\"x\":0.868,\"y\":0.974,\"z\":9.656},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"aa44a6\":{\"lock\":false,\"pos\":{\"x\":-15.256,\"y\":0.974,\"z\":4.416},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"b9f643\":{\"lock\":false,\"pos\":{\"x\":-12.968,\"y\":0.974,\"z\":1.259},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"bced83\":{\"lock\":false,\"pos\":{\"x\":-12.878,\"y\":0.974,\"z\":9.523},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"c23626\":{\"lock\":false,\"pos\":{\"x\":5.659,\"y\":0.974,\"z\":9.604},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"c252a9\":{\"lock\":false,\"pos\":{\"x\":0.757,\"y\":0.974,\"z\":1.059},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"c89758\":{\"lock\":false,\"pos\":{\"x\":-13.986,\"y\":0.974,\"z\":12.923},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"cf6e80\":{\"lock\":false,\"pos\":{\"x\":0.757,\"y\":0.974,\"z\":4.222},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"d52d53\":{\"lock\":false,\"pos\":{\"x\":-8.528,\"y\":0.974,\"z\":9.502},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"dde679\":{\"lock\":false,\"pos\":{\"x\":-15.165,\"y\":0.974,\"z\":9.523},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"df268a\":{\"lock\":false,\"pos\":{\"x\":-20.144,\"y\":1.001,\"z\":12.962},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"e4192e\":{\"lock\":false,\"pos\":{\"x\":7.806,\"y\":1.001,\"z\":12.797},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"e70b41\":{\"lock\":false,\"pos\":{\"x\":6.813,\"y\":0.974,\"z\":12.945},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"ea98e6\":{\"lock\":false,\"pos\":{\"x\":7.947,\"y\":0.974,\"z\":9.604},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"edde70\":{\"lock\":false,\"pos\":{\"x\":-19.922,\"y\":0.974,\"z\":4.329},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"f486c5\":{\"lock\":false,\"pos\":{\"x\":-6.236,\"y\":0.974,\"z\":1.101},\"rot\":{\"x\":0,\"y\":180,\"z\":0}},\"f8c234\":{\"lock\":false,\"pos\":{\"x\":-21.093,\"y\":0.974,\"z\":13.005},\"rot\":{\"x\":0,\"y\":180,\"z\":0}}},\"setupButton\":false}",
+  "XmlUI": "",
+  "ContainedObjects": [
+    {
+      "GUID": "f8c234",
+      "Name": "Card",
+      "Transform": {
+        "posX": -21.09306,
+        "posY": 0.9735986,
+        "posZ": 13.0049582,
+        "rotX": 7.463526E-05,
+        "rotY": 180.0113,
+        "rotZ": -0.000252194441,
+        "scaleX": 0.8214,
+        "scaleY": 1.0,
+        "scaleZ": 0.8214
+      },
+      "Nickname": "\"Crash\" Wilkins",
+      "Description": "",
+      "GMNotes": "{\"id\": \"80ffe016-25f9-4c88-ad37-32470db1c7b8\", \"type\": \"Investigator\", \"class\": \"Guardian\", \"traits\": \"Criminal. Veteran.\", \"willpowerIcons\": 3, \"intellectIcons\": 1, \"combatIcons\": 5, \"agilityIcons\": 3, \"health\": 9, \"sanity\": 5}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Investigator",
+        "Sideways"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 8600,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "86": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/10894264169618092711/0B5384E92092BEC84772D2DD8DB498B449E05BAA/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13559731908012850026/1E5F8B4A1AE11022301C1C4F954D748EE8BB3B05/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "df268a",
+      "Name": "Card",
+      "Transform": {
+        "posX": -20.14385,
+        "posY": 1.000796,
+        "posZ": 12.9619694,
+        "rotX": 0.000395869778,
+        "rotY": 179.996078,
+        "rotZ": -0.00019309597,
+        "scaleX": 0.6,
+        "scaleY": 1.0,
+        "scaleZ": 0.6
+      },
+      "Nickname": "\"Crash\" Wilkins Mini",
+      "Description": "",
+      "GMNotes": "{\n  \"id\": \"80ffe016-25f9-4c88-ad37-32470db1c7b8-m\",\n  \"shoggoth\": \"a5343639-abe0-4655-94e1-973af97438eb\",\n  \"type\": \"Minicard\"\n}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Minicard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 8000,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "80": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12352455362860529648/CFFA5C9E667A8E9566A5B21CE354C5C2C1AC8EC3/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/15847382911873494428/1FF2C55294D4E8683E86016ACC555F7BA2EAD6A0/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "4ce03f",
+      "Name": "Card",
+      "Transform": {
+        "posX": -19.8402271,
+        "posY": 0.9736048,
+        "posZ": 9.470925,
+        "rotX": -1.370764E-08,
+        "rotY": 179.999313,
+        "rotZ": 4.77790358E-08,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Persistent Nightgaunt",
+      "Description": "",
+      "GMNotes": "{\"id\": \"a3244012-492d-4cc4-acc8-bc0dee0d0c35\", \"type\": \"Enemy\", \"class\": \"Mythos\", \"traits\": \"Monster. Nightgaunt.\", \"health\": 5}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 5600,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "56": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/9232849540363311298/BCEF964E83CCE7831E797F71561954680063A5A8/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "934b39",
+      "Name": "Card",
+      "Transform": {
+        "posX": -22.12722,
+        "posY": 0.9736048,
+        "posZ": 9.470925,
+        "rotX": -6.01411756E-08,
+        "rotY": 179.999313,
+        "rotZ": -7.39259249E-08,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "\"Borrowed\" .303 Lewis ",
+      "Description": "",
+      "GMNotes": "{\"id\": \"f38dd2eb-530e-4c20-ac15-dacdac357e2a\", \"type\": \"Asset\", \"class\": \"Guardian\", \"traits\": \"Item. Weapon. Firearm. Illicit.\", \"slot\": \"Hand x2\", \"combatIcons\": 1, \"wildIcons\": 1, \"cost\": 4}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 6800,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "68": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18146394153013893436/8D0E77820043F4E930F692D9096361174533F072/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "08ef30",
+      "Name": "Card",
+      "Transform": {
+        "posX": -15.0244646,
+        "posY": 1.00080764,
+        "posZ": 4.69484854,
+        "rotX": 2.2397513E-05,
+        "rotY": 180.012985,
+        "rotZ": -0.000289788179,
+        "scaleX": 0.6,
+        "scaleY": 1.0,
+        "scaleZ": 0.6
+      },
+      "Nickname": "Signalers",
+      "Description": "",
+      "GMNotes": "{\"id\": \"00000-m\", \"shoggoth\": \"70d3a173-4257-4b1d-a984-6aebb30c18d3\", \"type\": \"Minicard\", \"class\": \"Seeker\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Minicard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 4400,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "44": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15068789047725487442/BFFB30DBECEBC30D0F5D11968A794D10DF55475E/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/9887455635711181124/60AF849E1A067B69A7650B98DA0C9BDDBF488153/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "1d34fb",
+      "Name": "Card",
+      "Transform": {
+        "posX": -13.0970516,
+        "posY": 1.00079513,
+        "posZ": 12.8047419,
+        "rotX": 0.0004817898,
+        "rotY": 179.998184,
+        "rotZ": -0.0002339741,
+        "scaleX": 0.6,
+        "scaleY": 1.0,
+        "scaleZ": 0.6
+      },
+      "Nickname": "Chris Rogers Jr. Mini",
+      "Description": "",
+      "GMNotes": "{\n  \"id\": \"cfe6a6b3-658d-4dfc-a31d-febbd8c8fd2e-m\",\n  \"shoggoth\": \"4e23a519-ee95-4a12-913e-9c776825d2e1\",\n  \"type\": \"Minicard\"\n}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Minicard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 4800,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "48": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11876035655037241841/A7B7D5A682576870A2E07CD7CE401ACFF91148EE/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13508376145612760564/FC8B2A2AF97AF5D3FA874A4A5FCF3874C34D834A/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "2ba5b5",
+      "Name": "Card",
+      "Transform": {
+        "posX": -15.2528124,
+        "posY": 1.00080729,
+        "posZ": 9.529188,
+        "rotX": 6.819078E-05,
+        "rotY": 179.996841,
+        "rotZ": -0.000401482481,
+        "scaleX": 0.6,
+        "scaleY": 1.0,
+        "scaleZ": 0.6
+      },
+      "Nickname": "Rogers Sr.'s Binoculars Mini",
+      "Description": "",
+      "GMNotes": "{\"id\": \"00000-m\", \"shoggoth\": \"69d8ae4b-3389-451b-af86-f8db0f2584d4\", \"type\": \"Minicard\"}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Minicard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 5100,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "51": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/17444065872595424605/5FA9E0D483EF91503067AC7A9972688C25E6E4C0/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/9309773416248387421/8C74C227AAD26EE2A3796B04C1A1392A756DA6B7/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "bced83",
+      "Name": "Card",
+      "Transform": {
+        "posX": -12.877533,
+        "posY": 0.973604739,
+        "posZ": 9.52327,
+        "rotX": 4.14485264E-08,
+        "rotY": 179.999313,
+        "rotZ": -2.95862463E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Short Final",
+      "Description": "",
+      "GMNotes": "{\"id\": \"3f2bb9a2-1098-429d-b87f-a78a6589b9cc\", \"type\": \"Location\", \"class\": \"Mythos\", \"traits\": \"<size 60>Non-Euclidean.\", \"locationFront\": {\"uses\": [{\"type\": \"Clue\", \"token\": \"clue\", \"count\": 0}]}}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Location",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 7300,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "73": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11142271038166456690/B83C27EE78AB26B30E7AB10F8AD2536ADCDC5E3F/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "c89758",
+      "Name": "Card",
+      "Transform": {
+        "posX": -13.9862385,
+        "posY": 0.9735986,
+        "posZ": 12.9230194,
+        "rotX": 7.514723E-05,
+        "rotY": 180.001236,
+        "rotZ": -0.0002574739,
+        "scaleX": 0.8214,
+        "scaleY": 1.0,
+        "scaleZ": 0.8214
+      },
+      "Nickname": "Chris Rogers Jr.",
+      "Description": "",
+      "GMNotes": "{\"id\": \"cfe6a6b3-658d-4dfc-a31d-febbd8c8fd2e\", \"type\": \"Investigator\", \"class\": \"Seeker\", \"traits\": \"Civic. Veteran.\", \"willpowerIcons\": 3, \"intellectIcons\": 5, \"combatIcons\": 1, \"agilityIcons\": 3, \"health\": 5, \"sanity\": 9}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Investigator",
+        "Sideways"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 7600,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "76": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/16634731287647888963/9579F52BBE694ED9371D94925E6AAA1717FD1206/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/18315852719244594394/D5FD8498821DA44E910BF1BD750AD8F985BF1995/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "dde679",
+      "Name": "Card",
+      "Transform": {
+        "posX": -15.1650581,
+        "posY": 0.973603547,
+        "posZ": 9.52327,
+        "rotX": 1.42699282E-05,
+        "rotY": 179.998322,
+        "rotZ": -8.505739E-05,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Rogers Sr.'s Binoculars",
+      "Description": "",
+      "GMNotes": "{\"id\": \"fcdda2f4-8cd1-47cb-ba79-4a5888440ca0\", \"type\": \"Asset\", \"class\": \"Seeker\", \"traits\": \"Item. Tool.\", \"slot\": \"Accessory\", \"intellectIcons\": 1, \"wildIcons\": 1, \"cost\": 2}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 7900,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "79": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18315889747481711677/0A12FE5DE122EF9E9B4DAE3DC0AE02C0F50CEC90/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "7d47f8",
+      "Name": "Card",
+      "Transform": {
+        "posX": -22.21022,
+        "posY": 0.9736048,
+        "posZ": 4.32892656,
+        "rotX": -4.54562574E-08,
+        "rotY": 179.999313,
+        "rotZ": 1.28439169E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Chauchat M1915",
+      "Description": "",
+      "GMNotes": "{\"id\": \"dfd78de6-df0e-4284-82d4-5c65ba7a6de6\", \"type\": \"Asset\", \"class\": \"Guardian\", \"traits\": \"Item. Weapon. Firearm.\", \"slot\": \"Hand x2\", \"combatIcons\": 1, \"level\": 0, \"cost\": 5, \"uses\": [{\"count\": 8, \"type\": \"Ammo\", \"token\": \"resource\"}]}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 6300,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "63": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/17589855997675547482/ED403E15A606A7849478DC1D69A253FBD976788B/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "816fb7",
+      "Name": "Card",
+      "Transform": {
+        "posX": -12.9682236,
+        "posY": 0.9736048,
+        "posZ": 4.421926,
+        "rotX": 9.302983E-08,
+        "rotY": 179.999313,
+        "rotZ": -2.34177762E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Coordinator",
+      "Description": "",
+      "GMNotes": "{\"id\": \"b77fbdff-6e85-43a9-8cfb-81c862601377\", \"type\": \"Asset\", \"class\": \"Seeker\", \"traits\": \"Talent.\", \"intellectIcons\": 2, \"level\": 1, \"cost\": 2}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 6400,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "64": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18113466882673047861/58D82358533A5C30855019BFF674AD59B2667578/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "aa44a6",
+      "Name": "Card",
+      "Transform": {
+        "posX": -15.2561655,
+        "posY": 0.973603,
+        "posZ": 4.41603136,
+        "rotX": 1.86677989E-05,
+        "rotY": 179.993561,
+        "rotZ": -0.00012056619,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Signalers",
+      "Description": "",
+      "GMNotes": "{\"id\": \"d41ef9f4-92ef-4660-828c-9fcbf08c826b\", \"type\": \"Asset\", \"class\": \"Seeker\", \"traits\": \"Ally. Veteran.\", \"slot\": \"Ally\", \"willpowerIcons\": 1, \"intellectIcons\": 1, \"agilityIcons\": 1, \"level\": 0, \"cost\": 3, \"health\": 2, \"sanity\": 2}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 7100,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "71": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/10317952218157229981/C1A72FE6445AED2A636F221D4AE24BEE55FD6D2E/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "edde70",
+      "Name": "Card",
+      "Transform": {
+        "posX": -19.922226,
+        "posY": 0.9736048,
+        "posZ": 4.32892561,
+        "rotX": 1.17149931E-07,
+        "rotY": 179.999313,
+        "rotZ": -2.08718713E-08,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Caught in the Crossfire",
+      "Description": "",
+      "GMNotes": "{\"id\": \"2633c087-1d69-42dc-84d6-5966db80fe17\", \"type\": \"Event\", \"class\": \"Guardian\", \"traits\": \"Spirit. Bold.\", \"combatIcons\": 1, \"agilityIcons\": 1, \"level\": 1, \"cost\": 0}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 8400,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "84": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18247883210762530510/6BDF21E16472A3B468D1606BAD22958EBE895DD5/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "1a67a6",
+      "Name": "Card",
+      "Transform": {
+        "posX": -7.506907,
+        "posY": 0.97360003,
+        "posZ": 12.7928391,
+        "rotX": 5.890452E-05,
+        "rotY": 180.002563,
+        "rotZ": -0.000202389259,
+        "scaleX": 0.8214,
+        "scaleY": 1.0,
+        "scaleZ": 0.8214
+      },
+      "Nickname": "Winifred Habbamock",
+      "Description": "",
+      "GMNotes": "{\"id\": \"81f6db65-e4ff-40fc-acb9-8d2466ef8ba6\", \"type\": \"Investigator\", \"class\": \"Rogue\", \"traits\": \"Criminal. \", \"willpowerIcons\": 1, \"intellectIcons\": 3, \"combatIcons\": 3, \"agilityIcons\": 5, \"health\": 8, \"sanity\": 6}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Investigator",
+        "Sideways"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 4700,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "47": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/16889797378423042232/B3A2F61CFB02DA1E6A6545F83D62DAE0495A1923/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/12188423052927453707/2EBF9E2421693F7F91F279BF464289C48293782A/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "24667f",
+      "Name": "Card",
+      "Transform": {
+        "posX": -8.524223,
+        "posY": 0.9736048,
+        "posZ": 1.10092652,
+        "rotX": 1.55915586E-07,
+        "rotY": 179.999313,
+        "rotZ": -8.618336E-08,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Crash Landing",
+      "Description": "",
+      "GMNotes": "{\"id\": \"748d65e6-11e0-4e7a-9799-b698f48f5ede\", \"type\": \"Event\", \"class\": \"Rogue\", \"traits\": \"Gambit.\", \"willpowerIcons\": 1, \"agilityIcons\": 2, \"level\": 3, \"cost\": 2}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 5000,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "50": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/17925023213612927857/20819DAD23157527F366C56F8CAD27A29011B1FA/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "3cd042",
+      "Name": "Card",
+      "Transform": {
+        "posX": -6.62643671,
+        "posY": 1.00079954,
+        "posZ": 12.9824162,
+        "rotX": 0.0001042722,
+        "rotY": 179.996017,
+        "rotZ": -0.000175580528,
+        "scaleX": 0.6,
+        "scaleY": 1.0,
+        "scaleZ": 0.6
+      },
+      "Nickname": "Winifred Habbamock Mini",
+      "Description": "",
+      "GMNotes": "{\n  \"id\": \"81f6db65-e4ff-40fc-acb9-8d2466ef8ba6-m\",\n  \"shoggoth\": \"283de017-4b39-4e0b-b859-b1b89fbf149d\",\n  \"type\": \"Minicard\"\n}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Minicard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 5300,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "53": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12887540815171262538/C61060D49A7FC1FC46348618F926DCA8ADAAC0CC/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/13799231264152239249/5F8BC515D59D120E50E8A1228AF865CCD7C8D559/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "5c248f",
+      "Name": "Card",
+      "Transform": {
+        "posX": -19.922226,
+        "posY": 0.9736048,
+        "posZ": 1.1659261,
+        "rotX": -8.887858E-08,
+        "rotY": 179.999313,
+        "rotZ": 2.08868826E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Full-Auto",
+      "Description": "",
+      "GMNotes": "{\"id\": \"80c605f8-a143-4e8b-8e9c-ac2eb5933354\", \"type\": \"Event\", \"class\": \"Guardian\", \"traits\": \"Tactic. Bold. Fated.\", \"combatIcons\": 4, \"level\": 5, \"cost\": 2}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 5700,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "57": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15982273878100052807/C637E72DCE7EDE9C2263E2AD6BCF54E9EB39A451/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "60657b",
+      "Name": "Card",
+      "Transform": {
+        "posX": -22.2102184,
+        "posY": 0.9736048,
+        "posZ": 1.1659261,
+        "rotX": -8.887858E-08,
+        "rotY": 179.999313,
+        "rotZ": 2.08868826E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Big Game Hunter",
+      "Description": "",
+      "GMNotes": "{\"id\": \"9d765928-d0cc-4993-b291-4a6fb33494b5\", \"type\": \"Skill\", \"class\": \"Guardian\", \"traits\": \"Task. Expert.\", \"level\": 3, \"cost\": 0}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 5900,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "59": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/14836198810984554958/E6E0C49F9D5F2BF9EB31FB4327B0E7E726B75447/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "694a44",
+      "Name": "Card",
+      "Transform": {
+        "posX": -15.2552261,
+        "posY": 0.9736048,
+        "posZ": 1.25892746,
+        "rotX": -2.16782041E-08,
+        "rotY": 179.999313,
+        "rotZ": -1.99353423E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Butter Landing",
+      "Description": "",
+      "GMNotes": "{\"id\": \"2f6bc929-3f78-4efd-a833-debf7a668107\", \"type\": \"Event\", \"class\": \"Seeker\", \"traits\": \"Fortune.\", \"willpowerIcons\": 1, \"intellectIcons\": 2, \"level\": 3, \"cost\": 2}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 6000,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "60": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/17788036345613403904/A9C9715026B6AF3382FF48FF39C9ECE842E978D4/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "6e4e97",
+      "Name": "Card",
+      "Transform": {
+        "posX": -6.23622131,
+        "posY": 0.9736048,
+        "posZ": 4.26292944,
+        "rotX": -1.03532606E-07,
+        "rotY": 179.999313,
+        "rotZ": 1.24415209E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Dogfight",
+      "Description": "",
+      "GMNotes": "{\"id\": \"1d82da6d-a867-4837-8f93-77ea554d4480\", \"type\": \"Event\", \"class\": \"Rogue\", \"traits\": \"Tactic. Bold. Fated.\", \"agilityIcons\": 4, \"level\": 5, \"cost\": 3}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 6200,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "62": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/17819665942854639432/02CD64AB394A0D385B071535DB6AB9B55007E76B/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "85b6a7",
+      "Name": "Card",
+      "Transform": {
+        "posX": -8.524223,
+        "posY": 0.9736048,
+        "posZ": 4.26292944,
+        "rotX": -2.106239E-10,
+        "rotY": 179.999313,
+        "rotZ": -9.70881047E-08,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Gyroscopic Compass",
+      "Description": "",
+      "GMNotes": "{\"id\": \"907d6fa2-7f72-4209-8978-f95294def82c\", \"type\": \"Asset\", \"class\": \"Rogue\", \"traits\": \"Item. Tool.\", \"slot\": \"Hand\", \"intellectIcons\": 1, \"agilityIcons\": 1, \"level\": 0, \"cost\": 4}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 6500,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "65": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/9551906755633315444/0DAC3F1753F87065C37E660B78F655D063A71D91/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "a554ed",
+      "Name": "Card",
+      "Transform": {
+        "posX": -6.24022,
+        "posY": 0.9736048,
+        "posZ": 9.501929,
+        "rotX": -1.54269657E-07,
+        "rotY": 179.999313,
+        "rotZ": 4.778642E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Arrogance",
+      "Description": "",
+      "GMNotes": "{\"id\": \"bf8e09ab-53db-4aef-93eb-c0dc47fce62a\", \"type\": \"Event\", \"class\": \"Weakness\", \"weakness\": true, \"traits\": \"Bold. Flaw.\", \"wildIcons\": 1, \"cost\": 3}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 6900,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "69": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/16377171640651556692/AA932232A5E5826678C48E6E12248F4DCC912390/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "b9f643",
+      "Name": "Card",
+      "Transform": {
+        "posX": -12.9682236,
+        "posY": 0.9736048,
+        "posZ": 1.25892746,
+        "rotX": -1.12971614E-08,
+        "rotY": 179.999313,
+        "rotZ": 1.38116079E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Mayday Response",
+      "Description": "",
+      "GMNotes": "{\"id\": \"21b07143-5b37-4fb9-bc3c-e9602b69e118\", \"type\": \"Event\", \"class\": \"Seeker\", \"traits\": \"Tactic.\", \"intellectIcons\": 4, \"level\": 5, \"cost\": 2}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 7200,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "72": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/9964405029767942003/7D6FE97528BA62D28FFB76313C4EBEA79627895F/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "d52d53",
+      "Name": "Card",
+      "Transform": {
+        "posX": -8.528223,
+        "posY": 0.9736048,
+        "posZ": 9.501929,
+        "rotX": -8.658112E-08,
+        "rotY": 179.999313,
+        "rotZ": 4.290866E-08,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "\"Anything You Can Do, Better\"",
+      "Description": "",
+      "GMNotes": "{\"id\": \"22dbecc5-0710-4adf-bc81-be250b95efa3\", \"type\": \"Event\", \"class\": \"Rogue\", \"traits\": \"Bold. Gambit.\", \"agilityIcons\": 1, \"wildIcons\": 1, \"cost\": 2}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 7800,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "78": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/13647680933988994255/EDCD687A8153B6B247B8A890464238ACB72B7D92/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "f486c5",
+      "Name": "Card",
+      "Transform": {
+        "posX": -6.23622131,
+        "posY": 0.9736048,
+        "posZ": 1.10092747,
+        "rotX": -6.63744757E-08,
+        "rotY": 179.999313,
+        "rotZ": 1.69982464E-08,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Smuggler's Cargo",
+      "Description": "",
+      "GMNotes": "{\"id\": \"5fca8efa-e6f8-4460-97f4-ae0dc3b2a35e\", \"type\": \"Asset\", \"class\": \"Rogue\", \"traits\": \"Connection. Supply. Illicit.\", \"level\": 1, \"cost\": 1}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 8500,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "85": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15515864693962596245/2A97CF9891A6A6B7B18BF4D1216A85B77BFE3135/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "0b10e3",
+      "Name": "Card",
+      "Transform": {
+        "posX": -1.42021954,
+        "posY": 0.9736048,
+        "posZ": 9.655929,
+        "rotX": -4.115393E-08,
+        "rotY": 179.999313,
+        "rotZ": -2.17388376E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "\"By the skin of your teeth!\"",
+      "Description": "",
+      "GMNotes": "{\"id\": \"c1e02b8f-481a-4713-940f-b5a42cc30bbe\", \"type\": \"Event\", \"class\": \"Mystic\", \"traits\": \"Fortune.\", \"willpowerIcons\": 1, \"wildIcons\": 1, \"cost\": 1}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 4600,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "46": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11571859780441240171/8E8CD9BAAB55BD036502B43E21A0FB5A33D698F2/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "2d117c",
+      "Name": "Card",
+      "Transform": {
+        "posX": -0.313657075,
+        "posY": 0.973598838,
+        "posZ": 12.9090233,
+        "rotX": 6.999271E-05,
+        "rotY": 179.997787,
+        "rotZ": -0.000241880116,
+        "scaleX": 0.8214,
+        "scaleY": 1.0,
+        "scaleZ": 0.8214
+      },
+      "Nickname": "Herbert Költ",
+      "Description": "",
+      "GMNotes": "{\"id\": \"d2bffdfe-5b96-42b9-ac66-660295ca77dd\", \"type\": \"Investigator\", \"class\": \"Mystic\", \"traits\": \"Performer. Veteran.\", \"willpowerIcons\": 5, \"intellectIcons\": 1, \"combatIcons\": 3, \"agilityIcons\": 3, \"health\": 6, \"sanity\": 8}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Investigator",
+        "Sideways"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 5200,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "52": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/13627021487193220717/2DF9DDA40FCDB7F2BA4F966BFC5133F2BD56F36C/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/14783396217814108150/D21A4C9121C020A1B40B218111BFE6982F0BA951/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "5f53a7",
+      "Name": "Card",
+      "Transform": {
+        "posX": -1.53021932,
+        "posY": 0.9736048,
+        "posZ": 1.05892766,
+        "rotX": 1.71689862E-08,
+        "rotY": 179.999313,
+        "rotZ": 1.27442547E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Celestial Navigation",
+      "Description": "",
+      "GMNotes": "{\"id\": \"ee095bda-f12c-43e7-ace6-d69e0b40bdba\", \"type\": \"Skill\", \"class\": \"Mystic\", \"traits\": \"Practiced. Expert.\", \"level\": 3}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 5800,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "58": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12383701078997171406/09490E74D4B0F3905D2E01E93B32BF1B368AC204/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "8eb65c",
+      "Name": "Card",
+      "Transform": {
+        "posX": 0.6133381,
+        "posY": 1.00079668,
+        "posZ": 12.8754263,
+        "rotX": 0.000368718058,
+        "rotY": 180.004547,
+        "rotZ": -0.000199112474,
+        "scaleX": 0.6,
+        "scaleY": 1.0,
+        "scaleZ": 0.6
+      },
+      "Nickname": "Herbert Költ Mini",
+      "Description": "",
+      "GMNotes": "{\n  \"id\": \"d2bffdfe-5b96-42b9-ac66-660295ca77dd-m\",\n  \"shoggoth\": \"856d81a4-8c70-4ac6-bdf5-1f57e754a906\",\n  \"type\": \"Minicard\"\n}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Minicard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 6600,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "66": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/17745286559485733699/F59D2437BA612B53990C88B911C63E46E8EE084B/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/10799173940198248181/22B0CA52BEF2E623DAAC9361782ADED3CE71D6F6/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "922e51",
+      "Name": "Card",
+      "Transform": {
+        "posX": -1.53021944,
+        "posY": 0.9736048,
+        "posZ": 4.22193,
+        "rotX": 2.636986E-08,
+        "rotY": 179.999313,
+        "rotZ": 7.34181E-08,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Vol de Nuit",
+      "Description": "",
+      "GMNotes": "{\"id\": \"f4e25cf9-b185-4564-ac8b-6fe1a52c29d3\", \"type\": \"Event\", \"class\": \"Mystic\", \"traits\": \"Spell.\", \"willpowerIcons\": 1, \"level\": 0, \"cost\": 2}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 6700,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "67": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12024490132360556353/EEF431629FE681F8688268AB054F2485CCA349C8/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "a7b33d",
+      "Name": "Card",
+      "Transform": {
+        "posX": 0.8677781,
+        "posY": 0.9736048,
+        "posZ": 9.655929,
+        "rotX": -1.41211416E-08,
+        "rotY": 179.999313,
+        "rotZ": -1.40816141E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "\"What goes up...\"",
+      "Description": "",
+      "GMNotes": "{\"id\": \"8c5a1e34-b74b-4154-a482-9c152dc06808\", \"type\": \"Skill\", \"class\": \"Weakness\", \"weakness\": true, \"traits\": \"Misfortune. Spell.\", \"wildIcons\": 1}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 7000,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "70": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/15098230196596391050/23984590FAC5565F25CA846C2540E5B83FCE511F/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "c252a9",
+      "Name": "Card",
+      "Transform": {
+        "posX": 0.7567795,
+        "posY": 0.9736048,
+        "posZ": 1.05892766,
+        "rotX": 8.91007943E-08,
+        "rotY": 179.999313,
+        "rotZ": -7.75811344E-08,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Force of Will",
+      "Description": "",
+      "GMNotes": "{\"id\": \"72fc4404-085a-4fd6-b7d6-5c56ab6ca04a\", \"type\": \"Skill\", \"class\": \"Mystic\", \"traits\": \"Spell. Expert.\", \"willpowerIcons\": 2, \"level\": 5}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 7500,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "75": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18068090182224829662/7D788AC769A6611458F0C417D556BE647DDCABEC/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "cf6e80",
+      "Name": "Card",
+      "Transform": {
+        "posX": 0.7567791,
+        "posY": 0.9736048,
+        "posZ": 4.22193,
+        "rotX": 8.87561E-08,
+        "rotY": 179.999313,
+        "rotZ": 1.95803921E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Search in Dreams",
+      "Description": "",
+      "GMNotes": "{\"id\": \"201355a7-00de-4203-b82a-8981f71c30c7\", \"type\": \"Event\", \"class\": \"Mystic\", \"traits\": \"Spell.\", \"wildIcons\": 1, \"level\": 1, \"cost\": 1}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 7700,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "77": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/9881045332515222758/9E69BF64F469BE792DCDEF7C5FAE86D33127636F/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "6b150a",
+      "Name": "Card",
+      "Transform": {
+        "posX": -7.214225,
+        "posY": 0.9736048,
+        "posZ": -5.11907244,
+        "rotX": -1.29993467E-07,
+        "rotY": 179.999313,
+        "rotZ": 2.728561E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Aviator's Cap and Goggles",
+      "Description": "",
+      "GMNotes": "{\"id\": \"91c37b99-8174-4545-8544-159a281d398e\", \"type\": \"Asset\", \"class\": \"Specialist\", \"traits\": \"Item. Clothing.\", \"slot\": \"hat\", \"willpowerIcons\": 1, \"agilityIcons\": 1, \"level\": 1, \"cost\": 2, \"health\": 1, \"sanity\": 1}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 6100,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "61": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18115376362501214954/3F4361F8EBC6DFD9B62ACC71099D02749A2D0444/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "1d668d",
+      "Name": "Card",
+      "Transform": {
+        "posX": 5.688778,
+        "posY": 0.9736048,
+        "posZ": 4.27193,
+        "rotX": 5.628225E-08,
+        "rotY": 179.999313,
+        "rotZ": -1.56755661E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Elbow Grease",
+      "Description": "",
+      "GMNotes": "{\"id\": \"23c4a522-ba40-4312-b98b-a06fc900ac4d\", \"type\": \"Event\", \"class\": \"Survivor\", \"traits\": \"Improvised.\", \"combatIcons\": 1, \"agilityIcons\": 1, \"level\": 0, \"cost\": 0}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 4900,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "49": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/12549887018407189907/4BE487E343B2FF51B11391F0C9430494BB1714D8/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "c23626",
+      "Name": "Card",
+      "Transform": {
+        "posX": 5.659264,
+        "posY": 0.973604739,
+        "posZ": 9.603526,
+        "rotX": -3.71214242E-07,
+        "rotY": 179.999313,
+        "rotZ": -4.8351427E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "The Essentials",
+      "Description": "",
+      "GMNotes": "{\"id\": \"d6407f53-0c69-4600-992e-752545393d64\", \"type\": \"Asset\", \"class\": \"Survivor\", \"traits\": \"Item. Supply. Tool. \", \"wildIcons\": 2, \"cost\": 1}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 7400,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "74": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/13581601828707155257/23CD9642D60818C1CE63F0857A1D2AC5BD24B586/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "3ed74f",
+      "Name": "Card",
+      "Transform": {
+        "posX": 5.6887784,
+        "posY": 0.9736048,
+        "posZ": 1.1099292,
+        "rotX": -6.63744757E-08,
+        "rotY": 179.999313,
+        "rotZ": 1.69982464E-08,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Tool Belt",
+      "Description": "",
+      "GMNotes": "{\"id\": \"7ed58ce3-1471-47c2-b751-3be23eebfac1\", \"type\": \"Asset\", \"class\": \"Survivor\", \"traits\": \"Item. Clothing.\", \"slot\": \"Body\", \"willpowerIcons\": 1, \"intellectIcons\": 1, \"level\": 3, \"cost\": 2}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 5400,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "54": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/10678116713110253767/E73C88284933FF28B842C4685789C6E80FD4EF7D/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "e4192e",
+      "Name": "Card",
+      "Transform": {
+        "posX": 7.806027,
+        "posY": 1.00079143,
+        "posZ": 12.7968493,
+        "rotX": 0.0006105614,
+        "rotY": 180.000534,
+        "rotZ": -0.000193916232,
+        "scaleX": 0.6,
+        "scaleY": 1.0,
+        "scaleZ": 0.6
+      },
+      "Nickname": "Wallace Barr Mini",
+      "Description": "",
+      "GMNotes": "{\n  \"id\": \"4b60732f-5baa-4665-8eae-5f977c31e856-m\",\n  \"shoggoth\": \"a88daea3-418e-46a3-968b-77c1d1d980d0\",\n  \"type\": \"Minicard\"\n}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Minicard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 8100,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "81": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/10218754367897877431/E217CCC9479765B5E10D590A5BC4E4609793DB77/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/17491386373242541158/97EC2636D5E7F6C12B8D8917DEE22E0F85140C81/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "e70b41",
+      "Name": "Card",
+      "Transform": {
+        "posX": 6.812907,
+        "posY": 0.973597348,
+        "posZ": 12.945075,
+        "rotX": 9.021404E-05,
+        "rotY": 180.005783,
+        "rotZ": -0.000306841946,
+        "scaleX": 0.8214,
+        "scaleY": 1.0,
+        "scaleZ": 0.8214
+      },
+      "Nickname": "Wallace Barr",
+      "Description": "",
+      "GMNotes": "{\"id\": \"4b60732f-5baa-4665-8eae-5f977c31e856\", \"type\": \"Investigator\", \"class\": \"Survivor\", \"traits\": \"Veteran. Worker.\", \"willpowerIcons\": 3, \"intellectIcons\": 3, \"combatIcons\": 3, \"agilityIcons\": 3, \"health\": 7, \"sanity\": 7, \"uses\": [{\"count\": 1, \"type\": \"Scrap\", \"token\": \"resource\"}]}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Investigator",
+        "Sideways"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": false,
+      "Hands": true,
+      "CardID": 8200,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "82": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/10498301907716030888/C493D993D703E2D7ABBFE6A1EFACE30E3CBC06C6/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/16183261984621209928/39FDC005956565642D9FB6F228A45DDF66A18A71/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "0992c9",
+      "Name": "Card",
+      "Transform": {
+        "posX": 7.97577667,
+        "posY": 0.9736048,
+        "posZ": 1.1099292,
+        "rotX": -1.02246736E-08,
+        "rotY": 179.999313,
+        "rotZ": 1.45866281E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Exhaustive",
+      "Description": "",
+      "GMNotes": "{\"id\": \"170dd600-24a8-4d39-9ace-05ee316d388a\", \"type\": \"Skill\", \"class\": \"Survivor\", \"traits\": \"Innate. Developed.\", \"willpowerIcons\": 1, \"intellectIcons\": 1, \"combatIcons\": 1, \"agilityIcons\": 1, \"level\": 1}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 4500,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "45": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/9701985343336620319/19E180397ADC8CF249B2112755506D174DFD212B/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "47514d",
+      "Name": "Card",
+      "Transform": {
+        "posX": 7.97577667,
+        "posY": 0.9736048,
+        "posZ": 4.27193,
+        "rotX": 3.84463981E-08,
+        "rotY": 179.999313,
+        "rotZ": -1.02094525E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Hangar Crew",
+      "Description": "",
+      "GMNotes": "{\"id\": \"a0533ea0-24c9-4ce1-9cf0-e12201671cbd\", \"type\": \"Asset\", \"class\": \"Survivor\", \"traits\": \"Ally. Worker.\", \"slot\": \"Ally\", \"wildIcons\": 2, \"level\": 5, \"cost\": 7, \"health\": 4, \"sanity\": 4}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "Asset",
+        "PlayerCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 5500,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "55": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/18008224582685111960/3435294F5E93A3C256F8E510317509DF9736AF8F/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940352139/A2D42E7E5C43D045D72CE5CFC907E4F886C8C690/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    },
+    {
+      "GUID": "ea98e6",
+      "Name": "Card",
+      "Transform": {
+        "posX": 7.946789,
+        "posY": 0.9736048,
+        "posZ": 9.603526,
+        "rotX": -7.78030937E-08,
+        "rotY": 179.999313,
+        "rotZ": 1.14582917E-07,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "scaleZ": 1.0
+      },
+      "Nickname": "Passion Project",
+      "Description": "",
+      "GMNotes": "{\"id\": \"3a158d76-4a0a-4220-a4a8-ab9c9bbd5d88\", \"type\": \"Treachery\", \"class\": \"Mythos\", \"weakness\": true, \"traits\": \"Task.\", \"cost\": 0}",
+      "AltLookAngle": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "Tags": [
+        "ScenarioCard"
+      ],
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": true,
+      "CardID": 8300,
+      "SidewaysCard": false,
+      "CustomDeck": {
+        "83": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/14972482207376831815/2DF86F433A377BDE743F8F4382060EAE84CA9CF8/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/2342503777940351785/F64D8EFB75A9E15446D24343DA0A6EEF5B3E43DB/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": true,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": ""
+    }
+  ],
+  "AttachedDecals": [
+    {
+      "Transform": {
+        "posX": 0.0,
+        "posY": -0.1,
+        "posZ": 0.0,
+        "rotX": 270.0,
+        "rotY": 0.0,
+        "rotZ": 0.0,
+        "scaleX": 2.0,
+        "scaleY": 2.0,
+        "scaleZ": 2.0
+      },
+      "CustomDecal": {
+        "Name": "dunwich_back",
+        "ImageURL": "https://steamusercontent-a.akamaihd.net/ugc/959719855119695911/931B9829687A20F4DEADB36DA57B7E6D76792231/",
+        "Size": 7.4
+      },
+      "OwnerSteamID": 0
+    }
+  ]
+}
