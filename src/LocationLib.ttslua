@@ -161,24 +161,28 @@ do
     return { x = grid.x + offset.x, y = grid.y + offset.y }
   end
 
-  function LocationLib.swapCardInDirection(card, direction)
+  local function swapLocationsBetweenGrids(card, currentGrid, targetGrid, emptyMessage)
     if currentlyMoving then return end
     currentlyMoving = true
     Wait.time(function() currentlyMoving = false end, 1)
 
-    local canSwap = not LocationLib.isAdjacentGridEmpty(card, direction)
+    local currentPos    = PlayAreaApi.gridToWorld(currentGrid)
+    local targetPos     = PlayAreaApi.gridToWorld(targetGrid)
+    local sourceObjects = LocationLib.getObjectsAt(currentGrid)
+    local targetObjects = LocationLib.getObjectsAt(targetGrid)
+    local hasTargetCard = false
 
-    if not canSwap then
-      broadcastToAll("Adjacent position is empty.", "Orange")
-      return
+    for _, obj in ipairs(targetObjects) do
+      if obj.type == "Card" then
+        hasTargetCard = true
+        break
+      end
     end
 
-    local currentGrid      = LocationLib.getCurrentGrid(card)
-    local adjacentGrid     = LocationLib.getAdjacentGrid(currentGrid, direction)
-    local currentPos       = PlayAreaApi.gridToWorld(currentGrid)
-    local adjacentPos      = PlayAreaApi.gridToWorld(adjacentGrid)
-    local sourceObjects    = LocationLib.getObjectsAt(currentGrid)
-    local targetObjects    = LocationLib.getObjectsAt(adjacentGrid)
+    if not hasTargetCard then
+      broadcastToAll(emptyMessage, "Orange")
+      return
+    end
 
     -- check target for invalid swap ID
     local INVALID_SWAP_IDS = card.getTable("INVALID_SWAP_IDS")
@@ -194,13 +198,26 @@ do
       end
     end
 
-    removeDuplicates(sourceObjects, targetObjects, currentPos, adjacentPos)
+    removeDuplicates(sourceObjects, targetObjects, currentPos, targetPos)
 
     -- move objects from target location
-    LocationLib.moveObjectsByOffset(targetObjects, currentPos - adjacentPos)
+    LocationLib.moveObjectsByOffset(targetObjects, currentPos - targetPos)
 
     -- move objects from source location
-    LocationLib.moveObjectsByOffset(sourceObjects, adjacentPos - currentPos)
+    LocationLib.moveObjectsByOffset(sourceObjects, targetPos - currentPos)
+  end
+
+  -- swaps the locations occupied by two location cards
+  function LocationLib.swapLocations(card, otherCard)
+    local currentGrid = LocationLib.getCurrentGrid(card)
+    local targetGrid  = LocationLib.getCurrentGrid(otherCard)
+    swapLocationsBetweenGrids(card, currentGrid, targetGrid, "Can't swap with an empty location.")
+  end
+
+  function LocationLib.swapCardInDirection(card, direction)
+    local currentGrid = LocationLib.getCurrentGrid(card)
+    local targetGrid  = LocationLib.getAdjacentGrid(currentGrid, direction)
+    swapLocationsBetweenGrids(card, currentGrid, targetGrid, "Adjacent position is empty.")
   end
 
   -- moves a card (and nearby cards) in a direction
