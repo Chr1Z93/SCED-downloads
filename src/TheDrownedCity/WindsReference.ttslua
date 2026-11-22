@@ -36,7 +36,7 @@ end
 
 function triggerWinds()
   function triggerWindsCoroutine()
-    if self.is_face_down then -- "Eastern"
+    if self.is_face_down then
       direction = "Eastern"
       firstRow  = 1
       secondRow = 3
@@ -51,9 +51,9 @@ function triggerWinds()
     moveRow(secondRow)
     CoroutineLib.yieldSeconds(3)
 
-    local summitDeck = getSummitDeck()
-    local pos = summitDeck.getPosition() - Vector(0, 0, 3.9)
-    local searchResult = SearchLib.atPosition(pos, "isCardOrDeck")
+    local summitDeck      = getSummitDeck()
+    local pos             = summitDeck.getPosition() - Vector(0, 0, 3.9)
+    local searchResult    = SearchLib.atPosition(pos, "isCardOrDeck")
     local removedLocation = deckOrCard(searchResult)
 
     -- shuffle if deck, then put onto summit deck
@@ -84,21 +84,24 @@ function moveRow(row)
       moveableRow = TableLib.reverse(moveableRow)
     end
 
-    local locationToLeavePlay = moveableRow[1]
-    local md = HelperLib.getMetadata(locationToLeavePlay)
+    local locationToLeavePlay  = moveableRow[1]
+    local md                   = HelperLib.getMetadata(locationToLeavePlay)
+    local grid                 = PlayAreaApi.worldToGrid(locationToLeavePlay.getPosition())
 
-    local objectsToDelete = {}
-    for _, obj in ipairs(LocationLib.getObjectsAt(PlayAreaApi.worldToGrid(locationToLeavePlay.getPosition()))) do
+    local objectsToDelete      = {}
+    local wasPlacedInVpDisplay = false
+    for _, obj in ipairs(LocationLib.getObjectsAt(grid)) do
       if obj.type == "Card" and obj.hasTag("ScenarioCard") then
-        -- move enemies and treacheries to the encounter discard pile
         if not obj.hasTag("Location") then
+          -- move enemies and treacheries to the encounter discard pile
           broadcastToAll("Discarded " .. obj.getName())
-          obj.setPosition(MythosAreaApi.getEncounterDiscardPosition() + Vector(0, 5, 0))
-          obj.setRotation(MythosAreaApi.getEncounterDiscardRotation())
+          obj.setPosition(MythosAreaApi.getEncounterDiscardPosition() + Vector(0, 3, 0))
+          obj.setRotation(MythosAreaApi.getRotation())
         else
           if md.locationFront and md.locationFront.victory and not locationToLeavePlay.is_face_down and not HelperLib.cardHasClues(locationToLeavePlay) then
             PlayAreaApi.maybeUntrackLocation(locationToLeavePlay)
             VictoryDisplayApi.placeCard(locationToLeavePlay)
+            wasPlacedInVpDisplay = true
           else
             obj.setRotation({ 0, 270, 180 }) -- flip over to avoid respawning clues
             TokenSpawnTrackerApi.resetTokensSpawned(obj)
@@ -116,8 +119,11 @@ function moveRow(row)
     end
 
     CoroutineLib.yieldSeconds(1)
-    locationToLeavePlay.setPositionSmooth(summitDeck.getPosition() - Vector(0, 0, 3.9))
-    CoroutineLib.yieldSeconds(1)
+
+    if not wasPlacedInVpDisplay then
+      locationToLeavePlay.setPositionSmooth(summitDeck.getPosition() - Vector(0, 0, 3.9))
+      CoroutineLib.yieldSeconds(1)
+    end
 
     for i = 2, #moveableRow do
       if i == #moveableRow then
@@ -166,7 +172,7 @@ function spawnArrow(row)
   end
 
   local locationToLeavePlay = moveableRow[1]
-  local spawnPosition = locationToLeavePlay.getPosition() - Vector(2.7, 0, 0)
+  local spawnPosition       = locationToLeavePlay.getPosition() - Vector(2.7, 0, 0)
   if row == 2 or row == 4 then
     spawnRot = { 0, 270, 0 }
   else
@@ -218,8 +224,10 @@ function getSummitDeck()
   end
 end
 
+-- Needs to loop in reverse
 function removeFromList(rowLocations)
-  for i, location in ipairs(rowLocations) do
+  for i = #rowLocations, 1, -1 do
+    local location = rowLocations[i]
     if location.hasTag("NoWind") and not location.is_face_down then
       table.remove(rowLocations, i)
     end
